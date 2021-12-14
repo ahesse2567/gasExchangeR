@@ -8,4 +8,5 @@ start_end_test <- function(.data,
         end <- nrow(.data) # instead, set end to last data point in file
     }
     .data <- .data[start:end,]
+    .data
 }

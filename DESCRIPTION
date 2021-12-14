@@ -1,11 +1,18 @@
 Package: gasExchangeR
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Analyze Gas Exchange Data From Graded Exercise Tests
 Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+Authors@R: 
+    person(given = "Anton",
+           family = "Hesse",
+           role = c("aut", "cre"),
+           email = "ahesse2567@gmail.com",
+           comment = c(ORCID = "0000-0001-8456-7343"))
+Maintainer: Anton Hesse <ahesse2567@gmail.com>
+Description: The tools in this package will help you load your data,
+    check for outliers, interpolate, average, and find important metrics such as
+    VO2max and the first and second ventilatory thresholds.
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
+RoxygenNote: 7.1.2
