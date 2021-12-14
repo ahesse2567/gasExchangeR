@@ -1,4 +1,24 @@
-interpolate <- function(.data, time_col, every_s = 1, method = c("linear", "cubic")) {
+#' Interpolate graded exercise test data with linear or cubic spline interpolation
+#'
+#' @param .data Data frame to interpolate
+#' @param time_col Time column from data frame to reference for interpolation
+#' @param every_s Should the data be interpolated every second? Every 2 seconds?
+#' @param method Use linear or cubic spline interpolation
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' time <- sample.int(100, 20)
+#' time <- sort(time)
+#' y <- rnorm(length(time), mean = mean(time), sd = sd(time))
+#' df <- data.frame(time = time, y = y)
+#' interpolate(.data = df, time_col = "time", every_s = 2, method = "linear")
+
+interpolate <- function(.data,
+                        time_col,
+                        method = c("linear", "cubic"),
+                        every_s = 1) {
     # TODO add stopifnot()
     method <- match.arg(method, choices = c("linear", "cubic"))
     # turn this into a method later
@@ -19,14 +39,14 @@ interpolate <- function(.data, time_col, every_s = 1, method = c("linear", "cubi
         out <- purrr::map(.x = data_num, .f = function(i) stats::spline(
             x = data_num[[time_col]],
             y = i,
-            xout = per_every)$y) %>%
-            dplyr::as_tibble()
+            xout = per_every)$y)
+        out <- dplyr::as_tibble(out)
     } else {
         out <- purrr::map(.x = data_num, .f = function(i) stats::approx(
             x = data_num[[time_col]],
             y = i,
-            xout = per_every)$y) %>%
-            dplyr::as_tibble()
+            xout = per_every)$y)
+        out <- dplyr::as_tibble(out)
     }
 
     out
