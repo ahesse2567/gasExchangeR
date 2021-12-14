@@ -25,9 +25,9 @@ interpolate <- function(.data,
     # class(.data) <- method
     # UseMethod("interpolate", .data)
 
-    data_num <- .data %>% # coerce to numeric b/c time may not be of another class
-        dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
-                                    as.numeric))
+    data_num <- dplyr::mutate(.data,
+                              dplyr::across(where(purrr::negate(is.character)),
+                                            as.numeric))
     # add removal of NA vals to the numeric coercion above?
 
     per_every <- seq(from = min(as.integer(.data[[time_col]])),
