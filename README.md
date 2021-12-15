@@ -6,8 +6,8 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of gasExchangeR is to help exercise physiologist more easily
-analyze gas exchange data and to provide more directly control when
+The goal of gasExchangeR is to help exercise physiologists more easily
+analyze gas exchange data and to provide more direct control when
 doing so. The overview of the process of analyzing gas exchange data
 involves importing the data, identifying and removing outliers,
 interpolating if desired, and finally averaging the data. Afterwards
