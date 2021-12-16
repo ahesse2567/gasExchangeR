@@ -2,9 +2,9 @@ library(tidyverse)
 
 df <- read_csv("inst/extdata/mar16_101_pre.csv")
 
-df <- read_csv(test_to_read) %>%
-    start_end_test() %>%
-    vo2max_window() %>%
+df <- df %>%
+    trim_rest_rec(intensity_col = "speed", start_intensity = 3) %>%
+    # vo2max_window() %>%
     # x_breath_mean(b = 4) %>%
     select(time, speed, grade, vo2, vo2.1, vco2, ve.btps, peto2, petco2) %>%
     rename(vo2_rel = vo2,
@@ -39,10 +39,11 @@ tr_mean <- function(.v, x, y) {
     out
 }
 
-avg_exercise_test(df, type = "breath", subtype = "rolling")
+avg_exercise_test.breath(df, type = "breath", subtype = "rolling")
 
 my_func <- function() {
     browser()
     avg_exercise_test(df, type = "breath", subtype = "rolling")
 }
 
+my_func()
