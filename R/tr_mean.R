@@ -2,17 +2,17 @@
 #'
 #' @details Function for internal use only. It will not be exported.
 #'
-#' @param .v A vector of numeric or logical values
-#' @param x The number of values to keep
-#' @param y The total number of values to consider
+#' @param .v A vector of numeric or logical values.
+#' @param x The number of values to keep.
+#' @param y The total number of values to consider.
 #'
 #' @return
 #' @keywords internal
+#' @noRd
 #'
 #' @details This function trims the mean according to the difference between the x and y parameters. For example, if \code{x = 5} and \code{y = 7}, the difference is\code{2}. Half of the difference value is removed from the highest side of the vector and half the difference is removed from the lowest side of the vector. Therefore, the higest and lowest values would be removed before taking the mean. If instead \code{x = 5} and \code{y = 7}, the two lowest and two highest values would be removed before taking the mean.
 #'
 #' @examples
-#'
 #' set.seed(2357234)
 #' v <- 1:7
 #' v <- round(v + rnorm(n = length(v), sd = 3), 2)
