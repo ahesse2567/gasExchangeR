@@ -6,13 +6,23 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of gasExchangeR is to help exercise physiologists more easily
-analyze gas exchange data and to provide more direct control when
+The goal of gasExchangeR is to help exercise physiologist more easily
+analyze gas exchange data and to provide more directly control when
 doing so. The overview of the process of analyzing gas exchange data
 involves importing the data, identifying and removing outliers,
 interpolating if desired, and finally averaging the data. Afterwards
 then one can determine ventilatory thresholds, VO2max, and other
 important values.
+
+## Early acknowledgemets
+
+This package borrows heavily from the work by Felipe Mattioni Maturana
+(<https://orcid.org/0000-0002-4221-6104>). Specifically, his work on the
+[whippr](https://github.com/fmmattioni/whippr) and
+[lacater](https://fmmattioni.github.io/lactater/) packages.
+[gasExchangeR](https://github.com/ahesse2567/gasExchangeR) focuses more
+on graded exercise testing than VO2 kinetics; it also emphasizes
+ventilatory breakpoint methods.
 
 ## Installation
 
