@@ -14,17 +14,17 @@ avg_exercise_test(
 )
 }
 \arguments{
-\item{.data}{Gas exchange data}
+\item{.data}{Gas exchange data.}
 
-\item{type}{Choose between breath averages, time averages, or digital filtering}
+\item{type}{Choose between breath averages, time averages, or digital filtering.}
 
-\item{subtype}{Choose rolling, bin, or combo}
+\item{subtype}{Choose rolling, bin, or combo.}
 
-\item{rolling_window}{How many seconds or breaths to include if rolling}
+\item{rolling_window}{How many seconds or breaths to include if rolling.}
 
-\item{bins}{Bin size of breaths or time}
+\item{bins}{Bin size of breaths or time.}
 
-\item{align}{If using a rolling method, how to align the rolling average}
+\item{align}{If using a rolling method, how to align the rolling average. Other choices include "left", and "right".}
 }
 \value{
 
@@ -35,5 +35,5 @@ If averaging by breath or time averages, it can also perform rolling or bin aver
 }
 \examples{
 
-# TODO write an example later
+# TODO write an example later b/c I was getting errors earlier despite getting the functions to work when they were in the global environment
 }

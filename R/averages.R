@@ -3,12 +3,12 @@
 #' This function averages first by either breath, time, or digital filtering
 #' If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
 #'
-#' @param .data Gas exchange data
-#' @param type Choose between breath averages, time averages, or digital filtering
-#' @param subtype Choose rolling, bin, or combo
-#' @param rolling_window How many seconds or breaths to include if rolling
-#' @param bins Bin size of breaths or time
-#' @param align If using a rolling method, how to align the rolling average
+#' @param .data Gas exchange data.
+#' @param type Choose between breath averages, time averages, or digital filtering.
+#' @param subtype Choose rolling, bin, or combo.
+#' @param rolling_window How many seconds or breaths to include if rolling.
+#' @param bins Bin size of breaths or time.
+#' @param align If using a rolling method, how to align the rolling average. Other choices include "left", and "right".
 #'
 #' @import magrittr
 #'
@@ -17,7 +17,7 @@
 #'
 #' @examples
 #'
-#' # TODO write an example later
+#' # TODO write an example later b/c I was getting errors earlier despite getting the functions to work when they were in the global environment
 
 avg_exercise_test <- function(.data,
                               type = c("breath", "time", "digital_filter"),
@@ -38,6 +38,7 @@ avg_exercise_test <- function(.data,
     UseMethod("avg_exercise_test", .data)
 }
 
+#' @export
 avg_exercise_test.breath <- function(.data,
                                      type = c("breath", "time", "digital_filter"),
                                      subtype = c("rolling", "bin", "combo"),
@@ -49,6 +50,7 @@ avg_exercise_test.breath <- function(.data,
     UseMethod("avg_exercise_test.breath", .data)
 }
 
+#' @export
 avg_exercise_test.breath.rolling <- function(.data,
                                      type = c("breath", "time", "digital_filter"),
                                      subtype = c("rolling", "bin", "combo"),
@@ -78,6 +80,8 @@ avg_exercise_test.breath.rolling <- function(.data,
         roll_i <- dplyr::bind_rows(roll_i, temp)
     }
 
+    align <- match.arg(align, choices = c("left", "right", "center"))
+
     out <- data_num %>%
         zoo::rollmean(x = ., k = rolling_window, align = align) %>%
         dplyr::as_tibble()
@@ -87,6 +91,7 @@ avg_exercise_test.breath.rolling <- function(.data,
     out
 }
 
+#' @export
 avg_exercise_test.breath.bin <- function(
     .data,
     type = c("breath", "time", "digital_filter"),
