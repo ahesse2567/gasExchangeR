@@ -39,11 +39,9 @@ tr_mean <- function(.v, x, y) {
     out
 }
 
-avg_exercise_test.breath(df, type = "breath", subtype = "rolling")
+avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "mean")
+avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "mean", trim = 4)
+avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "median", trim = 0)
 
-my_func <- function() {
-    browser()
-    avg_exercise_test(df, type = "breath", subtype = "rolling")
-}
+avg_exercise_test(df, type = "breath", subtype = "bin", mos = "mean")
 
-my_func()

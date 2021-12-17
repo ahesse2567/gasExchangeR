@@ -8,9 +8,11 @@ avg_exercise_test(
   .data,
   type = c("breath", "time", "digital_filter"),
   subtype = c("rolling", "bin", "combo"),
-  rolling_window = 15,
+  roll_window = 15,
   bins = 15,
-  align = "center"
+  align = "center",
+  mos = "mean",
+  trim = 0
 )
 }
 \arguments{
@@ -20,11 +22,15 @@ avg_exercise_test(
 
 \item{subtype}{Choose rolling, bin, or combo.}
 
-\item{rolling_window}{How many seconds or breaths to include if rolling.}
+\item{roll_window}{How many seconds or breaths to include if rolling.}
 
 \item{bins}{Bin size of breaths or time.}
 
 \item{align}{If using a rolling method, how to align the rolling average. Other choices include "left", and "right".}
+
+\item{mos}{'Measure of center'. Choices include "mean" or "median"}
+
+\item{trim}{Indicate i you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method.}
 }
 \value{
 
