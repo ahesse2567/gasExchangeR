@@ -6,13 +6,16 @@
 \usage{
 avg_exercise_test(
   .data,
-  type = c("breath", "time", "digital_filter"),
+  type = c("breath", "time", "digital"),
   subtype = c("rolling", "bin", "combo"),
   roll_window = 15,
   bins = 15,
   align = "center",
   mos = "mean",
-  trim = 0
+  trim = 0,
+  cutoff = 0.04,
+  fs = 1,
+  order = 3
 )
 }
 \arguments{
@@ -31,6 +34,12 @@ avg_exercise_test(
 \item{mos}{'Measure of center'. Choices include "mean" or "median"}
 
 \item{trim}{Indicate i you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method.}
+
+\item{cutoff}{The cutoff frequency in Hz. Only used by digital filter.}
+
+\item{fs}{The sampling frequency in Hz. Only used by digital filter.}
+
+\item{order}{The Butterworth low-pass filter order. Only used by digital filter.}
 }
 \value{
 
@@ -42,4 +51,5 @@ If averaging by breath or time averages, it can also perform rolling or bin aver
 \examples{
 
 # TODO write an example later b/c I was getting errors earlier despite getting the functions to work when they were in the global environment
+
 }

@@ -25,6 +25,7 @@ Imports:
     purrr,
     readr,
     rlang,
+    signal,
     splines,
     stats,
     stringr,

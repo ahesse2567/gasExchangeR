@@ -11,6 +11,9 @@
 #' @param align If using a rolling method, how to align the rolling average. Other choices include "left", and "right".
 #' @param mos 'Measure of center'. Choices include "mean" or "median"
 #' @param trim Indicate i you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method.
+#' @param cutoff The cutoff frequency in Hz. Only used by digital filter.
+#' @param fs The sampling frequency in Hz. Only used by digital filter.
+#' @param order The Butterworth low-pass filter order. Only used by digital filter.
 #'
 #' @import magrittr
 #'
@@ -22,16 +25,18 @@
 #' # TODO write an example later b/c I was getting errors earlier despite getting the functions to work when they were in the global environment
 #'
 avg_exercise_test <- function(.data,
-                              type = c("breath", "time", "digital_filter"),
+                              type = c("breath", "time", "digital"),
                               subtype = c("rolling", "bin", "combo"),
                               roll_window = 15,
                               bins = 15,
                               align = "center",
                               mos = "mean",
-                              trim = 0) {
+                              trim = 0,
+                              cutoff = 0.04,
+                              fs = 1,
+                              order = 3) {
     stopifnot(!missing(.data),
               !missing(type),
-              !missing(subtype),
               roll_window >= 1,
               bins >= 1,
               roll_window %% 1 == 0,
@@ -44,14 +49,18 @@ avg_exercise_test <- function(.data,
 
 #' @export
 avg_exercise_test.breath <- function(.data,
-                                     type = c("breath", "time", "digital_filter"),
+                                     type = c("breath", "time", "digital"),
                                      subtype = c("rolling", "bin", "combo"),
                                      roll_window = 15,
                                      bins = 15,
                                      align = "center",
                                      mos = "mean",
-                                     trim = 0) {
+                                     trim = 0,
+                                     cutoff = 0.04,
+                                     fs = 1,
+                                     order = 3) {
     # browser()
+    stopifnot(!missing(subtype))
     subtype <- match.arg(subtype)
 
     char_cols <- .data[, purrr::map(.data, class) == "character"]
@@ -110,3 +119,49 @@ avg_exercise_test.breath <- function(.data,
     }
 }
 
+#' @export
+avg_exercise_test.digital <- function(.data,
+                                      type = c("breath", "time", "digital"),
+                                      subtype = c("rolling", "bin", "combo"),
+                                      roll_window = 15,
+                                      bins = 15,
+                                      align = "center",
+                                      mos = "mean",
+                                      trim = 0,
+                                      cutoff = 0.04,
+                                      fs = 1,
+                                      order = 3) {
+    # browser()
+
+    char_cols <- .data[, purrr::map(.data, class) == "character"]
+    if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
+        char_cols <- unique(char_cols)
+        # delete char col b/c they don't play well with rollapply(). Add back later
+        .data <- .data[,-which(colnames(x) %in% names(char_cols))]
+    } else {
+        char_cols <- NULL
+    }
+
+    data_num <- .data %>% # coerce to numeric b/c time may not be of another class
+        dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
+                                    as.numeric))
+
+    bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)
+
+    out <- purrr::map(.x = data_num,
+                      .f = function(.x, bf) signal::filter(bf, .x),
+                      bf = bf)
+
+    out <- dplyr::bind_cols(char_cols, out)
+    return(out)
+
+}
+
+#' @keywords internal
+butter_lowpass <- function(cutoff, fs, order = 5){
+    nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
+    # at a minimum two data points per wave in order to construct the wave
+    normal_cutoff <- cutoff / nyq
+    bf <- signal::butter(n = order, W = normal_cutoff, type = "low", plane = "z")
+    bf
+}

@@ -15,33 +15,62 @@ ggplot(data = df, aes(x = time, y = vo2_rel)) +
     geom_point() +
     theme_bw()
 
-tr_mean <- function(.v, x, y) {
-    # idx_col/decision_col = "ve_vo2_prod" should be implemented in the future
-    # because Breeze uses the ve * vco2 to determine which rows to remove
-    stopifnot(is.numeric(.v) | is.logical(.v),
-              x >= 1 & x %% 1 ==0 & x %% 2 == 1,
-              y >= 1 & y %% 1 ==0 & y %% 2 == 1 & y - x >= 2)
-    # browser()
-    num2remove <- y - x
-    for (i in 1:(num2remove / 2)) {
-        min_val <- which(.v == min(.v, na.rm = TRUE))
-        if (length(min_val) > 1) { # if two values are tied, remove one at random
-            min_val <- sample(min_val, 1)
-        }
-        .v <- .v[-min_val]
-        max_val <- which(.v == max(.v, na.rm = TRUE))
-        if (length(max_val) > 1) { # if two values are tied, remove one at random
-            max_val <- sample(max_val, 1)
-        }
-        .v <- .v[-max_val]
-        out <- mean(.v)
-    }
-    out
-}
-
 avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "mean")
 avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "mean", trim = 4)
 avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "median", trim = 0)
 
 avg_exercise_test(df, type = "breath", subtype = "bin", mos = "mean")
+
+
+#################################
+## Digital filter option
+
+butter_lowpass <- function(cutoff, fs, order = 5){
+    nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
+    # at a minimum two data points per wave in order to construct the wave
+    normal_cutoff <- cutoff / nyq
+    bf <- signal::butter(n = order, W = normal_cutoff, type = "low", plane = "z")
+    bf
+}
+
+butter_lowpass_filter <- function(data, cutoff, fs, order = 5){
+    # browser()
+    bf <- butter_lowpass(cutoff, fs, order=order)
+    filtered_data <- signal::filter(bf, data)
+    filtered_data
+}
+
+data_num <- df %>% # coerce to numeric b/c time may not be of another class
+    dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
+                                as.numeric))
+
+fs <- 1 # sampling rate in Hz
+cutoff <- 0.04 # low-pass filter cutoff (sampling rate?)
+order <- 3
+
+bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)
+bf
+head(data_num$vo2_rel)
+head(signal::filter(bf, data_num$vo2_rel))
+
+out <- purrr::map(.x = data_num,
+           .f = function(.x, bf) signal::filter(bf, .x), bf = bf)
+head(out$vo2_rel)
+head(signal::filter(bf, data_num$vo2_rel))
+
+out$time
+
+out$vo2_rel
+
+signal::filter(bf, data_num$vo2_rel)
+
+df
+
+df_digi_filt <- avg_exercise_test(df, type = "digital")
+
+head(df_digi_filt$vo2_rel)
+ggplot(data = df, aes(x = time, y = vo2_rel)) +
+    geom_point(alpha = 0.5) +
+    theme_bw() +
+    geom_line(aes(y = df_digi_filt$vo2_rel), color = "red")
 
