@@ -9,68 +9,214 @@ df <- df %>%
     select(time, speed, grade, vo2, vo2.1, vco2, ve.btps, peto2, petco2) %>%
     rename(vo2_rel = vo2,
            vo2_abs = vo2.1,
-           ve = ve.btps)
+           ve = ve.btps) %>%
+    mutate(ve_vo2 = ve*1000 / vo2_abs,
+           ve_vco2 = ve*1000 / vco2)
 
-ggplot(data = df, aes(x = time, y = vo2_rel)) +
-    geom_point() +
+ggplot() +
+    geom_point(data = df, aes(x = time, y = vo2_abs),
+               color = "red",
+               alpha = 0.5) +
+    theme_bw() +
+    ggtitle("Full Test, Unaveraged")
+
+ggplot() +
+    geom_point(data = df[(nrow(data)-60):nrow(data),],
+               aes(x = as.numeric(time), y = vo2_abs),
+               color = "red",
+               alpha = 0.5) +
+    theme_bw() +
+    ggtitle("Last 60 seconds, Unaveraged") +
+    xlim(c(810, 910))
+
+
+df_avg <- df %>%
+    avg_exercise_test(type ="breath", subtype = "rolling", roll_window = 11)
+
+ggplot() +
+    geom_point(data = df_avg, aes(x = time, y = vo2_abs),
+               color = "red",
+               alpha = 0.5) +
+    theme_bw() +
+    ggtitle("Full test, Rolling Breath Average")
+
+ggplot() +
+    geom_point(data = df_avg[(nrow(data)-60):nrow(data),],
+               aes(x = time, y = vo2_abs),
+               color = "red",
+               alpha = 0.5) +
+    theme_bw() +
+    ggtitle("Last 60 seconds, Rolling Breath Average") +
+    xlim(c(810, 910))
+
+idx_max_vo2_abs <- which.max(df_avg$vo2_abs)
+df_avg$vo2_abs[idx_max_vo2_abs] - df_avg$vo2_abs[idx_max_vo2_abs - 1]
+# vo2max minus the closest neighboring data point is prone to overshooting
+# the <50 mL O2/min limit because of noise in the data. Maybe this improves
+# after first removing outliers
+
+vo2_diff <- diff(df_avg$vo2_abs)
+
+df_avg$vo2_diff_abs <- c(NA,diff(df_avg$vo2_abs))
+
+df_avg <- df_avg %>%
+    mutate(plateau = if_else(vo2_diff_abs >= 50, FALSE, TRUE))
+
+max(df_avg$vo2_abs) / max(df_avg$grade)
+
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = vo2_abs, color = plateau), alpha = 0.5) +
+    geom_line(aes(y = speed*(max(vo2_abs) / max(speed))), color = "green") +
+    geom_line(aes(y = grade*(max(vo2_abs) / max(grade))), color = "blue") +
+    scale_y_continuous(
+        name = "Absolute VO2",
+        sec.axis = sec_axis(trans = ~./(max(df_avg$vo2_abs) / max(df_avg$grade)),
+                            name = "Speed/Grade")
+        )+
+    theme_bw() +
+    ggtitle("Only using the difference from data point to data point says\nthere's a plateau for almost the entire test when the diff is >= 50")
+# I think the issue is that this is a rolling average, whereas the traditional
+# vo2 plateau criteria uses time-bin averagin
+
+
+###### Last 60 s
+last_min_idx <- which((df_avg$time - max(df_avg$time) + 60) >= 0)
+last_min <- df_avg[last_min_idx,]
+
+ggplot(data = last_min, aes(x = time)) +
+    geom_point(aes(y = vo2_abs, color = plateau), alpha = 0.5) +
+    # geom_line(aes(y = speed*(max(vo2_abs) / max(speed))), color = "green") +
+    # geom_line(aes(y = grade*(max(vo2_abs) / max(grade))), color = "blue") +
+    scale_y_continuous(
+        name = "Absolute VO2",
+        sec.axis = sec_axis(trans = ~./(max(df_avg$vo2_abs) / max(df_avg$grade)),
+                            name = "Speed/Grade")
+    )+
+    theme_bw() +
+    geom_smooth(method = "lm", aes(y = vo2_abs)) +
+    ggtitle("Last 60 s with diff() showing when ΔVO2 <50 mL/O2/min\nfrompoint to point")
+
+lm_last_min <- lm(vo2_abs ~ 1 + time, data = last_min)
+summary(lm_last_min)
+coef(lm_last_min)[2] * 60
+
+# do you think they took the average
+
+
+###### Last 30 s
+last_30s_idx <- which((df_avg$time - max(df_avg$time) + 30) >= 0)
+last_30s <- df_avg[last_30s_idx,]
+
+ggplot(data = last_30s, aes(x = time)) +
+    geom_point(aes(y = vo2_abs, color = plateau), alpha = 0.5) +
+    # geom_line(aes(y = speed*(max(vo2_abs) / max(speed))), color = "green") +
+    # geom_line(aes(y = grade*(max(vo2_abs) / max(grade))), color = "blue") +
+    scale_y_continuous(
+        name = "Absolute VO2",
+        sec.axis = sec_axis(trans = ~./(max(df_avg$vo2_abs) / max(df_avg$grade)),
+                            name = "Speed/Grade")
+    )+
+    theme_bw() +
+    geom_smooth(method = "lm", aes(y = vo2_abs), se = FALSE) +
+    ggtitle("Last 60 s with diff() showing when ΔVO2 <50 mL/O2/min\nfrompoint to point")
+
+lm_last_30s <- lm(vo2_abs ~ 1 + time, data = last_30s)
+summary(lm_last_30s)
+coef(lm_last_30s)[2] * 60
+
+
+
+.x <- df_avg$vo2_abs
+plateau_func <- function(.x, cutoff = 150) {
+    # browser()
+    diff_x <- diff(.x)
+    max_x <- max(.x)
+    idx_max_x <- which(.x == max(.x))
+    plateau <- logical(length = length(diff_x))
+    for(i in 1:length(plateau)) {
+        temp <- max_x - .x[i]
+        if(temp < cutoff) {
+            plateau[i] <- TRUE
+        }
+    }
+    plateau <- c(NA, plateau)
+    plateau
+}
+
+plateau <- plateau_func(df_avg$vo2_abs, cutoff = 150)
+df_avg$plateau <- plateau
+
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = vo2_abs, color = plateau), alpha = 0.5) +
+    geom_line(aes(y = speed*(max(vo2_abs) / max(speed))), color = "green") +
+    geom_line(aes(y = grade*(max(vo2_abs) / max(grade))), color = "blue") +
+    scale_y_continuous(
+        name = "Absolute VO2",
+        sec.axis = sec_axis(trans = ~./(max(df_avg$vo2_abs) / max(df_avg$speed)),
+                            name = "Speed/Grade")
+    ) +
     theme_bw()
 
-avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "mean")
-avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "mean", trim = 4)
-avg_exercise_test(df, type = "breath", subtype = "rolling", mos = "median", trim = 0)
+round(df_avg$grade / 0.5) * 0.5
 
-avg_exercise_test(df, type = "breath", subtype = "bin", mos = "mean")
+grades <- c(0, 1, 2.5, 4, 5.5)
 
+x <- df_avg$grade - grades
 
-#################################
-## Digital filter option
-
-butter_lowpass <- function(cutoff, fs, order = 5){
-    nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
-    # at a minimum two data points per wave in order to construct the wave
-    normal_cutoff <- cutoff / nyq
-    bf <- signal::butter(n = order, W = normal_cutoff, type = "low", plane = "z")
-    bf
-}
-
-butter_lowpass_filter <- function(data, cutoff, fs, order = 5){
+grade_factors <- function(.x, grades = c(0, 1, 2.5, 4.0, 5.5, 7.0)) {
     # browser()
-    bf <- butter_lowpass(cutoff, fs, order=order)
-    filtered_data <- signal::filter(bf, data)
-    filtered_data
+    new_grades <- numeric(length = length(.x))
+    for(i in 1:length(new_grades)) {
+        temp <- abs(.x[i] - grades)
+        new_grades[i] <- grades[which.min(temp)]
+    }
+    new_grades
 }
 
-data_num <- df %>% # coerce to numeric b/c time may not be of another class
-    dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
-                                as.numeric))
+actual_grades <- grade_factors(df_avg$grade)
+df_avg <- df_avg %>% mutate(actual_grades = actual_grades)
 
-fs <- 1 # sampling rate in Hz
-cutoff <- 0.04 # low-pass filter cutoff (sampling rate?)
-order <- 3
+lm1 <- lm(vo2_abs ~ 1 + as.factor(actual_grades), data = df_avg)
+summary(lm1)
 
-bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)
-bf
-head(data_num$vo2_rel)
-head(signal::filter(bf, data_num$vo2_rel))
+vo2_by_grade <- df_avg %>%
+    group_by(actual_grades) %>%
+    summarize(avg_vo2_abs = mean(vo2_abs))
+diff(vo2_by_grade$avg_vo2_abs)
 
-out <- purrr::map(.x = data_num,
-           .f = function(.x, bf) signal::filter(bf, .x), bf = bf)
-head(out$vo2_rel)
-head(signal::filter(bf, data_num$vo2_rel))
+######
+# The paper V̇O2max, protocol duration, and the V̇O2 plateau
+# uses the last 30 s of a test and finds the VO2 vs. time slope
+# to find the presence of plateau
 
-out$time
+last_min_idx <- which((df_avg$time - max(df_avg$time) + 60) >= 0)
+last_min <- df_avg[last_min_idx,]
+last_min$vo2_abs[nrow(last_min)] - last_min$vo2_abs[1] # 85, suggesting
+# that there is a plateau if you use the original Taylor <= 150 mL, but not if you
+# use the Robers <= 50 mL
 
-out$vo2_rel
+last_min$vo2_abs[nrow(last_min)] - last_min$vo2_abs[30]
+# if you use just the last 30 seconds, then we meet the <= 50 mL criteria
 
-signal::filter(bf, data_num$vo2_rel)
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = peto2), color = "red")
 
-df
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = petco2), color = "blue")
 
-df_digi_filt <- avg_exercise_test(df, type = "digital")
+(max(df_avg$vco2) / max(df_avg$ve))
 
-head(df_digi_filt$vo2_rel)
-ggplot(data = df, aes(x = time, y = vo2_rel)) +
-    geom_point(alpha = 0.5) +
-    theme_bw() +
-    geom_line(aes(y = df_digi_filt$vo2_rel), color = "red")
+ggplot(data = df_avg[df_avg[["speed"]] > 5.9,], aes(x = time)) +
+    geom_point(aes(y = vo2_abs), color = "red") +
+    geom_point(aes(y = vco2), color = "blue") +
+    geom_point(aes(y = ve*(max(df_avg$vco2) / max(ve))), color = "green") +
+    scale_y_continuous(
+        name = "ve",
+        sec.axis = sec_axis(trans = ~./(max(df_avg$vco2) / max(df_avg$ve)),
+                            name = "VE")
+    ) +
+    theme_bw()
+
+
+
 

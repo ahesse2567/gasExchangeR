@@ -2,8 +2,10 @@
 
 S3method(avg_exercise_test,breath)
 S3method(avg_exercise_test,digital)
+S3method(exercise_outliers,knn)
 export("%>%")
 export(avg_exercise_test)
+export(exercise_outliers)
 export(interpolate)
 export(trim_rest_rec)
 import(magrittr)
