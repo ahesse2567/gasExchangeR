@@ -68,31 +68,31 @@ exercise_outliers.knn <- function(
 
     for(i in 1:passes) {
         d <- copy[vars] %>%
-            summarize_all(as.numeric) %>%
-            summarize_all(normalize) %>%
-            dist(method = dist_method) %>%
+            dplyr::summarize_all(as.numeric) %>%
+            dplyr::summarize_all(normalize) %>%
+            stats::dist(method = dist_method) %>%
             as.matrix() %>%
-            as_tibble() %>%
-            map(sort) %>%
-            bind_rows()
+            tibble::as_tibble() %>%
+            purrr::map(sort) %>%
+            dplyr::bind_rows()
         closest_k <- as.numeric(d[k+1,])
-        copy <- tibble(copy, closest_k = closest_k,)
+        copy <- tibble::tibble(copy, closest_k = closest_k,)
         copy <- copy %>%
-            mutate(knn_outlier = closest_k > quantile(closest_k, quant))
+            dplyr::mutate(knn_outlier = closest_k > stats::quantile(closest_k, quant))
         copy <- copy %>%
-            filter(knn_outlier == FALSE) %>%
-            select(-closest_k)
+            dplyr::filter(knn_outlier == FALSE) %>%
+            dplyr::select(-closest_k)
     }
     cols_to_use <- intersect(colnames(df), colnames(copy))
     common <- match(do.call("paste", df[, cols_to_use]),
                     do.call("paste", copy[, cols_to_use]))
     df <- df %>%
-        mutate(outlier = if_else(is.na(common) %in% as.integer(rownames(df)),
+        dplyr::mutate(outlier = dplyr::if_else(is.na(common) %in% as.integer(rownames(df)),
                                  TRUE,
                                  FALSE))
     if(keep_outliers == FALSE) {
         df <- df %>%
-            filter(outlier == FALSE)
+            dplyr::filter(outlier == FALSE)
     }
     df
 }
