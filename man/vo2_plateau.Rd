@@ -2,15 +2,17 @@
 % Please edit documentation in R/vo2_plateau.R
 \name{vo2_plateau}
 \alias{vo2_plateau}
-\title{Determine if a graded exercise test demonstrated a VO2 plateau}
+\title{Determine if a graded exercise test demonstrated a VO2 plateau. Should there be an "all" method?}
 \usage{
 vo2_plateau(
   .data,
-  method = c("slope_eot", "zero_slope", "vo2max_neighbor"),
+  method = "slope_eot",
   vo2_col,
   time_col = "time",
+  units = "mL",
   last_x_s = 30,
-  delta_vo2 = 50
+  delta_vo2 = 50,
+  alpha = 0.05
 )
 }
 \arguments{
@@ -18,15 +20,23 @@ vo2_plateau(
 
 \item{method}{Method to determine the presence of a plateau. Choose from slope at end of test (\code{slope_eot}), slope not significantly different from zero (\code{zero_sleop}), and \code{vo2max_neighbor}.}
 
+\item{vo2_col}{The name of the VO2 column to use in .data. Can be relative or absolute. Make sure units align with \code{units}.}
+
+\item{time_col}{The name of the time column in .data.}
+
+\item{units}{= Specify if the O2 part of the VO2 units are in mL or in L}
+
 \item{last_x_s}{How many seconds at the end of test will be included for slope_eot and zero_slope methods}
 
-\item{delta_vo2}{What is the acceptable variation in VO2 at the end of the test to conside if someone demonstrated a VO2 plateau.}
+\item{delta_vo2}{What is the acceptable variation in VO2 at the end of the test to consider if someone demonstrated a VO2 plateau.}
+
+\item{alpha}{= The level of significance to use when applying the \code{zero_slope} method.}
 }
 \value{
 
 }
 \description{
-Determine if a graded exercise test demonstrated a VO2 plateau
+Determine if a graded exercise test demonstrated a VO2 plateau. Should there be an "all" method?
 }
 \details{
 See Yoon et al. (2007) for a description of the slope_eot method. Briefly, if VO2-time slope in the last 30 seconds of exercise is less than 50 mL O2/min, the participant demonstrated a plateau. This method is likely more suitable when using rolling averages or digital filtering.

@@ -1,3 +1,4 @@
+library(gasExchangeR)
 library(tidyverse)
 
 df <- read_csv("inst/extdata/mar16_101_pre.csv")
@@ -14,53 +15,91 @@ df <- df %>%
            ve_vco2 = ve*1000 / vco2)
 
 ggplot() +
-    geom_point(data = df, aes(x = time, y = vo2_abs),
-               color = "red",
-               alpha = 0.5) +
+    geom_line(data = df[(nrow(df)-60):nrow(df),],
+              aes(x = as.numeric(time), y = vo2_abs),
+              color = "red",
+              alpha = 0.5) +
     theme_bw() +
-    ggtitle("Full Test, Unaveraged")
+    ggtitle("Last 60 seconds, Unaveraged, Raw") +
+    xlim(c(790, 925)) +
+    ylim(c(2100, 4500))
+
+df_knn <- exercise_outliers(df, method = "knn", keep_outliers = FALSE)
 
 ggplot() +
-    geom_point(data = df[(nrow(data)-60):nrow(data),],
+    geom_line(data = df_knn[(nrow(df_knn)-60):nrow(df_knn),],
                aes(x = as.numeric(time), y = vo2_abs),
                color = "red",
                alpha = 0.5) +
     theme_bw() +
-    ggtitle("Last 60 seconds, Unaveraged") +
-    xlim(c(810, 910))
+    ggtitle("Last 60 seconds, Unaveraged, Outliers Removed") +
+    xlim(c(790, 925)) +
+    ylim(c(2100, 4500))
 
-
-df_avg <- df %>%
-    avg_exercise_test(type ="breath", subtype = "rolling", roll_window = 11)
+df_avg <- avg_exercise_test(df_knn, type = "breath", subtype = "rolling")
 
 ggplot() +
-    geom_point(data = df_avg, aes(x = time, y = vo2_abs),
+    geom_line(data = df_avg[(nrow(df_avg)-60):nrow(df_avg),],
+               aes(x = as.numeric(time), y = vo2_abs),
                color = "red",
                alpha = 0.5) +
     theme_bw() +
-    ggtitle("Full test, Rolling Breath Average")
+    ggtitle("Last 60 seconds, Averaged") +
+    xlim(c(790, 925)) +
+    ylim(c(2100, 4500))
 
-ggplot() +
-    geom_point(data = df_avg[(nrow(data)-60):nrow(data),],
-               aes(x = time, y = vo2_abs),
-               color = "red",
-               alpha = 0.5) +
-    theme_bw() +
-    ggtitle("Last 60 seconds, Rolling Breath Average") +
-    xlim(c(810, 910))
+#### Plateau
+df_avg
+last_x_s <- 30
+time_col <- "time"
+vo2_col <- "vo2_abs"
+delta_vo2 = 50
+alpha <- 0.05
 
-idx_max_vo2_abs <- which.max(df_avg$vo2_abs)
-df_avg$vo2_abs[idx_max_vo2_abs] - df_avg$vo2_abs[idx_max_vo2_abs - 1]
-# vo2max minus the closest neighboring data point is prone to overshooting
-# the <50 mL O2/min limit because of noise in the data. Maybe this improves
-# after first removing outliers
+eot_idx <- which((df_avg[[time_col]] - max(df_avg[[time_col]]) + last_x_s) >= 0)
+eot <- df_avg[eot_idx,]
 
-vo2_diff <- diff(df_avg$vo2_abs)
+ggplot(data = eot, aes(x = time, y = vo2_abs)) +
+    geom_point(color = "red") +
+    geom_line() +
+    geom_smooth(method = "lm", se = FALSE) +
+    theme_bw()
 
-df_avg$vo2_diff_abs <- c(NA,diff(df_avg$vo2_abs))
+form <- as.formula(paste(vo2_col, "~ 1 +", time_col))
+lm <- lm(form, data = eot)
+broom::tidy(lm)
 
-df_avg <- df_avg %>%
-    mutate(plateau = if_else(vo2_diff_abs >= 50, FALSE, TRUE))
+if(broom::tidy(lm)[["p.value"]][2] > alpha) {
+    plateau <- TRUE
+} else if(broom::tidy(lm)[["p.value"]][2] < alpha & coef(lm)[2]*60 < 0){
+    plateau <- TRUE
+} else {
+    plateau <- FALSE
+}
+plateau
+
+out <- tibble(plateau = plateau,
+              vo2_time_slope_min = coef(lm)[2]*60,
+              p.value = broom::tidy(lm)[["p.value"]][2])
+out
+vo2_plateau(df_avg, method = "zero_slope", vo2_col = "vo2_abs",
+            time_col = "time", last_x_s = 35)
+
+
+vo2max_idx <- which.max(df_avg[[vo2_col]])
+vo2max_neighbor_diff <- df_avg[[vo2_col]][vo2max_idx] -
+    df_avg[[vo2_col]][vo2max_idx - 1]
+
+if(vo2max_neighbor_diff < delta_vo2) {
+    plateau <- TRUE
+} else {
+    plateau <- FALSE
+}
+
+out <- tibble(plateau = plateau,
+              vo2max_neighbor_diff = vo2max_neighbor_diff)
+out
+
 
 max(df_avg$vo2_abs) / max(df_avg$grade)
 
