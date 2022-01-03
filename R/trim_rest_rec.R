@@ -17,6 +17,7 @@ trim_rest_rec <- function(.data,
                            start_intensity,
                            end_intensity = 0) {
     start <- which(dplyr::lag(diff(.data[[intensity_col]])) == start_intensity)
+    # I think there's an issue here if the speed/grade doesn't repeat
     end <- which(diff(.data[[intensity_col]]) < end_intensity)
     if(length(end) == 0) { # test was terminated before clicking recovery on the computer
         end <- nrow(.data) # instead, set end to last data point in file

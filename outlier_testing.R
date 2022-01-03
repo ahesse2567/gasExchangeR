@@ -1,3 +1,4 @@
+library(gasExchangeR)
 library(tidyverse)
 
 df <- read_csv("inst/extdata/mar16_101_pre.csv")
@@ -17,6 +18,9 @@ df <- df %>%
 ggplot(data = df, aes(x = time)) +
     geom_point(aes(y = vo2_rel)) +
     theme_bw()
+
+# library(ccTools)
+# findOutlier(df, Q = 0.05, outliers = T)
 
 df_knn <- exercise_outliers(
     df = df,
