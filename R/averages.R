@@ -10,7 +10,7 @@
 #' @param bins Bin size of breaths or time.
 #' @param align If using a rolling method, how to align the rolling average. Other choices include "left", and "right".
 #' @param mos 'Measure of center'. Choices include "mean" or "median"
-#' @param trim Indicate i you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method.
+#' @param trim Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method. Must be a positive, even integer.
 #' @param cutoff The cutoff frequency in Hz. Only used by digital filter.
 #' @param fs The sampling frequency in Hz. Only used by digital filter.
 #' @param order The Butterworth low-pass filter order. Only used by digital filter.
@@ -25,8 +25,8 @@
 #' # TODO write an example later b/c I was getting errors earlier despite getting the functions to work when they were in the global environment
 #'
 avg_exercise_test <- function(.data,
-                              type = c("breath", "time", "digital"),
-                              subtype = c("rolling", "bin", "combo"),
+                              type = "breath",
+                              subtype = "rolling",
                               roll_window = 15,
                               bins = 15,
                               align = "center",
@@ -40,17 +40,18 @@ avg_exercise_test <- function(.data,
               roll_window >= 1,
               bins >= 1,
               roll_window %% 1 == 0,
-              bins %% 1 == 0)
+              bins %% 1 == 0,
+              trim > 0 & trim %% 2 == 0)
 
-    type <- match.arg(type)
+    type <- match.arg(type, choices = c("breath", "time", "digital"))
     class(.data) <- append(class(.data), type)
     UseMethod("avg_exercise_test", .data)
 }
 
 #' @export
 avg_exercise_test.breath <- function(.data,
-                                     type = c("breath", "time", "digital"),
-                                     subtype = c("rolling", "bin", "combo"),
+                                     type = "breath",
+                                     subtype = "rolling",
                                      roll_window = 15,
                                      bins = 15,
                                      align = "center",
@@ -61,7 +62,7 @@ avg_exercise_test.breath <- function(.data,
                                      order = 3) {
     # browser()
     stopifnot(!missing(subtype))
-    subtype <- match.arg(subtype)
+    subtype <- match.arg(subtype, choices = c("rolling", "bin", "combo"))
 
     char_cols <- .data[, purrr::map(.data, class) == "character"]
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
@@ -121,8 +122,8 @@ avg_exercise_test.breath <- function(.data,
 
 #' @export
 avg_exercise_test.digital <- function(.data,
-                                      type = c("breath", "time", "digital"),
-                                      subtype = c("rolling", "bin", "combo"),
+                                      type = "breath",
+                                      subtype = "rolling",
                                       roll_window = 15,
                                       bins = 15,
                                       align = "center",

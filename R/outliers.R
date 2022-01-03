@@ -47,7 +47,6 @@ exercise_outliers.knn <- function(
     dist_method = "euclidean",
     p = 1.5,
     keep_outliers = TRUE) {
-    # browser()
 
     dist_method <- match.arg(dist_method,
                              choices = c("euclidean", "maximum", "manhattan",
@@ -55,7 +54,8 @@ exercise_outliers.knn <- function(
     copy <- df
     cutoff <- round(cutoff,0)
     if(missing(passes)) {
-        passes <- round(100 - cutoff)
+        # passes <- round((100-cutoff)/100 * nrow(df)) # rm one per pass
+        passes <- round(100 - cutoff) # rm more than one per pass
     } else if ((100 - cutoff) %% passes != 0) {
         # change the passes and cutoff if they aren't divisible
         pass_mult <- round((100 - cutoff) / passes, 0)
@@ -76,9 +76,10 @@ exercise_outliers.knn <- function(
             purrr::map(sort) %>%
             dplyr::bind_rows()
         closest_k <- as.numeric(d[k+1,])
-        copy <- tibble::tibble(copy, closest_k = closest_k,)
+        copy <- tibble::tibble(copy, closest_k = closest_k)
         copy <- copy %>%
-            dplyr::mutate(knn_outlier = closest_k > stats::quantile(closest_k, quant))
+            dplyr::mutate(knn_outlier = closest_k > stats::quantile(closest_k,
+                                                                    quant))
         copy <- copy %>%
             dplyr::filter(knn_outlier == FALSE) %>%
             dplyr::select(-closest_k)

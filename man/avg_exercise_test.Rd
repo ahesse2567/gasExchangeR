@@ -6,8 +6,8 @@
 \usage{
 avg_exercise_test(
   .data,
-  type = c("breath", "time", "digital"),
-  subtype = c("rolling", "bin", "combo"),
+  type = "breath",
+  subtype = "rolling",
   roll_window = 15,
   bins = 15,
   align = "center",
