@@ -5,12 +5,13 @@
 #'
 #' @param .data Gas exchange data.
 #' @param type Choose between breath averages, time averages, or digital filtering.
-#' @param subtype Choose rolling, bin, or combo.
+#' @param time_col The name of the column with time.
+#' @param subtype Choose rolling, bin, or bin-roll.
 #' @param roll_window How many seconds or breaths to include if rolling.
-#' @param bins Bin size of breaths or time.
+#' @param bin_w Bin size of breaths or time.
 #' @param align If using a rolling method, how to align the rolling average. Other choices include "left", and "right".
-#' @param mos 'Measure of center'. Choices include "mean" or "median"
-#' @param trim Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method. Must be a positive, even integer.
+#' @param mos 'Measure of center'. Choices include "mean" or "median".
+#' @param trim Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-of-7" averaging method. Must be a positive, even integer.
 #' @param cutoff The cutoff frequency in Hz. Only used by digital filter.
 #' @param fs The sampling frequency in Hz. Only used by digital filter.
 #' @param order The Butterworth low-pass filter order. Only used by digital filter.
@@ -20,15 +21,21 @@
 #' @return
 #' @export
 #'
+#' @details
+#' If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the roll_window. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 / 5 = 3.
+#'
+#' \code{roll_window} must be evenly divisible by \code{bin_w}
+#'
 #' @examples
 #'
-#' # TODO write an example later b/c I was getting errors earlier despite getting the functions to work when they were in the global environment
+#' # TODO write an example
 #'
 avg_exercise_test <- function(.data,
                               type = "breath",
                               subtype = "rolling",
+                              time_col = "time",
                               roll_window = 15,
-                              bins = 15,
+                              bin_w = 15,
                               align = "center",
                               mos = "mean",
                               trim = 0,
@@ -38,10 +45,10 @@ avg_exercise_test <- function(.data,
     stopifnot(!missing(.data),
               !missing(type),
               roll_window >= 1,
-              bins >= 1,
+              bin_w >= 1,
               roll_window %% 1 == 0,
-              bins %% 1 == 0,
-              trim > 0 & trim %% 2 == 0)
+              bin_w %% 1 == 0,
+              trim >= 0 & trim %% 2 == 0)
 
     type <- match.arg(type, choices = c("breath", "time", "digital"))
     class(.data) <- append(class(.data), type)
@@ -52,8 +59,9 @@ avg_exercise_test <- function(.data,
 avg_exercise_test.breath <- function(.data,
                                      type = "breath",
                                      subtype = "rolling",
+                                     time_col = "time",
                                      roll_window = 15,
-                                     bins = 15,
+                                     bin_w = 15,
                                      align = "center",
                                      mos = "mean",
                                      trim = 0,
@@ -62,7 +70,7 @@ avg_exercise_test.breath <- function(.data,
                                      order = 3) {
     # browser()
     stopifnot(!missing(subtype))
-    subtype <- match.arg(subtype, choices = c("rolling", "bin", "combo"))
+    subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
 
     char_cols <- .data[, purrr::map(.data, class) == "character"]
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
@@ -106,7 +114,7 @@ avg_exercise_test.breath <- function(.data,
         # we should actually find the time_col
         out <- data_num %>%
             dplyr::group_by_at(1,
-                               function(x) round(x / roll_window) * roll_window) %>%
+                               function(x) round(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
                                  trim = trim / length(data) / 2)
@@ -116,7 +124,97 @@ avg_exercise_test.breath <- function(.data,
         out <- dplyr::bind_cols(char_cols, out)
         return(out)
     } else {
-        print("Subtypes other than 'rolling' and 'bin' not yet defined.")
+        if(roll_window %% bin_w != 0) {
+            stop("roll_window is not evenly divisible by bin_w")
+        }
+        align <- match.arg(align, choices = c("left", "right", "center"))
+        mos <- match.arg(mos, choices = c("mean", "median"))
+
+        block <- data_num %>%
+            dplyr::group_by_at(.vars = time_col,
+                               function(x) round(x / bin_w) * bin_w) %>%
+            dplyr::summarise_all(.funs = mos,
+                                 na.rm = TRUE,
+                                 trim = trim / length(data) / 2)
+        rolled_block <- block %>%
+            zoo::rollapply(data = .,
+                           width = roll_window / bin_w,
+                           align = align,
+                           FUN = mos,
+                           trim = trim / length(data) / 2) %>%
+            dplyr::as_tibble()
+        out <- dplyr::bind_cols(char_cols, rolled_block)
+        return(out)
+    }
+}
+
+#' @export
+avg_exercise_test.time <- function(.data,
+                                   type = "breath",
+                                   subtype = "rolling",
+                                   time_col = "time",
+                                   roll_window = 15,
+                                   bin_w = 15,
+                                   align = "center",
+                                   mos = "mean",
+                                   trim = 0,
+                                   cutoff = 0.04,
+                                   fs = 1,
+                                   order = 3) {
+    # browser()
+    stopifnot(!missing(subtype))
+    subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
+
+    char_cols <- .data[, purrr::map(.data, class) == "character"]
+    if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
+        char_cols <- unique(char_cols)
+        # delete char col b/c they don't play well with rollapply(). Add back later
+        .data <- .data[,-which(colnames(x) %in% names(char_cols))]
+    } else {
+        char_cols <- NULL
+    }
+
+    data_num <- .data %>% # coerce to numeric b/c time may not be of another class
+        dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
+                                    as.numeric))
+    if(subtype == "rolling") {
+        align <- match.arg(align, choices = c("left", "right", "center"))
+        mos <- match.arg(mos, choices = c("mean", "median"))
+        print("Irregular time series rolling average not yet defined")
+        # return(out)
+    } else if (subtype == "bin") {
+        out <- data_num %>%
+            dplyr::group_by_at(.vars = time_col,
+                               function(x) round(x / bin_w) * bin_w) %>%
+            dplyr::summarise_all(.funs = mos,
+                                 na.rm = TRUE,
+                                 trim = trim / length(data) / 2)
+        # round(x / roll_window) puts the values into groups. * roll_window
+        # scales it back to the original time values.
+        out <- dplyr::bind_cols(char_cols, out)
+        return(out)
+    } else {
+        if(roll_window %% bin_w != 0) {
+            stop("roll_window is not evenly divisible by bin_w")
+        }
+        align <- match.arg(align, choices = c("left", "right", "center"))
+        mos <- match.arg(mos, choices = c("mean", "median"))
+
+        block <- data_num %>%
+            dplyr::group_by_at(.vars = time_col,
+                               function(x) round(x / bin_w) * bin_w) %>%
+            dplyr::summarise_all(.funs = mos,
+                                 na.rm = TRUE,
+                                 trim = trim / length(data) / 2)
+        rolled_block <- block %>%
+            zoo::rollapply(data = .,
+                           width = roll_window / bin_w,
+                           align = align,
+                           FUN = mos,
+                           trim = trim / length(data) / 2) %>%
+            dplyr::as_tibble()
+        out <- dplyr::bind_cols(char_cols, rolled_block)
+        return(out)
     }
 }
 
@@ -124,8 +222,9 @@ avg_exercise_test.breath <- function(.data,
 avg_exercise_test.digital <- function(.data,
                                       type = "breath",
                                       subtype = "rolling",
+                                      time_col = "time",
                                       roll_window = 15,
-                                      bins = 15,
+                                      bin_w = 15,
                                       align = "center",
                                       mos = "mean",
                                       trim = 0,

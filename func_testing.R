@@ -4,7 +4,7 @@ library(tidyverse)
 df <- read_csv("inst/extdata/mar16_101_pre.csv")
 
 df <- df %>%
-    trim_rest_rec(intensity_col = "speed", start_intensity = 3) %>%
+    trim_rest_rec(intensity_col = "speed") %>%
     # vo2max_window() %>%
     # x_breath_mean(b = 4) %>%
     select(time, speed, grade, vo2, vo2.1, vco2, ve.btps, peto2, petco2) %>%

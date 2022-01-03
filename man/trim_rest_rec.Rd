@@ -11,9 +11,9 @@ trim_rest_rec(.data, intensity_col, pre_ex_intensity = 0, end_ex_intensity = 0)
 
 \item{intensity_col}{Speed, wattage, or grade values that help determine start and end of a test.}
 
-\item{start_ex_intensity}{Intensity of 'pre-exercise' data.}
+\item{pre_ex_intensity}{Intensity of 'pre-exercise' data.}
 
-\item{end__ex_intensity}{Intensity that denotes the test has ended or entered the final recovery phase.}
+\item{end_ex_intensity}{Intensity that denotes the test has ended or entered the final recovery phase.}
 }
 \value{
 

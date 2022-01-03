@@ -2,6 +2,7 @@
 
 S3method(avg_exercise_test,breath)
 S3method(avg_exercise_test,digital)
+S3method(avg_exercise_test,time)
 S3method(exercise_outliers,knn)
 S3method(vo2_plateau,slope_eot)
 S3method(vo2_plateau,vo2max_neighbor)

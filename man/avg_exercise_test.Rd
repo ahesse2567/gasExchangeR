@@ -8,8 +8,9 @@ avg_exercise_test(
   .data,
   type = "breath",
   subtype = "rolling",
+  time_col = "time",
   roll_window = 15,
-  bins = 15,
+  bin_w = 15,
   align = "center",
   mos = "mean",
   trim = 0,
@@ -23,17 +24,19 @@ avg_exercise_test(
 
 \item{type}{Choose between breath averages, time averages, or digital filtering.}
 
-\item{subtype}{Choose rolling, bin, or combo.}
+\item{subtype}{Choose rolling, bin, or bin-roll.}
+
+\item{time_col}{The name of the column with time.}
 
 \item{roll_window}{How many seconds or breaths to include if rolling.}
 
-\item{bins}{Bin size of breaths or time.}
+\item{bin_w}{Bin size of breaths or time.}
 
 \item{align}{If using a rolling method, how to align the rolling average. Other choices include "left", and "right".}
 
-\item{mos}{'Measure of center'. Choices include "mean" or "median"}
+\item{mos}{'Measure of center'. Choices include "mean" or "median".}
 
-\item{trim}{Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method. Must be a positive, even integer.}
+\item{trim}{Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-of-7" averaging method. Must be a positive, even integer.}
 
 \item{cutoff}{The cutoff frequency in Hz. Only used by digital filter.}
 
@@ -48,8 +51,13 @@ avg_exercise_test(
 This function averages first by either breath, time, or digital filtering
 If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
 }
+\details{
+If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the roll_window. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 / 5 = 3.
+
+\code{roll_window} must be evenly divisible by \code{bin_w}
+}
 \examples{
 
-# TODO write an example later b/c I was getting errors earlier despite getting the functions to work when they were in the global environment
+# TODO write an example
 
 }

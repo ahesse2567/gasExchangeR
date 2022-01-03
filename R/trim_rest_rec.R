@@ -2,8 +2,8 @@
 #'
 #' @param .data Unaveraged, breath-by-breath exercise test.
 #' @param intensity_col Speed, wattage, or grade values that help determine start and end of a test.
-#' @param start_ex_intensity Intensity of 'pre-exercise' data.
-#' @param end__ex_intensity Intensity that denotes the test has ended or entered the final recovery phase.
+#' @param pre_ex_intensity Intensity of 'pre-exercise' data.
+#' @param end_ex_intensity Intensity that denotes the test has ended or entered the final recovery phase.
 #'
 #' @return
 #' @export
@@ -30,6 +30,4 @@ trim_rest_rec <- function(.data,
     .data <- .data[start_idx:end_idx,]
     .data
 }
-
-
 
