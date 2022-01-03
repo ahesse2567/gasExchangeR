@@ -33,7 +33,7 @@ avg_exercise_test(
 
 \item{mos}{'Measure of center'. Choices include "mean" or "median"}
 
-\item{trim}{Indicate i you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method.}
+\item{trim}{Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-o-7" averaging method. Must be a positive, even integer.}
 
 \item{cutoff}{The cutoff frequency in Hz. Only used by digital filter.}
 

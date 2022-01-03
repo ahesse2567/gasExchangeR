@@ -4,16 +4,16 @@
 \alias{trim_rest_rec}
 \title{Delete any 'resting/pre-exercise' and 'recovery' portions from a graded exercise test}
 \usage{
-trim_rest_rec(.data, intensity_col, start_intensity, end_intensity = 0)
+trim_rest_rec(.data, intensity_col, pre_ex_intensity = 0, end_ex_intensity = 0)
 }
 \arguments{
-\item{.data}{Unaveraged, breath-by-breath exercise test}
+\item{.data}{Unaveraged, breath-by-breath exercise test.}
 
-\item{intensity_col}{Speed or wattage values that help determine start and end of a test}
+\item{intensity_col}{Speed, wattage, or grade values that help determine start and end of a test.}
 
-\item{start_intensity}{Initial intensity just after 'pre-exercise' data}
+\item{start_ex_intensity}{Intensity of 'pre-exercise' data.}
 
-\item{end_intensity}{Intensity that denotes the test has ended or entered the recovery phase}
+\item{end__ex_intensity}{Intensity that denotes the test has ended or entered the final recovery phase.}
 }
 \value{
 
@@ -24,5 +24,5 @@ Delete any 'resting/pre-exercise' and 'recovery' portions from a graded exercise
 \examples{
 df <- data.frame(time = c(14, 18, 61, 78, 88, 100, 120, 150, 220, 231),
 speed = c(0, 0, 0, 0, 3, 3, 3, 7.4, 7.4, 0))
-trim_rest_rec(.data = df, intensity_col = "speed", start_intensity = 3)
+trim_rest_rec(.data = df, intensity_col = "speed")
 }
