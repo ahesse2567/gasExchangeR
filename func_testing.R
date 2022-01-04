@@ -38,67 +38,77 @@ ggplot(data = df_inc, aes(x = time)) +
     ylim(c(20, 45)) +
     theme_bw()
 
-bcp_ve <- bcp(y = cbind(df_inc$ve_vco2, df_inc$petco2))
-plot(bcp_ve)
+## Nile data with one breakpoint: the annual flows drop in 1898
+## because the first Ashwan dam was built
+data("Nile")
+plot(Nile)
 
-## there are wayyyy too many changepoints using bcp
+## F statistics indicate one breakpoint
+fs.nile <- Fstats(Nile ~ 1)
+plot(fs.nile)
+breakpoints(fs.nile)
+lines(breakpoints(fs.nile))
 
-#### bcp package for beysian change point
-library(bcp)
+## or
+bp.nile <- breakpoints(Nile ~ 1)
+summary(bp.nile)
 
-##### univariate sequential data #####
-# an easy problem with 2 true change points
-set.seed(5)
-x <- c(rnorm(50), rnorm(50, 5, 1), rnorm(50))
-bcp.1a <- bcp(x)
-plot(bcp.1a, main="Univariate Change Point Example")
-legacyplot(bcp.1a)
+## the BIC also chooses one breakpoint
+plot(bp.nile)
+breakpoints(bp.nile)
 
-# a hard problem with 1 true change point
-set.seed(5)
-x <- rep(c(0,1), each=50)
-y <- x + rnorm(50, sd=1)
-bcp.1b <- bcp(y)
-plot(bcp.1b, main="Univariate Change Point Example")
+## fit null hypothesis model and model with 1 breakpoint
+fm0 <- lm(Nile ~ 1)
+fm1 <- lm(Nile ~ breakfactor(bp.nile, breaks = 1))
+plot(Nile)
+lines(ts(fitted(fm0), start = 1871), col = 3)
+lines(ts(fitted(fm1), start = 1871), col = 4)
+lines(bp.nile)
 
-##### multivariate sequential data #####
-# an easy problem in k=3 dimensions
-set.seed(5)
-x <- rnorm(6, sd=3)
-y <- rbind(cbind(rnorm(50, x[1]), rnorm(50, x[2]), rnorm(50, x[3])),
-           cbind(rnorm(50, x[4]), rnorm(50, x[5]), rnorm(50, x[6])))
-bcp.2a <- bcp(cbind(y))
-plot(bcp.2a, main="Multivariate (k=3) Change Point Example")
-plot(bcp.2a, separated=TRUE, main="Multivariate (k=3) Change Point Example")
+## confidence interval
+ci.nile <- confint(bp.nile)
+ci.nile
+lines(ci.nile)
 
-# a harder problem in k=5 dimensions
-set.seed(5)
-means1 <- rep(0, 5)
-means2 <- rep(1, 5)
-x <- rbind(matrix(rep(means1, each=50), nrow=50),
-           matrix(rep(means2, each=50), nrow=50))
-y <- x + rnorm(length(x), sd=1)
-bcp.2b <- bcp(cbind(y))
-plot(bcp.2b, main="Multivariate (k=5) Change Point Example")
+### strucchange with exercise data
+plot(df_inc$ve_vco2)
+fs.ve_vco2 <- Fstats(df_inc$ve_vco2 ~ 1)
+plot(fs.ve_vco2)
+breakpoints(fs.ve_vco2)
+lines(breakpoints(fs.ve_vco2))
 
-##### linear models with sequential data #####
-# 1 true change point at location 50; the predicting variable x is not related to location
-x <- rnorm(100)
-b <- rep(c(3,-3), each=50)
-y <- b*x + rnorm(100)
-bcp.3a <- bcp(y, x)
-# in the two plots that follow, the location IDs are used as the plot characters
-par(mfrow=c(1,2))
-plot(y ~ x, type="n", main="Linear Regression: Raw Data")
-text(x, y, as.character(1:100), col=(b/3)+2)
-plot(y ~ x, type="n", main="Linear Regression: Posterior Means")
-text(x, bcp.3a$posterior.mean[,1], as.character(1:100), col=(b/3)+2)
-plot(bcp.3a, main="Linear Regression Change Point Example")
 
-# 1 true change point at location 50; the predicting variable x is equal to location
-x <- 1:100
-b <- rep(c(3,-3), each=50)
-y <- b*x + rnorm(100, sd=50)
-bcp.3b <- bcp(y, x)
-plot(bcp.3b, main="Linear Regression Change Point Example")
+bp.ve_vco2 <- breakpoints(df_inc$ve_vco2 ~ 1)
+summary(bp.ve_vco2)
+plot(bp.ve_vco2)
+breakpoints(bp.ve_vco2)
 
+fm0 <- lm(df_inc$ve_vco2 ~ 1)
+bp.ve_vco2 <- breakpoints(df_inc$ve_vco2 ~ 1)
+fm1 <- lm(df_inc$ve_vco2 ~ breakfactor(bp.ve_vco2, breaks = 4))
+plot(df_inc$ve_vco2)
+lines(ts(fitted(fm0)), col = 3)
+lines(ts(fitted(fm1)), col = 4)
+lines(bp.ve_vco2)
+
+
+### with petco2
+plot(df_inc$petco2)
+fs.petco2 <- Fstats(df_inc$petco2 ~ 1)
+plot(fs.petco2)
+breakpoints(fs.petco2)
+lines(breakpoints(fs.petco2))
+
+
+bp.petco2 <- breakpoints(df_inc$petco2 ~ 1)
+summary(bp.petco2)
+plot(bp.petco2)
+breakpoints(bp.petco2)
+
+fm0 <- lm(df_inc$petco2 ~ 1)
+bp.petco2 <- breakpoints(df_inc$petco2 ~ 1)
+fm1 <- lm(df_inc$petco2 ~ breakfactor(bp.petco2, breaks = 2))
+plot(df_inc$petco2)
+lines(ts(fitted(fm0)), col = 3)
+lines(ts(fitted(fm1)), col = 4)
+lines(bp.ve_vco2)
