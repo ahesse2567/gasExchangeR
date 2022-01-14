@@ -75,7 +75,7 @@ library(lmvar)
 # using glm()
 set.seed(1234987)
 k <- 10
-knot_max <- 100
+knot_max <- nrow(df_unavg) / 2
 cv_error <- numeric(length = length(0:knot_max))
 cv_mod_list <- vector(mode = "list", length = length(0:knot_max))
 degree = 3
@@ -84,39 +84,12 @@ for(i in 0:knot_max) {
     cv_mod_list[[i+1]] <- glm(ve_vo2 ~ 1 + bs(as.numeric(time),
                                              df = i + degree,
                                              degree = degree),
-                             data = df_unavg,
-                             family = )
+                             data = df_unavg)
     names(cv_mod_list)[i+1] <- spline_mod_name
     cv_error[i+1] <- cv.glm(df_unavg, glmfit = cv_mod_list[[i+1]], K = k)$delta[1]
     # is there a cv.lm somewhere?
 }
 
-# using lm()
-set.seed(1234987)
-k <- 10
-knot_max <- 100
-cv_error <- numeric(length = length(0:knot_max))
-cv_mod_list <- vector(mode = "list", length = length(0:knot_max))
-degree = 3
-# this is REALLY slow compared to using glm and cv.glm()
-for(i in 0:knot_max) {
-    spline_mod_name <- paste0("bs.", i)
-    cv_mod_list[[i + 1]] <- lm(
-        ve_vo2 ~ 1 + bs(
-            as.numeric(time),
-            df = i + degree,
-            degree = degree
-        ),
-        data = df_unavg,
-        x = TRUE,
-        y = TRUE
-    )
-    names(cv_mod_list)[i + 1] <- spline_mod_name
-    cv_error[i + 1] <- lmvar::cv.lm(cv_mod_list[[i + 1]],
-                                    k = k)$MSE$mean
-}
-
-cv_error
 knot_tab <- tibble(knots = 0:knot_max,
                    df = 0:knot_max + degree,
                    cv_error = cv_error)
@@ -127,14 +100,30 @@ best_cv <- which.min(cv_error)
 best_cv # actually
 knot_tab[best_cv,]
 
-autoplot(cv_mod_list[best_cv], which = 1:6, ncol = 3, label.size = 3)
+# I got around the lack of a good cv.lm() function by just redoing
+# the best glm as an lm because lm is just the gaussian case of glm
+# this allowed me to make a prediction interval
+best_cv_mod <- lm(ve_vo2 ~ 1 + bs(as.numeric(time),
+                                  df = knot_tab[[best_cv,"df"]],
+                                  degree = degree),
+                  data = df_unavg)
+
+autoplot(best_cv_mod, which = 1:6, ncol = 3, label.size = 3)
 influenceIndexPlot(cv_mod_list[[best_cv]])
 outlierTest(cv_mod_list[[best_cv]])
 predict(cv_mod_list[[best_cv]], se.fit = TRUE)
 
 ## prediction errors are not built into a glm model
-pred_cv <- predict(cv_mod_list[[best_cv]],
-                interval = "prediction") %>%
+sd_to_pct <- function(sd) {
+    pct <- abs(1 - pnorm(sd) * 2)
+    pct
+}
+
+sd_to_pct(3)
+
+pred_cv <- predict(best_cv_mod,
+                interval = "prediction",
+                level = sd_to_pct(2)) %>%
     as_tibble()
 
 plot_data <- df_unavg %>%
@@ -149,3 +138,4 @@ ggplot(data = plot_data, aes(x = time, y = ve_vo2)) +
     geom_line(aes(y = upr), linetype = "dashed") +
     theme_bw()
 
+# now, refit the spline model but with the outliers removed
