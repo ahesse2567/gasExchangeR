@@ -102,7 +102,7 @@ avg_exercise_test.breath <- function(.data,
                            width = roll_window,
                            align = align,
                            FUN = mos,
-                           trim = trim / length(data) / 2) %>%
+                           trim = trim / roll_window / 2) %>%
             dplyr::as_tibble()
 
         # out <- rbind(roll_i, out) # if using breeze rolling
