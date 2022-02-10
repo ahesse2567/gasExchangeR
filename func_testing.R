@@ -8,22 +8,23 @@ df_unavg <- df_raw %>%
     rename(vo2_rel = vo2,
            vo2_abs = vo2.1,
            ve = ve.btps) %>%
-    trim_rest_rec(intensity_col = "speed") %>%
-    trim_rest_rec(intensity_col = "speed", pre_ex_intensity = 3) %>%
-    trim_rest_rec(intensity_col = "speed", pre_ex_intensity = 5.6) %>%
+    trim_pre_post(intensity_col = "speed") %>%
+    trim_pre_post(intensity_col = "speed", pre_ex_intensity = 3) %>%
+    trim_pre_post(intensity_col = "speed", pre_ex_intensity = 5.6) %>%
     select(time, speed, grade, vo2_rel, vo2_abs, vco2, ve, peto2, petco2) %>%
     mutate(ve_vo2 = ve*1000 / vo2_abs,
            ve_vco2 = ve*1000 / vco2)
 
-df_avg <- df_unavg %>%
-    avg_exercise_test(type = "breath",
-                      subtype = "rolling",
-                      roll_window = 11)
-
-ggplot(data = df_avg, aes(x = time, y = petco2)) +
+ggplot(data = df_unavg, aes(x = time, y = vo2_abs)) +
     geom_point(color = "red", alpha = 0.5) +
-    theme_bw() +
-    ylim(c(30, 45))
+    theme_bw()
+
+df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "bin",
+                  time_col = "time", bin_w = 10, trim = 2)
+
+ggplot(data = df_avg, aes(x = time, y = vo2_abs)) +
+    geom_point(color = "red", alpha = 0.5) +
+    theme_bw()
 
 ggplot(data = df_avg, aes(x = vco2, y = ve)) +
     geom_point(color = "brown", alpha = 0.5) +

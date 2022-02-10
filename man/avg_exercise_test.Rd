@@ -20,11 +20,11 @@ avg_exercise_test(
 )
 }
 \arguments{
-\item{.data}{Gas exchange data.}
+\item{.data}{Breath-by-breath gas exchange data.}
 
-\item{type}{Choose between breath averages, time averages, or digital filtering.}
+\item{type}{Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.}
 
-\item{subtype}{Choose rolling, bin, or bin-roll.}
+\item{subtype}{Choose \code{rolling}, \code{bin}, or \code{bin-roll}.}
 
 \item{time_col}{The name of the column with time.}
 
@@ -32,11 +32,12 @@ avg_exercise_test(
 
 \item{bin_w}{Bin size of breaths or time.}
 
-\item{align}{If using a rolling method, how to align the rolling average. Other choices include "left", and "right".}
+\item{align}{If using a rolling method, how to align the rolling average. Default is \code{"center"} Other choices include \code{"left"}, and \code{"right"}.}
 
-\item{mos}{'Measure of center'. Choices include "mean" or "median".}
+\item{mos}{'Measure of center'. Choices include \code{"mean"} (default) or \code{"median"}.}
 
-\item{trim}{Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-of-7" averaging method. Must be a positive, even integer.}
+\item{trim}{Indicate if you want a trimmed mean. Trim removes a number of data points equal to \code{trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{trim} must be a positive, even integer.
+TODO How should trim interact with bin_roll? It probably shouldn't trim during both the bin and the roll without letting the user specify that.}
 
 \item{cutoff}{The cutoff frequency in Hz. Only used by digital filter.}
 
@@ -52,7 +53,7 @@ This function averages first by either breath, time, or digital filtering
 If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
 }
 \details{
-If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the roll_window. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 / 5 = 3.
+If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
 
 \code{roll_window} must be evenly divisible by \code{bin_w}
 }

@@ -9,7 +9,7 @@
 #' @param subtype Choose \code{rolling}, \code{bin}, or \code{bin-roll}.
 #' @param roll_window How many seconds or breaths to include if rolling.
 #' @param bin_w Bin size of breaths or time.
-#' @param align If using a rolling method, how to align the rolling average. Default is \code{"center" Other choices include \code{"left"}, and \code{"right"}.
+#' @param align If using a rolling method, how to align the rolling average. Default is \code{"center"} Other choices include \code{"left"}, and \code{"right"}.
 #' @param mos 'Measure of center'. Choices include \code{"mean"} (default) or \code{"median"}.
 #' @param trim Indicate if you want a trimmed mean. Trim removes a number of data points equal to \code{trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{trim} must be a positive, even integer.
 #' TODO How should trim interact with bin_roll? It probably shouldn't trim during both the bin and the roll without letting the user specify that.
@@ -69,7 +69,6 @@ avg_exercise_test.breath <- function(.data,
                                      fs = 1,
                                      order = 3) {
     # browser()
-    stopifnot(!missing(subtype))
     subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
 
     char_cols <- .data[, purrr::map(.data, class) == "character"]
@@ -113,14 +112,12 @@ avg_exercise_test.breath <- function(.data,
         # that's probably okay b/c we need to group by breath. For time averaging
         # we should actually find the time_col
         out <- data_num %>%
-            dplyr::group_by_at(1,
-                               function(x) round(x / bin_w) * bin_w) %>%
-            dplyr::summarise_all(.funs = mos,
-                                 na.rm = TRUE,
-                                 trim = trim / bin_w / 2)
-        # round(x / roll_window) puts the values into groups. * roll_window
-        #scales it back to the original time values.
-        #Currently I don't think this adjusts to 0, 15, 30 seconds etc.
+            mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
+            group_by(bin) %>%
+            summarize_all(.funs = list(mos),
+                          na.rm = TRUE,
+                          trim = trim / bin_w / 2) %>%
+            select(-bin)
         out <- dplyr::bind_cols(char_cols, out)
         return(out)
     } else {
@@ -130,12 +127,14 @@ avg_exercise_test.breath <- function(.data,
         align <- match.arg(align, choices = c("left", "right", "center"))
         mos <- match.arg(mos, choices = c("mean", "median"))
 
-        block <- data_num %>%
-            dplyr::group_by_at(.vars = time_col,
-                               function(x) round(x / bin_w) * bin_w) %>%
-            dplyr::summarise_all(.funs = mos,
-                                 na.rm = TRUE,
-                                 trim = trim / length(data) / 2)
+        block <- ata_num %>%
+            mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
+            group_by(bin) %>%
+            summarize_all(.funs = list(mos),
+                          na.rm = TRUE,
+                          trim = trim / bin_w / 2) %>%
+            select(-bin)
+
         rolled_block <- block %>%
             zoo::rollapply(data = .,
                            width = roll_window / bin_w,
@@ -162,7 +161,6 @@ avg_exercise_test.time <- function(.data,
                                    fs = 1,
                                    order = 3) {
     # browser()
-    stopifnot(!missing(subtype))
     subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
 
     char_cols <- .data[, purrr::map(.data, class) == "character"]
