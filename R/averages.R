@@ -3,15 +3,16 @@
 #' This function averages first by either breath, time, or digital filtering
 #' If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
 #'
-#' @param .data Gas exchange data.
-#' @param type Choose between breath averages, time averages, or digital filtering.
+#' @param .data Breath-by-breath gas exchange data.
+#' @param type Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.
 #' @param time_col The name of the column with time.
-#' @param subtype Choose rolling, bin, or bin-roll.
+#' @param subtype Choose \code{rolling}, \code{bin}, or \code{bin-roll}.
 #' @param roll_window How many seconds or breaths to include if rolling.
 #' @param bin_w Bin size of breaths or time.
-#' @param align If using a rolling method, how to align the rolling average. Other choices include "left", and "right".
-#' @param mos 'Measure of center'. Choices include "mean" or "median".
-#' @param trim Indicate if you want a trimmed mean. This is used to emulate MCG's "mid-5-of-7" averaging method. Must be a positive, even integer.
+#' @param align If using a rolling method, how to align the rolling average. Default is \code{"center" Other choices include \code{"left"}, and \code{"right"}.
+#' @param mos 'Measure of center'. Choices include \code{"mean"} (default) or \code{"median"}.
+#' @param trim Indicate if you want a trimmed mean. Trim removes a number of data points equal to \code{trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{trim} must be a positive, even integer.
+#' TODO How should trim interact with bin_roll? It probably shouldn't trim during both the bin and the roll without letting the user specify that.
 #' @param cutoff The cutoff frequency in Hz. Only used by digital filter.
 #' @param fs The sampling frequency in Hz. Only used by digital filter.
 #' @param order The Butterworth low-pass filter order. Only used by digital filter.
@@ -22,7 +23,7 @@
 #' @export
 #'
 #' @details
-#' If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the roll_window. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 / 5 = 3.
+#' If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
 #'
 #' \code{roll_window} must be evenly divisible by \code{bin_w}
 #'
@@ -43,7 +44,6 @@ avg_exercise_test <- function(.data,
                               fs = 1,
                               order = 3) {
     stopifnot(!missing(.data),
-              !missing(type),
               roll_window >= 1,
               bin_w >= 1,
               roll_window %% 1 == 0,
@@ -117,7 +117,7 @@ avg_exercise_test.breath <- function(.data,
                                function(x) round(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
-                                 trim = trim / length(data) / 2)
+                                 trim = trim / bin_w / 2)
         # round(x / roll_window) puts the values into groups. * roll_window
         #scales it back to the original time values.
         #Currently I don't think this adjusts to 0, 15, 30 seconds etc.
@@ -188,7 +188,7 @@ avg_exercise_test.time <- function(.data,
                                function(x) round(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
-                                 trim = trim / length(data) / 2)
+                                 trim = trim / bin_w / 2)
         # round(x / roll_window) puts the values into groups. * roll_window
         # scales it back to the original time values.
         out <- dplyr::bind_cols(char_cols, out)
