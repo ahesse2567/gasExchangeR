@@ -94,7 +94,7 @@ knot_tab <- tibble(knots = 0:knot_max,
                    df = 0:knot_max + degree,
                    cv_error = cv_error)
 knot_tab
-plot(knot_tab$cv_error)
+plot(knot_tab$cv_error, ylim = c(1, 2.5))
 
 best_cv <- which.min(cv_error)
 best_cv # actually
@@ -136,6 +136,7 @@ ggplot(data = plot_data, aes(x = time, y = ve_vo2)) +
     geom_line(aes(y = fit)) +
     geom_line(aes(y = lwr), linetype = "dashed") +
     geom_line(aes(y = upr), linetype = "dashed") +
-    theme_bw()
+    theme_bw() +
+    ggtitle("Local outlier removal of points ± 2 sd in non-linear\nrelationship using a b-spline model and 10-fold cv")
 
 # now, refit the spline model but with the outliers removed

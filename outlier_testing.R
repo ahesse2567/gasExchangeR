@@ -4,7 +4,7 @@ library(tidyverse)
 df <- read_csv("inst/extdata/mar16_101_pre.csv")
 
 df <- df %>%
-    trim_rest_rec(intensity_col = "speed", start_intensity = 3) %>%
+    trim_pre_post(intensity_col = "speed", pre_ex_intensity = 3) %>%
     # vo2max_window() %>%
     # x_breath_mean(b = 4) %>%
     select(time, speed, grade, vo2, vo2.1, vco2, ve.btps, peto2, petco2) %>%
@@ -59,7 +59,8 @@ ggplot(data = au, aes(x = time)) +
     geom_smooth(method = "lm", aes(y = vo2_abs)) +
     geom_line(aes(y = .lwr), linetype = "dashed") +
     geom_line(aes(y = .upr), linetype = "dashed") +
-    theme_bw()
+    theme_bw() +
+    ggtitle("Local outlier removal of points ± 2 sd from the local mean")
 
 df <- bind_cols(df, au["outlier"])
 
