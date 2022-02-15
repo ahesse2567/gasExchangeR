@@ -7,9 +7,12 @@
 breakpoint(
   .data,
   method = NULL,
-  split = NULL,
-  .x = NULL,
-  .y = NULL,
+  algorithm_aert = NULL,
+  x_aert = NULL,
+  y_aert = NULL,
+  algorithm_rc = NULL,
+  x_rc = NULL,
+  y_rc = NULL,
   vo2_col = "vo2",
   cco2_col = "vco2",
   ve_col = "ve",
@@ -32,12 +35,12 @@ breakpoint(
 Find breakpoints in gas exchange data
 }
 \details{
-There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{split} and \code{.x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{split}, 'vo2' for .x, and 'vco2' for .y. If you enter a specific \code{method}, you can override the default \code{split}, \code{.x}, and \code{.y}.
+There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{.x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for .x, and 'vco2' for .y. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{.x}, and \code{.y}.
 
-Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{split}, \code{.x}, and \code{.y}.
+Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{.x}, and \code{.y}.
 }
 \examples{
-TODO write an an example
+# TODO write an an example
 
 }
 \references{
