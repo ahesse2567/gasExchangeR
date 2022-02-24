@@ -11,8 +11,8 @@
 #' @param bin_w Bin size of breaths or time.
 #' @param align If using a rolling method, how to align the rolling average. Default is \code{"center"} Other choices include \code{"left"}, and \code{"right"}.
 #' @param mos 'Measure of center'. Choices include \code{"mean"} (default) or \code{"median"}.
-#' @param trim Indicate if you want a trimmed mean. Trim removes a number of data points equal to \code{trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{trim} must be a positive, even integer.
-#' TODO How should trim interact with bin_roll? It probably shouldn't trim during both the bin and the roll without letting the user specify that.
+#' @param roll_trim Indicate if you want a trimmed mean. Roll_trim removes a number of data points equal to \code{roll_trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{roll_trim} must be a positive, even integer.
+#' @param bin_trim See \code{roll_trim}.
 #' @param cutoff The cutoff frequency in Hz. Only used by digital filter.
 #' @param fs The sampling frequency in Hz. Only used by digital filter.
 #' @param order The Butterworth low-pass filter order. Only used by digital filter.
@@ -39,7 +39,8 @@ avg_exercise_test <- function(.data,
                               bin_w = 15,
                               align = "center",
                               mos = "mean",
-                              trim = 0,
+                              roll_trim = 0,
+                              bin_trim = 0,
                               cutoff = 0.04,
                               fs = 1,
                               order = 3) {
@@ -64,7 +65,8 @@ avg_exercise_test.breath <- function(.data,
                                      bin_w = 15,
                                      align = "center",
                                      mos = "mean",
-                                     trim = 0,
+                                     roll_trim = 0,
+                                     bin_trim = 0,
                                      cutoff = 0.04,
                                      fs = 1,
                                      order = 3) {
@@ -101,7 +103,7 @@ avg_exercise_test.breath <- function(.data,
                            width = roll_window,
                            align = align,
                            FUN = mos,
-                           trim = trim / roll_window / 2) %>%
+                           trim = roll_trim / roll_window / 2) %>%
             dplyr::as_tibble()
 
         # out <- rbind(roll_i, out) # if using breeze rolling
@@ -116,7 +118,7 @@ avg_exercise_test.breath <- function(.data,
             group_by(bin) %>%
             summarize_all(.funs = list(mos),
                           na.rm = TRUE,
-                          trim = trim / bin_w / 2) %>%
+                          trim = bin_trim / bin_w / 2) %>%
             select(-bin)
         out <- dplyr::bind_cols(char_cols, out)
         return(out)
@@ -127,20 +129,21 @@ avg_exercise_test.breath <- function(.data,
         align <- match.arg(align, choices = c("left", "right", "center"))
         mos <- match.arg(mos, choices = c("mean", "median"))
 
-        block <- ata_num %>%
+        block <- data_num %>%
             mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
             group_by(bin) %>%
             summarize_all(.funs = list(mos),
                           na.rm = TRUE,
-                          trim = trim / bin_w / 2) %>%
+                          trim = bin_trim / bin_w / 2) %>%
             select(-bin)
-
+        # as of now this trims both during the block and during the roll.
+        # there should probably be an argument to specify that.
         rolled_block <- block %>%
             zoo::rollapply(data = .,
                            width = roll_window / bin_w,
                            align = align,
                            FUN = mos,
-                           trim = trim / length(data) / 2) %>%
+                           trim = roll_trim / roll_window / 2) %>%
             dplyr::as_tibble()
         out <- dplyr::bind_cols(char_cols, rolled_block)
         return(out)
@@ -156,7 +159,8 @@ avg_exercise_test.time <- function(.data,
                                    bin_w = 15,
                                    align = "center",
                                    mos = "mean",
-                                   trim = 0,
+                                   roll_trim = 0,
+                                   bin_trim = 0,
                                    cutoff = 0.04,
                                    fs = 1,
                                    order = 3) {
@@ -225,7 +229,8 @@ avg_exercise_test.digital <- function(.data,
                                       bin_w = 15,
                                       align = "center",
                                       mos = "mean",
-                                      trim = 0,
+                                      roll_trim = 0,
+                                      bin_trim = 0,
                                       cutoff = 0.04,
                                       fs = 1,
                                       order = 3) {
