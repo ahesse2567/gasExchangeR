@@ -1,5 +1,6 @@
 library(gasExchangeR)
 library(tidyverse)
+library(devtools)
 
 df_raw <- read_csv("inst/extdata/mar16_101_pre.csv", show_col_types = FALSE)
 
@@ -26,5 +27,19 @@ ggplot(data = df_avg, aes(x = time, y = vo2_abs)) +
     geom_point(color = "red", alpha = 0.5) +
     theme_bw()
 
-breakpoint(df_avg, algorithm_aert = "jm", x_aert = "ve_vo2", y_aert = "time",
-           algorithm_rc = "jm", x_rc = "ve_vco2", y_rc = "time", vo2 = "vo2_abs")
+ggplot(data = df_avg, aes(x = vco2, y = ve)) +
+    geom_point(color = "orange", alpha = 0.5) +
+    theme_bw()
+
+rc_stuff <- breakpoint(df_avg, algorithm_vt1 = "jm", x_vt1 = "vo2", y_vt1 = "vco2",
+           algorithm_rc = "jm", x_rc = "vco2", y_rc = "ve", vo2 = "vo2_abs")
+
+rc_stuff
+
+
+
+ggplot(data = df_avg, aes(x = vco2, y = ve)) +
+    geom_point(color = "orange", alpha = 0.5) +
+    theme_bw() +
+    geom_point(data = rc_stuff[[2]], aes(x = x, y = y_hat))
+# something is wrong with the JM algorithm

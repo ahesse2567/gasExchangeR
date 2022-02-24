@@ -39,20 +39,23 @@ bp_algorithm.jm <- function(.data,
                             vco2 = "vco2",
                             ve = "ve",
                             time = "time") {
+    browser()
     min_ss_idx <- which.min(loop(.data,
                           algorithm,
                           .x,
                           .y,
-                          vo2 = "vo2",
-                          vco2 = "vco2",
-                          ve = "ve",
-                          time = "time"))
+                          vo2 = vo2,
+                          vco2 = vco,
+                          ve = ve,
+                          time = time))
 
     df_left <- .data[1:min_ss_idx,] # x < x0
     df_right <- .data[(min_ss_idx+1):nrow(.data),] # x >= x0
 
+    x_knot <- .data[[.x]][min_ss_idx+1]
+
     df_right <- df_right %>%
-        mutate(s1 = df_right[[.x]] - .data[[.x]][min_ss_idx+1])
+        mutate(s1 = df_right[[.x]] - x_knot)
 
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
     # according to the JM method, the right regression line will have a constant equal to b0 + b1*x0
@@ -72,9 +75,9 @@ bp_algorithm.jm <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    vo2_col <- stringr::str_which(colnames(df), vo2)
     jm_row <- .data[min_ss_idx+1,] %>%
-        select(time, vo2_col, .x, .y, method)
+        select(time, vo2, .x, .y) %>%
+        mutate(algorithm = algorithm)
 
     return(list(jm_row, pred, pct_slope_change))
 
@@ -104,9 +107,10 @@ loop.jm <- function(.data,
                     vco2 = "vco2",
                     ve = "ve",
                     time = "time") {
-    # browser()
-    .data <- .data %>%
-        arrange(.data[[.x]], .data[[time]])
+    browser()
+    # rearranging data by the x variables was maybe a bad idea?
+    # .data <- .data %>%
+    #     arrange(.data[[.x]], .data[[time]])
 
     ss_both <- numeric(length = nrow(.data)-2)
     for(i in 2:(nrow(.data)-1)) {
