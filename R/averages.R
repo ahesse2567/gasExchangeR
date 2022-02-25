@@ -49,7 +49,8 @@ avg_exercise_test <- function(.data,
               bin_w >= 1,
               roll_window %% 1 == 0,
               bin_w %% 1 == 0,
-              trim >= 0 & trim %% 2 == 0)
+              roll_trim >= 0 & roll_trim %% 2 == 0,
+              bin_trim >= 0 & bin_trim %% 2 == 0)
 
     type <- match.arg(type, choices = c("breath", "time", "digital"))
     class(.data) <- append(class(.data), type)
@@ -136,8 +137,6 @@ avg_exercise_test.breath <- function(.data,
                           na.rm = TRUE,
                           trim = bin_trim / bin_w / 2) %>%
             select(-bin)
-        # as of now this trims both during the block and during the roll.
-        # there should probably be an argument to specify that.
         rolled_block <- block %>%
             zoo::rollapply(data = .,
                            width = roll_window / bin_w,
@@ -190,7 +189,7 @@ avg_exercise_test.time <- function(.data,
                                function(x) round(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
-                                 trim = trim / bin_w / 2)
+                                 trim = bin_trim / bin_w / 2)
         # round(x / roll_window) puts the values into groups. * roll_window
         # scales it back to the original time values.
         out <- dplyr::bind_cols(char_cols, out)
@@ -207,13 +206,13 @@ avg_exercise_test.time <- function(.data,
                                function(x) round(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
-                                 trim = trim / length(data) / 2)
+                                 trim = bin_trim / bin_w / 2)
         rolled_block <- block %>%
             zoo::rollapply(data = .,
                            width = roll_window / bin_w,
                            align = align,
                            FUN = mos,
-                           trim = trim / length(data) / 2) %>%
+                           trim = roll_trim / roll_window / 2) %>%
             dplyr::as_tibble()
         out <- dplyr::bind_cols(char_cols, rolled_block)
         return(out)
