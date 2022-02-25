@@ -13,7 +13,8 @@ avg_exercise_test(
   bin_w = 15,
   align = "center",
   mos = "mean",
-  trim = 0,
+  roll_trim = 0,
+  bin_trim = 0,
   cutoff = 0.04,
   fs = 1,
   order = 3
@@ -36,8 +37,9 @@ avg_exercise_test(
 
 \item{mos}{'Measure of center'. Choices include \code{"mean"} (default) or \code{"median"}.}
 
-\item{trim}{Indicate if you want a trimmed mean. Trim removes a number of data points equal to \code{trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{trim} must be a positive, even integer.
-TODO How should trim interact with bin_roll? It probably shouldn't trim during both the bin and the roll without letting the user specify that.}
+\item{roll_trim}{Indicate if you want a trimmed mean. Roll_trim removes a number of data points equal to \code{roll_trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{roll_trim} must be a positive, even integer.}
+
+\item{bin_trim}{See \code{roll_trim}.}
 
 \item{cutoff}{The cutoff frequency in Hz. Only used by digital filter.}
 

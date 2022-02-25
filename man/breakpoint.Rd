@@ -7,26 +7,42 @@
 breakpoint(
   .data,
   method = NULL,
-  algorithm_aert = NULL,
-  x_aert = NULL,
-  y_aert = NULL,
+  algorithm_vt1 = NULL,
+  x_vt1 = NULL,
+  y_vt1 = NULL,
   algorithm_rc = NULL,
   x_rc = NULL,
   y_rc = NULL,
-  vo2_col = "vo2",
-  cco2_col = "vco2",
-  ve_col = "ve",
-  time_col = "time"
+  vo2 = "vo2",
+  vco2 = "vco2",
+  ve = "ve",
+  time = "time"
 )
 }
 \arguments{
 \item{.data}{Gas exchange data}
 
-\item{method}{}
+\item{method}{Specify \code{excess_co2}, \code{v-slope}, or \code{v-slope_simple} and this fills in the most common variables used for these methods for those not already specified.}
 
-\item{.x}{Variable to use on the x axis, usually time, VO2, or VCO2.}
+\item{algorithm_vt1}{Algorithm to find VT1/GET}
 
-\item{.y}{Variable to use on the x axis}
+\item{x_vt1}{\code{x} variable to use to fine VT1/GET/aerobic threshold}
+
+\item{y_vt1}{\code{y} variable to use to fine VT1/GET/aerobic threshold}
+
+\item{algorithm_rc}{Algorithm to find VT2/RC}
+
+\item{x_rc}{\code{x} variable to use to fine VT2/RC/anaerobic threshold}
+
+\item{y_rc}{\code{y} variable to use to fine VT2/RC/anaerobic threshold}
+
+\item{vo2}{The name of the vo2 column in \code{.data}}
+
+\item{vco2}{The name of the vco2 column in \code{.data}}
+
+\item{ve}{The name of the ve column in \code{.data}}
+
+\item{time}{The name of the time column in \code{.data}}
 }
 \value{
 
@@ -35,9 +51,9 @@ breakpoint(
 Find breakpoints in gas exchange data
 }
 \details{
-There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{.x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for .x, and 'vco2' for .y. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{.x}, and \code{.y}.
+There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for \code{x_vt1}, and 'vco2' for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.
 
-Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{.x}, and \code{.y}.
+Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{x}, and \code{y}.
 }
 \examples{
 # TODO write an an example
