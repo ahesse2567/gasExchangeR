@@ -4,9 +4,16 @@
 #' @param algorithm The specific breakpoint algorithm you want to use to find a given threshold. Choices include \code{dmax}, \code{dmax_mod}, \code{jm}, \code{orr}, \code{v-slope}, \code{v_slope_simple}, and \code{splines}.
 #' @param .x The x-axis variable
 #' @param .y the y-axis variable
+#' @param vo2 The name of the \code{vo2} variable
+#' @param vco2 The name of the \code{vco2} variable
+#' @param ve The name of the \code{ve} variable
+#' @param time The name of the \code{time} variable
 #'
 #' @return
 #' @export
+#'
+#' @references
+#' Jones, R. H., & Molitoris, B. A. (1984). A statistical method for determining the breakpoint of two lines. Analytical Biochemistry, 141(1), 287–290. https://doi.org/10.1016/0003-2697(84)90458-5
 #'
 #' @examples
 #' # Come up with an example later
@@ -39,7 +46,7 @@ bp_algorithm.jm <- function(.data,
                             vco2 = "vco2",
                             ve = "ve",
                             time = "time") {
-    browser()
+    # browser()
     min_ss_idx <- which.min(loop(.data,
                           algorithm,
                           .x,
@@ -107,7 +114,7 @@ loop.jm <- function(.data,
                     vco2 = "vco2",
                     ve = "ve",
                     time = "time") {
-    browser()
+    # browser()
     # rearranging data by the x variables was maybe a bad idea?
     # .data <- .data %>%
     #     arrange(.data[[.x]], .data[[time]])
