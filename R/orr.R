@@ -1,13 +1,12 @@
 #' Finding a breakpoint using Orr's 'bruteforce' method
 #'
 #' @param .data Gas exchange data.
-#' @param algorithm The specific breakpoint algorithm you want to use to find a given threshold. Choices include \code{dmax}, \code{dmax_mod}, \code{jm}, \code{orr}, \code{v-slope}, \code{v_slope_simple}, and \code{splines}.
-#' @param .x The x-axis variable
-#' @param .y the y-axis variable
-#' @param vo2 The name of the \code{vo2} variable
-#' @param vco2 The name of the \code{vco2} variable
-#' @param ve The name of the \code{ve} variable
-#' @param time The name of the \code{time} variable
+#' @param .x The x-axis variable.
+#' @param .y the y-axis variable.
+#' @param vo2 The name of the \code{vo2} variable.
+#' @param vco2 The name of the \code{vco2} variable.
+#' @param ve The name of the \code{ve} variable.
+#' @param time The name of the \code{time} variable.
 #'
 #' @return
 #' @export
@@ -18,18 +17,26 @@
 #' @examples
 #' # TODO write examples
 orr <- function(.data,
-                algorithm,
                 .x,
                 .y,
                 vo2 = "vo2",
                 vco2 = "vco2",
                 ve = "ve",
                 time = "time") {
-    # browser()
+    browser()
+    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]])
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
 
     min_ss_idx <- which.min(ss)
     min_ss_idx
+
+    # get sst and sse for simple and the two-line regression
+    # compare those two regressions with an F test.
+    # does that F test require the total sums of squares, or just the mse?
+    # how can I do the likelihood ratio test by hand?
+    # An analysis of variance determines whether a significant
+    # (P < 0.01) reduction in the total sum of squares is achieved by the addition of         # the second and third line segments
+
 
     # now we need to find the closest data point to the breakpoint
 }

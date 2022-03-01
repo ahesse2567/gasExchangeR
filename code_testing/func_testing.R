@@ -16,39 +16,48 @@ df_unavg <- df_raw %>%
     mutate(ve_vo2 = ve*1000 / vo2_abs,
            ve_vco2 = ve*1000 / vco2)
 
-ggplot(data = df_unavg, aes(x = vco2, y = ve)) +
-    geom_point(color = "orange", alpha = 0.5) +
-    theme_bw()
-
-ggplot(data = df_unavg, aes(x = time, y = vo2_abs)) +
-    geom_point(color = "red", alpha = 0.5) +
-    theme_bw()
-
 df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
                   time_col = "time", roll_window = 9, roll_trim = 4)
 
-ggplot(data = df_avg, aes(x = time, y = ve)) +
-    geom_point(color = "orange", alpha = 0.5) +
+ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
+    geom_point(color = "purple", alpha = 0.5) +
     theme_bw()
 
-ggplot(data = df_avg, aes(x = vco2, y = ve)) +
-    geom_point(color = "brown", alpha = 0.5) +
-    theme_bw()
+.data <- df_avg
+.x <- "vo2_abs"
+.y <- "vco2"
 
-rc_stuff <- breakpoint(df_avg, algorithm_vt1 = "jm", x_vt1 = "vo2", y_vt1 = "vco2",
-           algorithm_rc = "jm", x_rc = "vo2_abs", y_rc = "vco2", vo2 = "vo2_abs")
+lm_simple <- lm(vco2 ~ 1 + vo2_abs, data = df_avg)
+summary(lm_simple)
+anova(lm_simple)
+deviance(lm_simple)
+logLik(lm_simple)
 
-rc_stuff
+ss_both <- loop_orr(df_avg, .x = .x, .y = .y)
+plot(ss_both)
+ss_min_idx <- which.min(ss_both)
+
+df_left <- df_avg[1:ss_min_idx,]
+df_right <- df_avg[ss_min_idx:nrow(df_avg),]
+
+lm_left <- lm(vco2 ~ 1 + vo2_abs, data = df_left)
+lm_right <- lm(vco2 ~ 1 + vo2_abs, data = df_right)
+pred_data <- tibble(vo2_abs = c(df_left$vo2_abs, df_right$vo2_abs),
+                    vco2 = c(lm_left$fitted.values, lm_right$fitted.values))
+
+plot_data_left <- tibble(vo2_abs = seq(min(df_avg$vo2_abs), max(df_avg$vo2_abs))) %>%
+    mutate(vco2_left = predict(lm_left, newdata = .))
+
+plot_data_right <- tibble(vo2_abs = seq(min(df_avg$vo2_abs), max(df_avg$vo2_abs))) %>%
+    mutate(vco2_right = predict(lm_right, newdata = .))
+
 
 ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
-    geom_point(color = "blue", alpha = 0.5) +
+    geom_point(color = "purple", alpha = 0.5) +
     theme_bw() +
-    geom_point(data = rc_stuff[[2]], aes(x = x, y = y_hat)) +
-    geom_vline(xintercept = rc_stuff[[1]][["vo2_abs"]])
-
-# ggplot(data = df_avg, aes(x = vco2, y = ve)) +
-#     geom_point(color = "orange", alpha = 0.5) +
-#     theme_bw() +
-#     geom_point(data = rc_stuff[[2]], aes(x = x, y = y_hat))
-
+    geom_smooth(method = "lm", se = FALSE) +
+    geom_line(data = pred_data[1:ss_min_idx,],
+              aes(x = vo2_abs, y = vco2)) +
+    geom_line(data = pred_data[ss_min_idx:nrow(pred_data),],
+              aes(x = vo2_abs, y = vco2))
 
