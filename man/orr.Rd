@@ -4,33 +4,22 @@
 \alias{orr}
 \title{Finding a breakpoint using Orr's 'bruteforce' method}
 \usage{
-orr(
-  .data,
-  algorithm,
-  .x,
-  .y,
-  vo2 = "vo2",
-  vco2 = "vco2",
-  ve = "ve",
-  time = "time"
-)
+orr(.data, .x, .y, vo2 = "vo2", vco2 = "vco2", ve = "ve", time = "time")
 }
 \arguments{
 \item{.data}{Gas exchange data.}
 
-\item{algorithm}{The specific breakpoint algorithm you want to use to find a given threshold. Choices include \code{dmax}, \code{dmax_mod}, \code{jm}, \code{orr}, \code{v-slope}, \code{v_slope_simple}, and \code{splines}.}
+\item{.x}{The x-axis variable.}
 
-\item{.x}{The x-axis variable}
+\item{.y}{the y-axis variable.}
 
-\item{.y}{the y-axis variable}
+\item{vo2}{The name of the \code{vo2} variable.}
 
-\item{vo2}{The name of the \code{vo2} variable}
+\item{vco2}{The name of the \code{vco2} variable.}
 
-\item{vco2}{The name of the \code{vco2} variable}
+\item{ve}{The name of the \code{ve} variable.}
 
-\item{ve}{The name of the \code{ve} variable}
-
-\item{time}{The name of the \code{time} variable}
+\item{time}{The name of the \code{time} variable.}
 }
 \value{
 
