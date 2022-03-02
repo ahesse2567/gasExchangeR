@@ -3,6 +3,7 @@
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
+#' @param slope_change_lim The absolute amount by which the slope should change from the left to the right regression line. Default per Beaver (1986) is 0.1.
 #' @param vo2 The name of the \code{vo2} variable.
 #' @param vco2 The name of the \code{vco2} variable.
 #' @param ve The name of the \code{ve} variable.
@@ -19,16 +20,17 @@
 v_slope <- function(.data,
                     .x,
                     .y,
+                    slope_change_lim = 0.1,
                     vo2 = "vo2",
                     vco2 = "vco2",
                     ve = "ve",
                     time = "time") {
     # browser()
-    # TODO exclude data at the beginning if the VCO2 vs. VO2 slopeis < 0.6
+    # TODO exclude data at the beginning if the VCO2 vs. VO2 slope is < 0.6
     ss <- loop_v_slope(.data = .data, .x = .x, .y = .y)
     slope_change <- 0
     i <- 1
-    while(slope_change < 0.1) {
+    while(slope_change < slope_change_lim) {
         bp_idx <- order(-ss)[i]
         df_left <- df_avg[1:bp_idx,]
         df_right <- df_avg[(bp_idx+1):nrow(df_avg),]
@@ -42,8 +44,26 @@ v_slope <- function(.data,
         }
     }
 
-    bp_idx
-    # TODO find crossing point of left and right regression
+    df_left <- .data[1:bp_idx,] # split data into left half
+    df_right <- .data[(bp_idx+1):nrow(.data),] # split data into right half
+
+    # make linear models of the two regressions
+    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+    lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+
+    # find intersection point of left and right regressions
+    lr_intersect <- intersection_point(lm_left, lm_right)
+
+    # find closest data point to intersection point
+    bp <- .data %>%
+        mutate(dist_x_sq = (.data[[.x]] - lr_intersect["x"])^2,
+               dist_y_sq = (.data[[.y]] - lr_intersect["y"])^2,
+               d = sqrt(dist_x_sq + dist_y_sq)) %>%
+        as_tibble() %>%
+        arrange(d) %>%
+        slice(1)
+
+    bp
 }
 
 #' @keywords internal
@@ -64,20 +84,17 @@ loop_v_slope <- function(.data, .x, .y) {
         lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
 
         # find intersection point of left and right regressions
-        # x = (b2 - b1) / (m1 - m2)
-        x_left_right <- (lm_right$coefficients[1] - lm_left$coefficients[1]) /
-            (lm_left$coefficients[2] - lm_right$coefficients[2])
-        y_left_right <- lm_left$coefficients[1] + lm_left$coefficients[2]*x_left_right
+        lr_intersect <- intersection_point(lm_left, lm_right)
 
-        b_recip <- recip_slope * (-1) * x_left_right + y_left_right
+        b_recip <- recip_slope * (-1) * lr_intersect["x"] + lr_intersect["y"]
 
         x_simple_recip <- (b_recip - lm_simple$coefficients[1]) /
             (lm_simple$coefficients[2] - (-1 / lm_simple$coefficients[2]))
         y_simple_recip <- lm_simple$coefficients[1] +
             lm_simple$coefficients[2]*x_simple_recip
 
-        d <- sqrt((x_simple_recip - x_left_right)^2 +
-                      (y_simple_recip - y_left_right)^2)
+        d <- sqrt((x_simple_recip - lr_intersect["x"])^2 +
+                      (y_simple_recip - lr_intersect["y"])^2)
 
         dist_MSE_ratio[i-1] <- d / anova(lm_simple)['Residuals', 'Mean Sq']
     }

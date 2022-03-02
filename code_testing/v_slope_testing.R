@@ -35,8 +35,9 @@ plot_data_right <- tibble(vo2_abs = df_right$vo2_abs,
 
 ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
     geom_point(color = "purple", alpha = 0.5) +
-    geom_vline(xintercept = df_avg$vo2_abs[bp_idx]) +
+    # geom_vline(xintercept = df_avg$vo2_abs[bp_idx]) +
     geom_line(data = plot_data_left, aes(x = vo2_abs, y = vco2)) +
     geom_line(data = plot_data_right, aes(x = vo2_abs, y = vco2)) +
-    geom_smooth(method = "lm", se = FALSE)
+    theme_bw()
+    # geom_smooth(method = "lm", se = FALSE)
 
