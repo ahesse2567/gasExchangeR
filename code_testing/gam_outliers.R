@@ -30,9 +30,10 @@ df_unavg <- df_unavg %>%
                normalize(df_unavg$ve))
 
 ggplot(data = df_unavg, aes(x = time)) +
-    geom_point(aes(y = progress), alpha = 0.5) +
-    # geom_smooth(aes(y = progress), se = F) +
+    geom_point(aes(y = normalize(progress)), alpha = 0.5) +
+    geom_smooth(aes(y = normalize(progress)), se = F) +
     theme_bw()
+
 
 ggplot(data = df_unavg, aes(x = time)) +
     geom_point(aes(y = normalize(vo2_abs)), color = "red", alpha = 0.5) +
@@ -41,9 +42,8 @@ ggplot(data = df_unavg, aes(x = time)) +
     geom_smooth(aes(y = normalize(vco2)), color = "blue", alpha = 0.5, se = F) +
     geom_point(aes(y = normalize(ve)), color = "orange", alpha = 0.5) +
     geom_smooth(aes(y = normalize(ve)), color = "orange", alpha = 0.5, se = F) +
-    # geom_point(aes(y = normalize(progress))) +
-    # geom_smooth(aes(y = normalize(ve)), color = "black", alpha = 0.5, se = F,
-    #             linetype="dashed") +
+    geom_point(aes(y = normalize(progress)), alpha = 0.5) +
+    geom_smooth(aes(y = normalize(progress)), color = "black", se = F) +
     theme_bw()
 
 ?mgcv::gam
