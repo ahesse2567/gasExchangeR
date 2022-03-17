@@ -5,9 +5,9 @@
 #' @param algorithm_vt1 Algorithm to find VT1/GET
 #' @param x_vt1 \code{x} variable to use to fine VT1/GET/aerobic threshold
 #' @param y_vt1 \code{y} variable to use to fine VT1/GET/aerobic threshold
-#' @param algorithm_rc Algorithm to find VT2/RC
-#' @param x_rc \code{x} variable to use to fine VT2/RC/anaerobic threshold
-#' @param y_rc \code{y} variable to use to fine VT2/RC/anaerobic threshold
+#' @param algorithm_vt2 Algorithm to find VT2/RC
+#' @param x_vt2 \code{x} variable to use to fine VT2/RC/anaerobic threshold
+#' @param y_vt2 \code{y} variable to use to fine VT2/RC/anaerobic threshold
 #' @param vo2 The name of the vo2 column in \code{.data}
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
@@ -33,9 +33,9 @@ breakpoint <- function(.data,
                        algorithm_vt1 = NULL,
                        x_vt1 = NULL,
                        y_vt1 = NULL,
-                       algorithm_rc = NULL,
-                       x_rc = NULL,
-                       y_rc = NULL,
+                       algorithm_vt2 = NULL,
+                       x_vt2 = NULL,
+                       y_vt2 = NULL,
                        alpha_linearity = 0.05,
                        vo2 = "vo2",
                        vco2 = "vco2",
@@ -44,8 +44,8 @@ breakpoint <- function(.data,
     stopifnot(!missing(.data),
               !all(is.null(method), is.null(algorithm_vt1),
                   is.null(x_vt1), is.null(y_vt1)),
-              !all(is.null(method), is.null(algorithm_rc),
-                  is.null(x_rc), is.null(y_rc)))
+              !all(is.null(method), is.null(algorithm_vt2),
+                  is.null(x_vt2), is.null(y_vt2)))
 
     # browser()
     if(!is.null(method)) {
@@ -69,26 +69,57 @@ breakpoint <- function(.data,
     # Find RC
     ##############################
 
-    algorithm_rc <- match.arg(algorithm_rc,
+    algorithm_vt2 <- match.arg(algorithm_vt2,
                   choices = c("dmax", "dmax_mod", "jm",
                               "orr", "v-slope", "v_slope_simple",
                               "splines"))
     # there's some lactate breakpoints that may be worth adding
 
-    rc_dat <- bp_algorithm(.data = .data,
-                           algorithm = algorithm_rc,
-                           .x = x_rc,
-                           .y = y_rc,
+    vt2_dat <- bp_algorithm(.data = .data,
+                           algorithm = algorithm_vt2,
+                           .x = x_vt2,
+                           .y = y_vt2,
                            vo2 = vo2,
                            vco2 = vco2,
                            ve = ve,
                            time = time)
 
-    rc_dat
+    ss <- loop_jm(.data = .data, .x = .x, .y = .y)
+    min_ss_idx <- which.min(ss)
+
+    jm_dat <- jm(.data = .data, .x = .x, .y = .y, vo2 = "vo2_abs")
+
+    jm_dat
+
+    ggplot(data = .data, aes(x = .data[[.x]], y = .data[[.y]])) +
+        geom_point(alpha = 0.5) +
+        theme_bw() +
+        geom_point(data = jm_dat$lm_left$model,
+                   aes(x = df_left[[.x]], y = df_left[[.y]]),
+                   color = "orange", alpha = 0.5) +
+        geom_smooth(data = jm_dat$lm_left$model,
+                   aes(x = df_left[[.x]], y = df_left[[.y]]),
+                   method = "lm",
+                   color = "orange", alpha = 0.5) +
+        geom_point(data = jm_dat$lm_right$model,
+                   aes(x = df_right[[.x]], y = df_right[[.y]]),
+                   color = "red", alpha = 0.5) +
+        geom_smooth(data = jm_dat$lm_right$model,
+               aes(x = df_right[[.x]], y = df_right[[.y]]),
+               method = "lm", se = FALSE,
+               color = "red", alpha = 0.5) +
+        geom_vline(xintercept = jm_dat$breakpoint_data$vco2)
+
+    vt2_dat
+
 
     ##############################
     # Truncate test if RC is found
     ##############################
+    if(vt2_dat$p_val_F < alpha_linearity) {
+        trunc_idx <- which(.data[[time]] == vt2_dat$breakpoint_data$time)
+        vt1_df <-
+    }
 
     ##############################
     # Find AerTh

@@ -16,6 +16,10 @@ df_unavg <- df_raw %>%
     mutate(ve_vo2 = ve*1000 / vo2_abs,
            ve_vco2 = ve*1000 / vco2)
 
+ggplot(data = df_unavg, aes(x = vco2, y = ve)) +
+    geom_point(color = "orange", alpha = 0.5) +
+    theme_bw()
+
 df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
                   time_col = "time", roll_window = 9, roll_trim = 4)
 
