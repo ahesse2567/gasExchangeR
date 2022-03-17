@@ -14,15 +14,37 @@ df_unavg <- df_raw %>%
            vt = `vt btps`) %>%
     select(time, speed, grade, vo2_rel, vo2_abs, vco2, ve, vt) %>%
     mutate(ve_vo2 = ve*1000 / vo2_abs,
-           ve_vco2 = ve*1000 / vco2) %>%
+           ve_vco2 = ve*1000 / vco2,
+           time = as.numeric(time)) %>%
     trim_pre_post(intensity_col = "grade",
                   pre_ex_intensity = 300.1,
                   post_ex_intensity = 300.1)
 
-normalize <- function(.x) {
-    out <- (.x - min(.x)) / (max(.x) - min(.x))
-    out
-}
+# normalize <- function(.x) {(.x - min(.x)) / (max(.x) - min(.x))}
+
+gam_mod <- mgcv::gam(time ~ 1 + s(vo2_rel) + s(vco2) + s(ve),
+                    data = df_unavg, method = "REML")
+
+beta <- coef(b)
+Vb <- vcov(b)
+
+## simulate replicate beta vectors from posterior...
+Cv <- chol(Vb)
+n.rep=10000
+nb <- length(beta)
+br <- t(Cv) %*% matrix(rnorm(n.rep*nb),nb,n.rep) + beta
+
+## turn these into replicate linear predictors...
+min(df_unavg$vo2_rel):max(df_unavg$vo2_rel)
+seq()
+
+xp <- df_unavg %>%
+    select(vo2_rel, vco2, ve)
+Xp <- predict(gam_mod,newdata=xp,type="lpmatrix")
+lp <- Xp%*%br
+fv <- exp(lp) ## ... finally, replicate expected value vectors
+fv
+
 
 df_unavg <- df_unavg %>%
     mutate(progress = normalize(df_unavg$vo2_abs) +
