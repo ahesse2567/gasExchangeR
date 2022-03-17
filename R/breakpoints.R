@@ -12,6 +12,7 @@
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simplier model.
 #'
 #' @return
 #' @export
@@ -35,6 +36,7 @@ breakpoint <- function(.data,
                        algorithm_rc = NULL,
                        x_rc = NULL,
                        y_rc = NULL,
+                       alpha_linearity = 0.05,
                        vo2 = "vo2",
                        vco2 = "vco2",
                        ve = "ve",
@@ -48,13 +50,20 @@ breakpoint <- function(.data,
     # browser()
     if(!is.null(method)) {
         method <- match.arg(method,
-                           choices = c("excess_co2", "v-slope", "v_slope_simple"))
+                           choices = c("excess_co2",
+                                       "orr",
+                                       "v-slope",
+                                       "v_slope_simple"))
         # class(.data) <- append(class(.data), method) # could be useful to
         # use class to pre-select .x and .y variable?
     }
 
     # if a specific method was chosen, a function pre-fills algorithms, .x, .y
     # based on the method so long as .x and .y are not already specified
+    # orr: VE vs. VO2. This kinda finds RC first if the three-regression model is
+    # best, but then only returns vt1. Given that, does this change the truncation
+    # decision at RC?
+    # V-slope
 
     ##############################
     # Find RC

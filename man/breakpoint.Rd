@@ -13,6 +13,7 @@ breakpoint(
   algorithm_rc = NULL,
   x_rc = NULL,
   y_rc = NULL,
+  alpha_linearity = 0.05,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -35,6 +36,8 @@ breakpoint(
 \item{x_rc}{\code{x} variable to use to fine VT2/RC/anaerobic threshold}
 
 \item{y_rc}{\code{y} variable to use to fine VT2/RC/anaerobic threshold}
+
+\item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simplier model.}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 

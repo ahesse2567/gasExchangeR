@@ -7,6 +7,7 @@
 #' @param vco2 The name of the \code{vco2} variable.
 #' @param ve The name of the \code{ve} variable.
 #' @param time The name of the \code{time} variable.
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simplier model.
 #'
 #' @return
 #' @export
@@ -22,21 +23,34 @@ orr <- function(.data,
                 vo2 = "vo2",
                 vco2 = "vco2",
                 ve = "ve",
-                time = "time") {
+                time = "time",
+                alpha_linearity = 0.05) {
     browser()
     lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]])
+    RSS_simple <- sum(resid(lm_simple)^2)
+
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
-
     min_ss_idx <- which.min(ss)
-    min_ss_idx
 
-    # get sst and sse for simple and the two-line regression
-    # compare those two regressions with an F test.
-    # does that F test require the total sums of squares, or just the mse?
-    # how can I do the likelihood ratio test by hand?
-    # An analysis of variance determines whether a significant
+    df_left <- df_avg[1:ss_min_idx,]
+    df_right <- df_avg[ss_min_idx:nrow(df_avg),]
+
+    lm_left <- lm(vco2 ~ 1 + vo2_abs, data = df_left)
+    lm_right <- lm(vco2 ~ 1 + vo2_abs, data = df_right)
+
+    RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    F_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+
+    pf_two <- pf(F_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    if(pf_two > alpha_linearity) {
+        message("No breakpoint detected")
+        return(NULL) # not sure if this should be stop() or something else
+    }
+
+
+
     # (P < 0.01) reduction in the total sum of squares is achieved by the addition of         # the second and third line segments
-
 
     # now we need to find the closest data point to the breakpoint
 }

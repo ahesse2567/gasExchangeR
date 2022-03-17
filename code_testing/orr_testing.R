@@ -30,8 +30,10 @@ ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
 lm_simple <- lm(vco2 ~ 1 + vo2_abs, data = df_avg)
 summary(lm_simple)
 anova(lm_simple)
-deviance(lm_simple)
-logLik(lm_simple)
+# deviance(lm_simple)
+RSS_simple <- sum(resid(lm_simple)^2)
+
+# logLik(lm_simple)
 
 ss_both <- loop_orr(df_avg, .x = .x, .y = .y)
 plot(ss_both)
@@ -42,6 +44,13 @@ df_right <- df_avg[ss_min_idx:nrow(df_avg),]
 
 lm_left <- lm(vco2 ~ 1 + vo2_abs, data = df_left)
 lm_right <- lm(vco2 ~ 1 + vo2_abs, data = df_right)
+
+RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+F_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+
+pf(F_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+
 pred_data <- tibble(vo2_abs = c(df_left$vo2_abs, df_right$vo2_abs),
                     vco2 = c(lm_left$fitted.values, lm_right$fitted.values))
 
