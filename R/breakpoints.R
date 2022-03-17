@@ -12,7 +12,7 @@
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
-#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simplier model.
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #'
 #' @return
 #' @export
@@ -75,14 +75,24 @@ breakpoint <- function(.data,
                               "splines"))
     # there's some lactate breakpoints that may be worth adding
 
-    vt2_dat <- bp_algorithm(.data = .data,
-                           algorithm = algorithm_vt2,
-                           .x = x_vt2,
-                           .y = y_vt2,
-                           vo2 = vo2,
-                           vco2 = vco2,
-                           ve = ve,
-                           time = time)
+    vt2_dat <- switch(algorithm_vt2,
+                      "jm" = jm(.data = .data,
+                                .x = x_vt2,
+                                .y = y_vt2,
+                                vo2 = vo2,
+                                vco2 = vco2,
+                                ve = ve,
+                                time = time,
+                                alpha_linearity = alpha_linearity),
+                      "orr" = orr(.data = .data,
+                                 .x = x_vt2,
+                                 .y = y_vt2,
+                                 vo2 = vo2,
+                                 vco2 = vco2,
+                                 ve = ve,
+                                 time = time,
+                                 alpha_linearity = alpha_linearity))
+
 
     ss <- loop_jm(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
@@ -116,10 +126,11 @@ breakpoint <- function(.data,
     ##############################
     # Truncate test if RC is found
     ##############################
-    if(vt2_dat$p_val_F < alpha_linearity) {
-        trunc_idx <- which(.data[[time]] == vt2_dat$breakpoint_data$time)
-        vt1_df <-
-    }
+
+    # if(vt2_dat$p_val_F < alpha_linearity) {
+    #     trunc_idx <- which(.data[[time]] == vt2_dat$breakpoint_data$time)
+    #     vt1_df <-
+    # }
 
     ##############################
     # Find AerTh

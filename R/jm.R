@@ -30,6 +30,8 @@ jm <- function(.data,
     ss <- loop_jm(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
 
+    # I don't think this actually intersects at x0 right now!!!!
+
     df_left <- .data[1:min_ss_idx,] # x < x0
     df_right <- .data[(min_ss_idx+1):nrow(.data),] # x >= x0
 
