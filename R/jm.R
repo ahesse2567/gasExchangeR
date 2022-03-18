@@ -65,20 +65,23 @@ jm <- function(.data,
                           y_hat = lm_right$fitted.values,
                           method = "jm")
     pred <- bind_rows(y_hat_left, y_hat_right)
-    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+    pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
     bp_dat <- .data[min_ss_idx+1,] %>%
         select(time, vo2, vco2, ve) %>%
         mutate(method = "jm",
+               bp = bp,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
-               p_val_f = pf_two)
+               p_val_f = pf_two) %>%
+        relocate(bp, method)
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
                 lm_left = lm_left,
-                lm_right = lm_right))
+                lm_right = lm_right,
+                lm_simple = lm_simple))
 
 }
 

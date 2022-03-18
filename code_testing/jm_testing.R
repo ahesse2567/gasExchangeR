@@ -28,13 +28,14 @@ y_vt2 <- "ve"
 jm(.data, x_vt2, y_vt2, vo2 = "vo2_abs")
 
 breakpoint(.data = df_avg,
-           x_vt1 = "vo2",
+           x_vt1 = "vo2_abs",
            y_vt1 = "vco2",
            algorithm_vt1 = "jm",
            x_vt2 = "vco2",
            y_vt2 = "ve",
            algorithm_vt2 = "jm",
-           vo2 = "vo2_abs")
+           vo2 = "vo2_abs",
+           bps = "both")
 
 
 

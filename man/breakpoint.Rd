@@ -17,7 +17,8 @@ breakpoint(
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
-  time = "time"
+  time = "time",
+  bps = "both"
 )
 }
 \arguments{
@@ -46,6 +47,8 @@ breakpoint(
 \item{ve}{The name of the ve column in \code{.data}}
 
 \item{time}{The name of the time column in \code{.data}}
+
+\item{bps}{Should the function find the breakpoints for vt1, vt2, or both. Default is \code{both}.}
 }
 \value{
 
@@ -61,7 +64,4 @@ Since there aren't common names for every way to find a breakpoint, you can also
 \examples{
 # TODO write an an example
 
-}
-\references{
-Beaver, W. L., Wasserman, K., & Whipp, B. J. (1986). A new method for detecting anaerobic threshold by gas exchange. Journal of Applied Physiology, 121(6), 2020–2027.
 }

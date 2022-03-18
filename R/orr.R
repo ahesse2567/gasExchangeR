@@ -63,7 +63,7 @@ orr <- function(.data,
         arrange(sum_dist_sq) %>%
         dplyr::mutate(method = "orr") %>%
         slice(1) %>%
-        select(time, vo2, vco2, ve, method)
+        select(bp, method, time, vo2, vco2, ve)
 
     bp_dat <- orr_row %>%
         mutate(pct_slope_change = pct_slope_change,
@@ -73,7 +73,8 @@ orr <- function(.data,
     return(list(breakpoint_data = bp_dat,
                 # fitted_vals = pred, # TODO how to return fitted values?
                 lm_left = lm_left,
-                lm_right = lm_right))
+                lm_right = lm_right,
+                lm_simple = lm_simple))
 
     # Should we add the three line regression code later?
 

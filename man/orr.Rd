@@ -12,7 +12,8 @@ orr(
   vco2 = "vco2",
   ve = "ve",
   time = "time",
-  alpha_linearity = 0.05
+  alpha_linearity = 0.05,
+  bp
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ orr(
 \item{time}{The name of the \code{time} variable.}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+
+\item{bp}{Is this algorithm being used to find vt1 or vt2?}
 }
 \value{
 

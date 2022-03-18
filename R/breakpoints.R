@@ -45,10 +45,15 @@ breakpoint <- function(.data,
                   is.null(x_vt1), is.null(y_vt1)),
               !all(is.null(method), is.null(algorithm_vt2),
                   is.null(x_vt2), is.null(y_vt2)))
-    bps <- match.arg(bps, choices = c("vt1", "vt2", "both"),
-                     several.ok = FALSE)
+    bps <- match.arg(bps, choices = c("vt1", "vt2", "both"), several.ok = FALSE)
 
-    # browser()
+    # do I need to restrict the options for x_vt1 etc. to "time", "vo2", "vco2"
+    # "speed", "watts", etc? That could serve as the general language to define
+    # the relationship graphically. Then I could use the vo2, vco2 arguments to
+    # tell the function what column name specifically refers to "vo2", "vco2", etc.
+    # or, do I just check to make sure the x_vt1 type arguments can be found
+    # in the column names?
+
     if(!is.null(method)) {
         method <- match.arg(method,
                            choices = c("excess_co2",
@@ -66,10 +71,6 @@ breakpoint <- function(.data,
     # decision at RC?
     # V-slope
 
-    ##############################
-    # Find RC
-    ##############################
-
     algorithm_vt2 <- match.arg(algorithm_vt2,
                   choices = c("dmax", "dmax_mod", "jm",
                               "orr", "v-slope", "v_slope_simple",
@@ -77,6 +78,7 @@ breakpoint <- function(.data,
     # there's some lactate breakpoints that may be worth adding
 
     if(bps == "both" | bps == "vt2") {
+        bp <- "vt2"
         vt2_out <- switch(algorithm_vt2,
                           "jm" = jm(.data = .data,
                                     .x = x_vt2,
@@ -86,7 +88,7 @@ breakpoint <- function(.data,
                                     ve = ve,
                                     time = time,
                                     alpha_linearity = alpha_linearity,
-                                    bp = bps),
+                                    bp = bp),
                           "orr" = orr(.data = .data,
                                       .x = x_vt2,
                                       .y = y_vt2,
@@ -95,30 +97,23 @@ breakpoint <- function(.data,
                                       ve = ve,
                                       time = time,
                                       alpha_linearity = alpha_linearity,
-                                      bp = bps))
+                                      bp = bp))
 
         if(bps == "vt2") {
             return(vt2_out)
         }
-
-        ##############################
-        # Truncate test if RC is found
-        ##############################
-
-        # if(vt2_dat$p_val_F < alpha_linearity) {
-        #     trunc_idx <- which(.data[[time]] == vt2_dat$breakpoint_data$time)
-        #     vt1_df <-
-        # }
+        # truncate if VT2 is found
+        if(vt2_out$breakpoint_data$p_val_f < alpha_linearity) {
+            trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
+            vt1_df <- .data[1:trunc_idx,]
+        }
 
     } else {
         vt1_df <- .data
     }
 
     if(bps == "both" | bps == "vt1") {
-
-        ##############################
-        # Find VT1
-        ##############################
+        bp <- "vt1"
         vt1_out <- switch(algorithm_vt1,
                           "jm" = jm(.data = vt1_df,
                                     .x = x_vt1,
@@ -128,7 +123,7 @@ breakpoint <- function(.data,
                                     ve = ve,
                                     time = time,
                                     alpha_linearity = alpha_linearity,
-                                    bp = bps),
+                                    bp = bp),
                           "orr" = orr(.data = vt1_df,
                                       .x = x_vt1,
                                       .y = y_vt1,
@@ -137,16 +132,15 @@ breakpoint <- function(.data,
                                       ve = ve,
                                       time = time,
                                       alpha_linearity = alpha_linearity,
-                                      bp = bps))
+                                      bp = bp))
         if(bps == "vt1") {
             return(vt1_out)
         }
     }
-    ##############################
-    # Return values and stats
-    ##############################
-    vt_out <- rbind(vt1_out$breakpoint_data, vt2_out$breakpoint_data)
-    out <- list(vt_out, vt1_out[-1], vt2_out[-2])
-    out
 
+    vt_out <- rbind(vt1_out$breakpoint_data, vt2_out$breakpoint_data)
+    out <- list(bp_dat = vt_out,
+                vt1_dat = vt1_out[-1],
+                vt2_dat = vt2_out[-1])
+    out
 }
