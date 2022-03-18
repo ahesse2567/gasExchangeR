@@ -1,4 +1,3 @@
-library(devtools)
 library(gasExchangeR)
 library(tidyverse)
 library(devtools)
@@ -17,28 +16,24 @@ df_unavg <- df_raw %>%
     mutate(ve_vo2 = ve*1000 / vo2_abs,
            ve_vco2 = ve*1000 / vco2)
 
-ggplot(data = df_unavg, aes(x = vco2, y = ve)) +
-    geom_point(color = "orange", alpha = 0.5) +
-    theme_bw()
-
 df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
                   time_col = "time", roll_window = 9, roll_trim = 4)
 
-ggplot(data = df_avg, aes(x = vco2, y = ve)) +
-    geom_point(color = "orange", alpha = 0.5) +
-    theme_bw()
 
-ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
-    geom_point(color = "purple", alpha = 0.5) +
-    theme_bw()
-
-.data <- df_avg
-.x <- "vo2_abs"
-.y <- "vco2"
 
 orr(.data = df_avg, .x = "vco2", .y = "ve",
     vo2 = "vo2_abs", vco2 = "vco2", ve = "ve",
-    time = "time", alpha_linearity = 0.05)
+    time = "time", alpha_linearity = 0.05, bp = "vt1")
+
+breakpoint(.data = df_avg,
+           x_vt1 = "vo2_abs",
+           y_vt1 = "vco2",
+           algorithm_vt1 = "orr",
+           x_vt2 = "vco2",
+           y_vt2 = "ve",
+           algorithm_vt2 = "orr",
+           vo2 = "vo2_abs",
+           bps = "both")
 
 lm_simple <- lm(vco2 ~ 1 + vo2_abs, data = df_avg)
 summary(lm_simple)

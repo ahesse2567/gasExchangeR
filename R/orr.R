@@ -28,7 +28,7 @@ orr <- function(.data,
                 alpha_linearity = 0.05,
                 bp) {
     # TODO add which bp argument and determinate/indeterminate output
-    browser()
+    # browser()
 
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
@@ -49,10 +49,7 @@ orr <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    if(pf_two > alpha_linearity) {
-        message("No breakpoint detected")
-        # should this change what's returned?
-    }
+    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
     int_point <- intersection_point(lm_left, lm_right)
 
@@ -61,9 +58,11 @@ orr <- function(.data,
                dist_y_sq = (.data[[.y]] - int_point["y"])^2,
                sum_dist_sq = dist_x_sq + dist_y_sq) %>%
         arrange(sum_dist_sq) %>%
-        dplyr::mutate(method = "orr") %>%
         slice(1) %>%
-        select(bp, method, time, vo2, vco2, ve)
+        dplyr::mutate(method = "orr",
+                      determinant_bp = determinant_bp,
+                      bp = bp) %>%
+        select(bp, method, determinant_bp, time, vo2, vco2, ve)
 
     bp_dat <- orr_row %>%
         mutate(pct_slope_change = pct_slope_change,
