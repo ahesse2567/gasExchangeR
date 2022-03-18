@@ -31,20 +31,37 @@ v_slope <- function(.data,
                     bp) {
     # browser()
     # TODO exclude data at the beginning if the VCO2 vs. VO2 slope is < 0.6
-    ss <- loop_v_slope(.data = .data, .x = .x, .y = .y)
+    dist_MSE_ratio <- loop_v_slope(.data = .data, .x = .x, .y = .y)
     slope_change <- 0
     i <- 1
     while(slope_change < slope_change_lim) {
-        bp_idx <- order(-ss)[i]
+        bp_idx <- order(-dist_MSE_ratio)[i]
         df_left <- df_avg[1:bp_idx,]
         df_right <- df_avg[(bp_idx+1):nrow(df_avg),]
-        lm_left <- lm(vco2 ~ 1 + vo2_abs, data = df_left)
-        lm_right <- lm(vco2 ~ 1 + vo2_abs, data = df_right)
+        lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+        lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
 
         slope_change <- lm_right$coefficients[2] - lm_left$coefficients[2]
         i <- i + 1
-        if (i > length(ss)) {
-            stop("No breakpoint found. Change between slopes was never >= 0.1.")
+        if (i > length(dist_MSE_ratio)) {
+            message("No breakpoint found. Change between slopes was never >= 0.1.")
+            bp_dat <- .data %>%
+                dplyr::slice(1) %>%
+                dplyr::select(time, vo2, vco2, ve) %>%
+                dplyr::mutate(bp = bp,
+                       method = "v-slope",
+                       determinant_bp = FALSE,
+                       pct_slope_change = NA,
+                       f_stat = NA,
+                       p_val_f = NA) %>%
+                dplyr::relocate(bp, method, determinant_bp) %>%
+                map_df(num_to_na)
+
+            return(list(breakpoint_data = bp_dat,
+                        # fitted_vals = pred, # dTODO how to return fitted values?
+                        lm_left = NULL,
+                        lm_right = NULL,
+                        lm_simple = NULL))
         }
     }
 
@@ -127,4 +144,12 @@ loop_v_slope <- function(.data, .x, .y) {
     }
 
     dist_MSE_ratio
+}
+
+#' @keywords internal
+num_to_na <- function(x) {
+    if(is.numeric(x)) {
+        x <- NA
+    }
+    x
 }

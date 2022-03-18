@@ -39,7 +39,8 @@ breakpoint <- function(.data,
                        vco2 = "vco2",
                        ve = "ve",
                        time = "time",
-                       bps = "both") {
+                       bps = "both",
+                       ...) {
     stopifnot(!missing(.data),
               !all(is.null(method), is.null(algorithm_vt1),
                   is.null(x_vt1), is.null(y_vt1)),
@@ -111,9 +112,10 @@ breakpoint <- function(.data,
         if(bps == "vt2") {
             return(vt2_out)
         }
-
+        # browser()
         # truncate if VT2 is found
-        if(vt2_out$breakpoint_data$p_val_f < alpha_linearity) {
+        if(vt2_out$breakpoint_data$p_val_f < alpha_linearity &
+           !is.na(vt2_out$breakpoint_data$p_val_f)) {
             trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
             vt1_df <- .data[1:trunc_idx,]
         } else {
