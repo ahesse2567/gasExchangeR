@@ -8,6 +8,7 @@
 #' @param ve The name of the \code{ve} variable.
 #' @param time The name of the \code{time} variable.
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param bp Is this algorithm being used to find vt1 or vt2?
 #'
 #' @return
 #' @export
@@ -24,8 +25,9 @@ jm <- function(.data,
                vco2 = "vco2",
                ve = "ve",
                time = "time",
-               alpha_linearity = 0.05) {
-
+               alpha_linearity = 0.05,
+               bp) {
+    # TODO add which bp argument and determinate/indeterminate output
     # browser()
     ss <- loop_jm(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
@@ -63,7 +65,7 @@ jm <- function(.data,
                           y_hat = lm_right$fitted.values,
                           method = "jm")
     pred <- bind_rows(y_hat_left, y_hat_right)
-    pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
+    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
     bp_dat <- .data[min_ss_idx+1,] %>%

@@ -8,6 +8,7 @@
 #' @param ve The name of the \code{ve} variable.
 #' @param time The name of the \code{time} variable.
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param bp Is this algorithm being used to find vt1 or vt2?
 #'
 #' @return
 #' @export
@@ -24,18 +25,20 @@ orr <- function(.data,
                 vco2 = "vco2",
                 ve = "ve",
                 time = "time",
-                alpha_linearity = 0.05) {
+                alpha_linearity = 0.05,
+                bp) {
+    # TODO add which bp argument and determinate/indeterminate output
     browser()
 
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
 
-    df_left <- df_avg[1:ss_min_idx,]
-    df_right <- df_avg[ss_min_idx:nrow(df_avg),]
+    df_left <- df_avg[1:min_ss_idx,]
+    df_right <- df_avg[min_ss_idx:nrow(df_avg),]
 
-    lm_left <- lm(vco2 ~ 1 + vo2_abs, data = df_left)
-    lm_right <- lm(vco2 ~ 1 + vo2_abs, data = df_right)
-    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]])
+    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+    lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
 
     RSS_simple <- sum(resid(lm_simple)^2)
     RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
@@ -43,7 +46,7 @@ orr <- function(.data,
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
     pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
 
-    pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
+    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
     if(pf_two > alpha_linearity) {
@@ -54,11 +57,11 @@ orr <- function(.data,
     int_point <- intersection_point(lm_left, lm_right)
 
     orr_row <- .data %>%
-        mutate(dist_x_sq = (.data[[bp_x_var]] - int_point["x"])^2,
-               dist_y_sq = (.data[[bp_y_var]] - int_point["y"])^2,
+        dplyr::mutate(dist_x_sq = (.data[[.x]] - int_point["x"])^2,
+               dist_y_sq = (.data[[.y]] - int_point["y"])^2,
                sum_dist_sq = dist_x_sq + dist_y_sq) %>%
         arrange(sum_dist_sq) %>%
-        mutate(method = "orr") %>%
+        dplyr::mutate(method = "orr") %>%
         slice(1) %>%
         select(time, vo2, vco2, ve, method)
 
