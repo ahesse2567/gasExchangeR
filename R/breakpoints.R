@@ -13,6 +13,7 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param bps Should the function find the breakpoints for vt1, vt2, or both. Default is \code{both}.
 #'
 #' @return
 #' @export
@@ -24,9 +25,6 @@
 #'
 #' @examples
 #' # TODO write an an example
-#'
-#' @references
-#' Beaver, W. L., Wasserman, K., & Whipp, B. J. (1986). A new method for detecting anaerobic threshold by gas exchange. Journal of Applied Physiology, 121(6), 2020–2027.
 #'
 breakpoint <- function(.data,
                        method = NULL,
@@ -40,12 +38,15 @@ breakpoint <- function(.data,
                        vo2 = "vo2",
                        vco2 = "vco2",
                        ve = "ve",
-                       time = "time") {
+                       time = "time",
+                       bps = "both") {
     stopifnot(!missing(.data),
               !all(is.null(method), is.null(algorithm_vt1),
                   is.null(x_vt1), is.null(y_vt1)),
               !all(is.null(method), is.null(algorithm_vt2),
                   is.null(x_vt2), is.null(y_vt2)))
+    bps <- match.arg(bps, choices = c("vt1", "vt2", "both"),
+                     several.ok = FALSE)
 
     # browser()
     if(!is.null(method)) {
@@ -75,69 +76,77 @@ breakpoint <- function(.data,
                               "splines"))
     # there's some lactate breakpoints that may be worth adding
 
-    vt2_dat <- switch(algorithm_vt2,
-                      "jm" = jm(.data = .data,
-                                .x = x_vt2,
-                                .y = y_vt2,
-                                vo2 = vo2,
-                                vco2 = vco2,
-                                ve = ve,
-                                time = time,
-                                alpha_linearity = alpha_linearity),
-                      "orr" = orr(.data = .data,
-                                 .x = x_vt2,
-                                 .y = y_vt2,
-                                 vo2 = vo2,
-                                 vco2 = vco2,
-                                 ve = ve,
-                                 time = time,
-                                 alpha_linearity = alpha_linearity))
+    if(bps == "both" | bps == "vt2") {
+        vt2_out <- switch(algorithm_vt2,
+                          "jm" = jm(.data = .data,
+                                    .x = x_vt2,
+                                    .y = y_vt2,
+                                    vo2 = vo2,
+                                    vco2 = vco2,
+                                    ve = ve,
+                                    time = time,
+                                    alpha_linearity = alpha_linearity,
+                                    bp = bps),
+                          "orr" = orr(.data = .data,
+                                      .x = x_vt2,
+                                      .y = y_vt2,
+                                      vo2 = vo2,
+                                      vco2 = vco2,
+                                      ve = ve,
+                                      time = time,
+                                      alpha_linearity = alpha_linearity,
+                                      bp = bps))
 
+        if(bps == "vt2") {
+            return(vt2_out)
+        }
 
-    ss <- loop_jm(.data = .data, .x = .x, .y = .y)
-    min_ss_idx <- which.min(ss)
+        ##############################
+        # Truncate test if RC is found
+        ##############################
 
-    jm_dat <- jm(.data = .data, .x = .x, .y = .y, vo2 = "vo2_abs")
+        # if(vt2_dat$p_val_F < alpha_linearity) {
+        #     trunc_idx <- which(.data[[time]] == vt2_dat$breakpoint_data$time)
+        #     vt1_df <-
+        # }
 
-    jm_dat
+    } else {
+        vt1_df <- .data
+    }
 
-    ggplot(data = .data, aes(x = .data[[.x]], y = .data[[.y]])) +
-        geom_point(alpha = 0.5) +
-        theme_bw() +
-        geom_point(data = jm_dat$lm_left$model,
-                   aes(x = df_left[[.x]], y = df_left[[.y]]),
-                   color = "orange", alpha = 0.5) +
-        geom_smooth(data = jm_dat$lm_left$model,
-                   aes(x = df_left[[.x]], y = df_left[[.y]]),
-                   method = "lm",
-                   color = "orange", alpha = 0.5) +
-        geom_point(data = jm_dat$lm_right$model,
-                   aes(x = df_right[[.x]], y = df_right[[.y]]),
-                   color = "red", alpha = 0.5) +
-        geom_smooth(data = jm_dat$lm_right$model,
-               aes(x = df_right[[.x]], y = df_right[[.y]]),
-               method = "lm", se = FALSE,
-               color = "red", alpha = 0.5) +
-        geom_vline(xintercept = jm_dat$breakpoint_data$vco2)
+    if(bps == "both" | bps == "vt1") {
 
-    vt2_dat
-
-
-    ##############################
-    # Truncate test if RC is found
-    ##############################
-
-    # if(vt2_dat$p_val_F < alpha_linearity) {
-    #     trunc_idx <- which(.data[[time]] == vt2_dat$breakpoint_data$time)
-    #     vt1_df <-
-    # }
-
-    ##############################
-    # Find AerTh
-    ##############################
-
+        ##############################
+        # Find VT1
+        ##############################
+        vt1_out <- switch(algorithm_vt1,
+                          "jm" = jm(.data = vt1_df,
+                                    .x = x_vt1,
+                                    .y = y_vt1,
+                                    vo2 = vo2,
+                                    vco2 = vco2,
+                                    ve = ve,
+                                    time = time,
+                                    alpha_linearity = alpha_linearity,
+                                    bp = bps),
+                          "orr" = orr(.data = vt1_df,
+                                      .x = x_vt1,
+                                      .y = y_vt1,
+                                      vo2 = vo2,
+                                      vco2 = vco2,
+                                      ve = ve,
+                                      time = time,
+                                      alpha_linearity = alpha_linearity,
+                                      bp = bps))
+        if(bps == "vt1") {
+            return(vt1_out)
+        }
+    }
     ##############################
     # Return values and stats
     ##############################
+    vt_out <- rbind(vt1_out$breakpoint_data, vt2_out$breakpoint_data)
+    out <- list(vt_out, vt1_out[-1], vt2_out[-2])
+    out
 
 }

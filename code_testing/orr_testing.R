@@ -1,3 +1,4 @@
+library(devtools)
 library(gasExchangeR)
 library(tidyverse)
 library(devtools)
@@ -23,6 +24,10 @@ ggplot(data = df_unavg, aes(x = vco2, y = ve)) +
 df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
                   time_col = "time", roll_window = 9, roll_trim = 4)
 
+ggplot(data = df_avg, aes(x = vco2, y = ve)) +
+    geom_point(color = "orange", alpha = 0.5) +
+    theme_bw()
+
 ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
     geom_point(color = "purple", alpha = 0.5) +
     theme_bw()
@@ -31,11 +36,17 @@ ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
 .x <- "vo2_abs"
 .y <- "vco2"
 
+orr(.data = df_avg, .x = "vco2", .y = "ve",
+    vo2 = "vo2_abs", vco2 = "vco2", ve = "ve",
+    time = "time", alpha_linearity = 0.05)
+
 lm_simple <- lm(vco2 ~ 1 + vo2_abs, data = df_avg)
 summary(lm_simple)
 anova(lm_simple)
 # deviance(lm_simple)
 RSS_simple <- sum(resid(lm_simple)^2)
+
+
 
 # logLik(lm_simple)
 
