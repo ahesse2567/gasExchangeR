@@ -96,6 +96,7 @@ knot_tab <- tibble(knots = 0:knot_max,
 knot_tab
 plot(knot_tab$cv_error, ylim = c(1, 2.5))
 
+
 best_cv <- which.min(cv_error)
 best_cv # actually
 knot_tab[best_cv,]
@@ -119,8 +120,6 @@ sd_to_pct <- function(sd) {
     pct
 }
 
-sd_to_pct(3)
-
 pred_cv <- predict(best_cv_mod,
                 interval = "prediction",
                 level = sd_to_pct(2)) %>%
@@ -137,6 +136,74 @@ ggplot(data = plot_data, aes(x = time, y = ve_vo2)) +
     geom_line(aes(y = lwr), linetype = "dashed") +
     geom_line(aes(y = upr), linetype = "dashed") +
     theme_bw() +
-    ggtitle("Local outlier removal of points ± 2 sd in non-linear\nrelationship using a b-spline model and 10-fold cv")
+    ggtitle(paste("Local outlier removal of points ± 2 sd in non-linear\nrelationship using a b-spline model, 10-fold cv, and",
+                  best_cv - 1,
+                  "knots"))
 
 # now, refit the spline model but with the outliers removed
+
+
+#### now using the one-standard-error rule
+
+se <- function(.x) {sqrt(var(.x) / length(.x))}
+se(cv_error)
+
+plot(knot_tab$cv_error, ylim = c(1, 2.5))
+
+cv_error_df <- tibble(cv_error = cv_error)
+
+which((cv_error - min(cv_error) - se(cv_error)) < 0)[1]
+one_se_cv_err <- which((cv_error - min(cv_error) - se(cv_error)) < 0)[1]
+
+ggplot(data = cv_error_df, aes(x = as.integer(rownames(cv_error_df)),
+                               y = cv_error)) +
+    geom_point() +
+    ylim(c(0.5, 2.5)) + # major outliers so I adjusted the axes
+    theme_bw() +
+    geom_hline(yintercept = min(cv_error), color = "red") +
+    geom_hline(yintercept = min(cv_error) - se(cv_error),
+               color = "red", linetype = "dashed") +
+    geom_hline(yintercept = min(cv_error) + se(cv_error),
+               color = "red", linetype = "dashed") +
+    geom_vline(xintercept = one_se_cv_err, color = "blue")
+
+knot_tab[one_se_cv_err,]
+
+# I got around the lack of a good cv.lm() function by just redoing
+# the best glm as an lm because lm is just the gaussian case of glm
+# this allowed me to make a prediction interval
+one_se_cv_mod <- lm(ve_vo2 ~ 1 + bs(as.numeric(time),
+                                  df = knot_tab[[one_se_cv_err,"df"]],
+                                  degree = degree),
+                  data = df_unavg)
+
+autoplot(one_se_cv_mod, which = 1:6, ncol = 3, label.size = 3)
+influenceIndexPlot(cv_mod_list[[one_se_cv_err]])
+outlierTest(cv_mod_list[[one_se_cv_err]])
+predict(cv_mod_list[[one_se_cv_err]], se.fit = TRUE)
+
+## prediction errors are not built into a glm model
+sd_to_pct <- function(sd) {
+    pct <- abs(1 - pnorm(sd) * 2)
+    pct
+}
+
+pred_one_se_cv <- predict(one_se_cv_mod,
+                   interval = "prediction",
+                   level = sd_to_pct(2)) %>%
+    as_tibble()
+
+plot_data_one_se <- df_unavg %>%
+    select(time, ve_vo2) %>%
+    bind_cols(pred_one_se_cv) %>%
+    mutate(outlier = ve_vo2 < lwr | ve_vo2 > upr)
+
+ggplot(data = plot_data_one_se, aes(x = time, y = ve_vo2)) +
+    geom_point(aes(color = outlier), alpha = 0.5) +
+    geom_line(aes(y = fit)) +
+    geom_line(aes(y = lwr), linetype = "dashed") +
+    geom_line(aes(y = upr), linetype = "dashed") +
+    theme_bw() +
+    ggtitle(paste("Local outlier removal of points ± 2 sd in non-linear\nrelationship using a b-spline model, 10-fold cv, and",
+                  one_se_cv_err - 1,
+                  "knots"))

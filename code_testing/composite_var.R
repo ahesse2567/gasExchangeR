@@ -18,6 +18,11 @@ df_unavg <- df_raw %>%
                   pre_ex_intensity = 300.1,
                   post_ex_intensity = 300.1)
 
+normalize <- function(.x) {
+    out <- (.x - min(.x)) / (max(.x) - min(.x))
+    out
+}
+
 df_unavg <- df_unavg %>%
     mutate(progress = normalize(df_unavg$vo2_abs) +
                normalize(df_unavg$vco2) +

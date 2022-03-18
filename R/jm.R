@@ -1,13 +1,14 @@
-#' Breakpoint Algorithm
+#' Finding a breakpoint using the Jones-Molitoris method.
 #'
 #' @param .data Gas exchange data.
-#' @param algorithm The specific breakpoint algorithm you want to use to find a given threshold. Choices include \code{dmax}, \code{dmax_mod}, \code{jm}, \code{orr}, \code{v-slope}, \code{v_slope_simple}, and \code{splines}.
-#' @param .x The x-axis variable
-#' @param .y the y-axis variable
-#' @param vo2 The name of the \code{vo2} variable
-#' @param vco2 The name of the \code{vco2} variable
-#' @param ve The name of the \code{ve} variable
-#' @param time The name of the \code{time} variable
+#' @param .x The x-axis variable.
+#' @param .y the y-axis variable.
+#' @param vo2 The name of the \code{vo2} variable.
+#' @param vco2 The name of the \code{vco2} variable.
+#' @param ve The name of the \code{ve} variable.
+#' @param time The name of the \code{time} variable.
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param bp Is this algorithm being used to find vt1 or vt2?
 #'
 #' @return
 #' @export
@@ -16,45 +17,22 @@
 #' Jones, R. H., & Molitoris, B. A. (1984). A statistical method for determining the breakpoint of two lines. Analytical Biochemistry, 141(1), 287–290. https://doi.org/10.1016/0003-2697(84)90458-5
 #'
 #' @examples
-#' # Come up with an example later
-#'
-bp_algorithm <- function(.data,
-                         algorithm,
-                         .x,
-                         .y,
-                         vo2 = "vo2",
-                         vco2 = "vco2",
-                         ve = "ve",
-                         time = "time") {
-    stopifnot(!missing(.data), !missing(.x), !missing(.y), !missing(algorithm))
+#' #' # TODO write examples
+jm <- function(.data,
+               .x,
+               .y,
+               vo2 = "vo2",
+               vco2 = "vco2",
+               ve = "ve",
+               time = "time",
+               alpha_linearity = 0.05,
+               bp) {
+    # TODO add which bp argument and determinate/indeterminate output
     # browser()
+    ss <- loop_jm(.data = .data, .x = .x, .y = .y)
+    min_ss_idx <- which.min(ss)
 
-    algorithm <- match.arg(algorithm,
-                           choices = c("dmax", "dmax_mod", "jm",
-                                       "orr", "v-slope", "v_slope_simple",
-                                       "splines")) # several ok = FALSE?
-
-    class(.data) <- append(class(.data), algorithm) # could be useful to
-    UseMethod("bp_algorithm", .data)
-}
-
-bp_algorithm.jm <- function(.data,
-                            algorithm,
-                            .x,
-                            .y,
-                            vo2 = "vo2",
-                            vco2 = "vco2",
-                            ve = "ve",
-                            time = "time") {
-    # browser()
-    min_ss_idx <- which.min(loop(.data,
-                          algorithm,
-                          .x,
-                          .y,
-                          vo2 = vo2,
-                          vco2 = vco,
-                          ve = ve,
-                          time = time))
+    # I don't think this actually intersects at x0 right now!!!!
 
     df_left <- .data[1:min_ss_idx,] # x < x0
     df_right <- .data[(min_ss_idx+1):nrow(.data),] # x >= x0
@@ -72,6 +50,14 @@ bp_algorithm.jm <- function(.data,
     lm_right <- lm(df_right[[.y]] ~ 0 + s1, data = df_right,
                    offset = rep(b0_plus_b1x0, nrow(df_right)))
 
+    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]])
+
+    RSS_simple <- sum(resid(lm_simple)^2)
+    RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+
     y_hat_left <- tibble(x = df_left[[.x]],
                          y_hat = lm_left$fitted.values,
                          method = "jm")
@@ -82,38 +68,30 @@ bp_algorithm.jm <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    jm_row <- .data[min_ss_idx+1,] %>%
-        select(time, vo2, .x, .y) %>%
-        mutate(algorithm = algorithm)
+    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
-    return(list(jm_row, pred, pct_slope_change))
+    bp_dat <- .data[min_ss_idx+1,] %>%
+        select(time, vo2, vco2, ve) %>%
+        mutate(method = "jm",
+               bp = bp,
+               determinant_bp = determinant_bp,
+               pct_slope_change = pct_slope_change,
+               f_stat = f_stat,
+               p_val_f = pf_two) %>%
+        relocate(bp, method, determinant_bp)
+
+    return(list(breakpoint_data = bp_dat,
+                fitted_vals = pred,
+                lm_left = lm_left,
+                lm_right = lm_right,
+                lm_simple = lm_simple))
 
 }
 
 #' @keywords internal
-loop <- function(.data,
-                 algorithm,
-                 .x,
-                 .y,
-                 vo2 = "vo2",
-                 vco2 = "vco2",
-                 ve = "ve",
-                 time = "time") {
-    loop <- match.arg(algorithm, choices = c("jm", "orr", "v-slope",
-                                         "v_slope_simple", "splines"))
-    class(.data) <- append(class(.data), loop)
-    UseMethod("loop", .data)
-}
-
-#' @keywords internal
-loop.jm <- function(.data,
-                    algorithm,
+loop_jm <- function(.data,
                     .x,
-                    .y,
-                    vo2 = "vo2",
-                    vco2 = "vco2",
-                    ve = "ve",
-                    time = "time") {
+                    .y) {
     # browser()
     # rearranging data by the x variables was maybe a bad idea?
     # .data <- .data %>%
