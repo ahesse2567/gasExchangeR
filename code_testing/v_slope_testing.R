@@ -19,6 +19,16 @@ df_unavg <- df_raw %>%
 df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
                             time_col = "time", roll_window = 9, roll_trim = 4)
 
+breakpoint(.data = df_avg,
+           x_vt1 = "vo2_abs",
+           y_vt1 = "vco2",
+           algorithm_vt1 = "v-slope",
+           x_vt2 = "vco2",
+           y_vt2 = "ve",
+           algorithm_vt2 = "v-slope",
+           vo2 = "vo2_abs",
+           bps = "both")
+
 ss <- loop_v_slope(df_avg, "vo2_abs", "vco2")
 plot(ss)
 bp_idx <- v_slope(df_avg, "vo2_abs", "vco2")

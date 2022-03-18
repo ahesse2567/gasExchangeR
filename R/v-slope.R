@@ -8,6 +8,8 @@
 #' @param vco2 The name of the \code{vco2} variable.
 #' @param ve The name of the \code{ve} variable.
 #' @param time The name of the \code{time} variable.
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param bp Is this algorithm being used to find vt1 or vt2?
 #'
 #' @return
 #' @export
@@ -24,7 +26,9 @@ v_slope <- function(.data,
                     vo2 = "vo2",
                     vco2 = "vco2",
                     ve = "ve",
-                    time = "time") {
+                    time = "time",
+                    alpha_linearity = 0.05,
+                    bp) {
     # browser()
     # TODO exclude data at the beginning if the VCO2 vs. VO2 slope is < 0.6
     ss <- loop_v_slope(.data = .data, .x = .x, .y = .y)
@@ -50,20 +54,43 @@ v_slope <- function(.data,
     # make linear models of the two regressions
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
     lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+    # sinle line regression
+    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+
+    # check for a significant departure from linearity
+    RSS_simple <- sum(resid(lm_simple)^2)
+    RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+
+    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+        lm_left$coefficients[2]
 
     # find intersection point of left and right regressions
     lr_intersect <- intersection_point(lm_left, lm_right)
-
-    # find closest data point to intersection point
-    bp <- .data %>%
-        mutate(dist_x_sq = (.data[[.x]] - lr_intersect["x"])^2,
+    # find closest data point to intersection point and prepare output
+    bp_dat <- .data %>%
+        dplyr::mutate(dist_x_sq = (.data[[.x]] - lr_intersect["x"])^2,
                dist_y_sq = (.data[[.y]] - lr_intersect["y"])^2,
                d = sqrt(dist_x_sq + dist_y_sq)) %>%
-        as_tibble() %>%
-        arrange(d) %>%
-        slice(1)
+        tibble::as_tibble() %>%
+        dplyr::arrange(d) %>%
+        dplyr::slice(1) %>%
+        dplyr::mutate(method = "v_slope",
+                      determinant_bp = determinant_bp,
+                      bp = bp) %>%
+        dplyr::select(bp, method, determinant_bp, time, vo2, vco2, ve) %>%
+        mutate(pct_slope_change = pct_slope_change,
+           f_stat = f_stat,
+           p_val_f = pf_two)
 
-    bp
+    return(list(breakpoint_data = bp_dat,
+                # fitted_vals = pred, # TODO how to return fitted values?
+                lm_left = lm_left,
+                lm_right = lm_right,
+                lm_simple = lm_simple))
 }
 
 #' @keywords internal

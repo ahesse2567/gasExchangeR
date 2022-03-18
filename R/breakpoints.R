@@ -73,7 +73,7 @@ breakpoint <- function(.data,
 
     algorithm_vt2 <- match.arg(algorithm_vt2,
                   choices = c("dmax", "dmax_mod", "jm",
-                              "orr", "v-slope", "v_slope_simple",
+                              "orr", "v-slope", "simplified_v-slope",
                               "splines"))
     # there's some lactate breakpoints that may be worth adding
 
@@ -97,15 +97,27 @@ breakpoint <- function(.data,
                                       ve = ve,
                                       time = time,
                                       alpha_linearity = alpha_linearity,
-                                      bp = bp))
+                                      bp = bp),
+                          "v-slope" = v_slope(.data = .data,
+                                               .x = x_vt2,
+                                               .y = y_vt2,
+                                               vo2 = vo2,
+                                               vco2 = vco2,
+                                               ve = ve,
+                                               time = time,
+                                               alpha_linearity = alpha_linearity,
+                                               bp = bp))
 
         if(bps == "vt2") {
             return(vt2_out)
         }
+
         # truncate if VT2 is found
         if(vt2_out$breakpoint_data$p_val_f < alpha_linearity) {
             trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
             vt1_df <- .data[1:trunc_idx,]
+        } else {
+            vt1_df <- .data
         }
 
     } else {
@@ -132,7 +144,16 @@ breakpoint <- function(.data,
                                       ve = ve,
                                       time = time,
                                       alpha_linearity = alpha_linearity,
-                                      bp = bp))
+                                      bp = bp),
+                          "v-slope" = v_slope(.data = vt1_df,
+                                              .x = x_vt1,
+                                              .y = y_vt1,
+                                              vo2 = vo2,
+                                              vco2 = vco2,
+                                              ve = ve,
+                                              time = time,
+                                              alpha_linearity = alpha_linearity,
+                                              bp = bp))
         if(bps == "vt1") {
             return(vt1_out)
         }
