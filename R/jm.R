@@ -53,8 +53,8 @@ jm <- function(.data,
     RSS_simple <- sum(resid(lm_simple)^2)
     RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
     MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
-    F_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(F_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
 
     y_hat_left <- tibble(x = df_left[[.x]],
                          y_hat = lm_left$fitted.values,
@@ -66,15 +66,15 @@ jm <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    jm_row <- .data[min_ss_idx+1,] %>%
-        select(time, vo2, .x, .y)
+    bp_dat <- .data[min_ss_idx+1,] %>%
+        select(time, vo2, vco2, ve) %>%
+        mutate(method = "jm",
+               pct_slope_change = pct_slope_change,
+               f_stat = f_stat,
+               p_val_f = pf_two)
 
-    return(list(breakpoint_data = jm_row,
+    return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
-                pct_slope_change = pct_slope_change,
-                F_stat = F_stat,
-                p_val_F = pf_two,
-                lm_simple = lm_simple,
                 lm_left = lm_left,
                 lm_right = lm_right))
 

@@ -40,19 +40,40 @@ orr <- function(.data,
     RSS_simple <- sum(resid(lm_simple)^2)
     RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
     MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
-    F_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(F_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+
+    pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
+        lm_left$coefficients[2]
 
     if(pf_two > alpha_linearity) {
         message("No breakpoint detected")
-        return(NULL) # not sure if this should be stop() or something else
+        # should this change what's returned?
     }
 
+    int_point <- intersection_point(lm_left, lm_right)
 
+    orr_row <- .data %>%
+        mutate(dist_x_sq = (.data[[bp_x_var]] - int_point["x"])^2,
+               dist_y_sq = (.data[[bp_y_var]] - int_point["y"])^2,
+               sum_dist_sq = dist_x_sq + dist_y_sq) %>%
+        arrange(sum_dist_sq) %>%
+        mutate(method = "orr") %>%
+        slice(1) %>%
+        select(time, vo2, vco2, ve, method)
 
-    # (P < 0.01) reduction in the total sum of squares is achieved by the addition of         # the second and third line segments
+    bp_dat <- orr_row %>%
+        mutate(pct_slope_change = pct_slope_change,
+               f_stat = f_stat,
+               p_val_f = pf_two)
 
-    # now we need to find the closest data point to the breakpoint
+    return(list(breakpoint_data = bp_dat,
+                # fitted_vals = pred, # TODO how to return fitted values?
+                lm_left = lm_left,
+                lm_right = lm_right))
+
+    # Should we add the three line regression code later?
+
 }
 #'
 #' @keywords internal
