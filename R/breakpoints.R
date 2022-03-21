@@ -13,7 +13,9 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
-#' @param bps Should the function find the breakpoints for vt1, vt2, or both. Default is \code{both}.
+#' @param bps Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
+#' @param truncate By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.
+#' @param ...
 #'
 #' @return
 #' @export
@@ -40,6 +42,7 @@ breakpoint <- function(.data,
                        ve = "ve",
                        time = "time",
                        bps = "both",
+                       truncate = TRUE,
                        ...) {
     stopifnot(!missing(.data),
               !all(is.null(method), is.null(algorithm_vt1),
@@ -99,7 +102,7 @@ breakpoint <- function(.data,
         # browser()
         # truncate if VT2 is found
         if(vt2_out$breakpoint_data$p_val_f < alpha_linearity &
-           !is.na(vt2_out$breakpoint_data$p_val_f)) {
+           !is.na(vt2_out$breakpoint_data$p_val_f) & truncate == TRUE) {
             trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
             vt1_df <- .data[1:trunc_idx,]
         } else {

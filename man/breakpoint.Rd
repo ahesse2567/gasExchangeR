@@ -19,6 +19,7 @@ breakpoint(
   ve = "ve",
   time = "time",
   bps = "both",
+  truncate = TRUE,
   ...
 )
 }
@@ -49,7 +50,11 @@ breakpoint(
 
 \item{time}{The name of the time column in \code{.data}}
 
-\item{bps}{Should the function find the breakpoints for vt1, vt2, or both. Default is \code{both}.}
+\item{bps}{Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.}
+
+\item{truncate}{By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.}
+
+\item{...}{}
 }
 \value{
 
