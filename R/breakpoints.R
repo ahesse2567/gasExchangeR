@@ -79,35 +79,19 @@ breakpoint <- function(.data,
     # there's some lactate breakpoints that may be worth adding
 
     if(bps == "both" | bps == "vt2") {
-        bp <- "vt2"
+        params = list(.data = .data,
+                      .x = x_vt2,
+                      .y = y_vt2,
+                      vo2 = vo2,
+                      vco2 = vco2,
+                      ve = ve,
+                      time = time,
+                      alpha_linearity = alpha_linearity,
+                      bp = "vt2")
         vt2_out <- switch(algorithm_vt2,
-                          "jm" = jm(.data = .data,
-                                    .x = x_vt2,
-                                    .y = y_vt2,
-                                    vo2 = vo2,
-                                    vco2 = vco2,
-                                    ve = ve,
-                                    time = time,
-                                    alpha_linearity = alpha_linearity,
-                                    bp = bp),
-                          "orr" = orr(.data = .data,
-                                      .x = x_vt2,
-                                      .y = y_vt2,
-                                      vo2 = vo2,
-                                      vco2 = vco2,
-                                      ve = ve,
-                                      time = time,
-                                      alpha_linearity = alpha_linearity,
-                                      bp = bp),
-                          "v-slope" = v_slope(.data = .data,
-                                               .x = x_vt2,
-                                               .y = y_vt2,
-                                               vo2 = vo2,
-                                               vco2 = vco2,
-                                               ve = ve,
-                                               time = time,
-                                               alpha_linearity = alpha_linearity,
-                                               bp = bp))
+                          "jm" = do.call(what = "jm", args = params),
+                          "orr" = do.call(what = "orr", args = params),
+                          "v-slope" = do.call(what = "v_slope", args = params))
 
         if(bps == "vt2") {
             return(vt2_out)
@@ -127,35 +111,19 @@ breakpoint <- function(.data,
     }
 
     if(bps == "both" | bps == "vt1") {
-        bp <- "vt1"
+        params = list(.data = .data,
+                      .x = x_vt1,
+                      .y = y_vt1,
+                      vo2 = vo2,
+                      vco2 = vco2,
+                      ve = ve,
+                      time = time,
+                      alpha_linearity = alpha_linearity,
+                      bp = "vt1")
         vt1_out <- switch(algorithm_vt1,
-                          "jm" = jm(.data = vt1_df,
-                                    .x = x_vt1,
-                                    .y = y_vt1,
-                                    vo2 = vo2,
-                                    vco2 = vco2,
-                                    ve = ve,
-                                    time = time,
-                                    alpha_linearity = alpha_linearity,
-                                    bp = bp),
-                          "orr" = orr(.data = vt1_df,
-                                      .x = x_vt1,
-                                      .y = y_vt1,
-                                      vo2 = vo2,
-                                      vco2 = vco2,
-                                      ve = ve,
-                                      time = time,
-                                      alpha_linearity = alpha_linearity,
-                                      bp = bp),
-                          "v-slope" = v_slope(.data = vt1_df,
-                                              .x = x_vt1,
-                                              .y = y_vt1,
-                                              vo2 = vo2,
-                                              vco2 = vco2,
-                                              ve = ve,
-                                              time = time,
-                                              alpha_linearity = alpha_linearity,
-                                              bp = bp))
+                          "jm" = do.call(what = "jm", args = params),
+                          "orr" = do.call(what = "orr", args = params),
+                          "v-slope" = do.call(what = "v_slope", args = params))
         if(bps == "vt1") {
             return(vt1_out)
         }
@@ -163,7 +131,7 @@ breakpoint <- function(.data,
 
     vt_out <- rbind(vt1_out$breakpoint_data, vt2_out$breakpoint_data)
     out <- list(bp_dat = vt_out,
-                vt1_dat = vt1_out[-1],
-                vt2_dat = vt2_out[-1])
+                vt1_dat = vt1_out,
+                vt2_dat = vt2_out)
     out
 }
