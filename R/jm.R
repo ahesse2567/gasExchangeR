@@ -17,7 +17,7 @@
 #' Jones, R. H., & Molitoris, B. A. (1984). A statistical method for determining the breakpoint of two lines. Analytical Biochemistry, 141(1), 287–290. https://doi.org/10.1016/0003-2697(84)90458-5
 #'
 #' @examples
-#' #' # TODO write examples
+#' # TODO write examples
 jm <- function(.data,
                .x,
                .y,

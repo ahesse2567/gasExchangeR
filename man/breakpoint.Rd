@@ -18,7 +18,8 @@ breakpoint(
   vco2 = "vco2",
   ve = "ve",
   time = "time",
-  bps = "both"
+  bps = "both",
+  ...
 )
 }
 \arguments{
