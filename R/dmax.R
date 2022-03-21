@@ -18,7 +18,7 @@
 #'
 #' @examples
 #' # TODO write examples
-break.dmax <- function(.data,
+dmax <- function(.data,
                        .x,
                        .y,
                        vo2 = "vo2",
@@ -27,16 +27,15 @@ break.dmax <- function(.data,
                        time = "time",
                        alpha_linearity = 0.05,
                        bp){
-    # browser
+    browser()
     # the original paper has something about 50 mL increments in O2
 
     # Get limits of x-axis for plots
-    xmin = min(df[[bp_x_var]], na.rm = T)
-    xmax = max(df[[bp_x_var]], na.rm = T)
+    xmin = min(.data[[.x]], na.rm = T)
+    xmax = max(.data[[.x]], na.rm = T)
 
     # Determine 3rd order polynomial
-    my_formula <- as.formula(paste(bp_y_var, " ~ 1 + poly(", bp_x_var, ", 3, raw = TRUE)"))
-    g.model = lm(my_formula, data = df)
+    g.model = lm(.data[[.y]] ~ 1 + poly(.data[[.x]], 3, raw = TRUE), data = .data)
 
     # Get min and max y hats. This will be used to create a straight line that passes through these points
     y_hat_min <- min(g.model$fitted.values)
@@ -47,8 +46,6 @@ break.dmax <- function(.data,
     x2 = xmax
     y2 = y_hat_max
 
-    ##### Determine 3rd order polynomial
-    g.model = lm(df[[bp_y_var]] ~ 1 + poly(df[[bp_x_var]], 3, raw = TRUE), data = df)
     g = g.model$coefficients  #Get polynomial coefficients
     names(g) = 0:(length(g) - 1) #Add vco2 name to coefficients
 
@@ -57,42 +54,66 @@ break.dmax <- function(.data,
     D.max = ComputeDmax(f, g, x1, x2)
     g.D.max = poly.evaluate(g, D.max) #Find y-coord on polynomial g, corresponding to D.max
 
-    #couldn't use mutate for this, got an error
-    vo2_col <- stringr::str_which(colnames(df), "rel")
-    dmax_row <- df %>%
-        mutate(dist_x_sq = (df[[bp_x_var]] - D.max)^2,
-               dist_y_sq = (df[[bp_y_var]] - g.D.max)^2,
+    dmax_idx <- .data %>%
+        mutate(dist_x_sq = (.data[[.x]] - D.max)^2,
+               dist_y_sq = (.data[[.y]] - g.D.max)^2,
+               sum_sq = dist_x_sq + dist_y_sq) %>%
+        select(sum_sq) %>%
+        pull() %>%
+        which.min()
+
+    df_left <- .data[1:dmax_idx,]
+    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], df_left)
+
+    df_right <- .data[dmax_idx:nrow(.data),]
+    lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], df_right)
+
+    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+        lm_left$coefficients[2]
+
+    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+
+    RSS_simple <- sum(resid(lm_simple)^2)
+    RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+
+    # find closest actual data point to dmax point and return data
+    bp_dat <- .data %>%
+        mutate(dist_x_sq = (.data[[.x]] - D.max)^2,
+               dist_y_sq = (.data[[.y]] - g.D.max)^2,
                sum_sq = dist_x_sq + dist_y_sq) %>%
         arrange(sum_sq) %>%
         slice(1) %>%
-        mutate(method = "dmax") %>%
-        select(time, vo2_col, bp_x_var, bp_y_var, method)
+        select(-c(dist_x_sq, dist_y_sq, sum_sq)) %>%
+        mutate(bp = bp,
+               method = "dmax",
+               determinant_bp = determinant_bp,
+               pct_slope_change = pct_slope_change,
+               f_stat = f_stat,
+               p_val_f = pf_two) %>%
+        relocate(bp, method, determinant_bp, pct_slope_change, f_stat, p_val_f)
 
     # create linear model object so plotting behavior is similar to other methods
-    y_hat <- df[[bp_x_var]]*f[2] + f[1]
-    dmax_lm <- lm(y_hat ~ df[[bp_x_var]] + 1)
+    # y_hat <- .data[[.x]]*f[2] + f[1]
+    # dmax_lm <- lm(y_hat ~ .data[[.x]] + 1)
+    #
+    # pred <- bind_rows(tibble(x = .data[[.x]],
+    #                          y_hat = g.model$fitted.values,
+    #                          method = "dmax"),
+    #                   tibble(x = .data[[.x]],
+    #                          y_hat = dmax_lm$fitted.values,
+    #                          method = "dmax_start_end"))
 
-    pred <- bind_rows(tibble(x = df[[bp_x_var]],
-                             y_hat = g.model$fitted.values,
-                             method = "dmax"),
-                      tibble(x = df[[bp_x_var]],
-                             y_hat = dmax_lm$fitted.values,
-                             method = "dmax_start_end"))
-
-    #calculate percent slope change using lines from start -> breakpoint and breakpoint -> end
-
-    #get x and y values at dmax point
-    dmax_x <- dmax_row[[bp_x_var]]
-    dmax_y <- dmax_row[[bp_y_var]]
-
-    #find slopes from dmax to end and start to dmax
-    m2 <- (y2 - dmax_y)/(x2 - dmax_x)
-    m1 <- (dmax_y - y1)/(dmax_x - x1)
-
-    #change in slopes is percent change
-    pct_slope_change <- (m2 - m1)/m1*100
-
-    return(list(dmax_row, pred, pct_slope_change))
+    return(list(breakpoint_data = bp_dat,
+                # fitted_vals = pred,
+                poly_model = g.model,
+                dmax_point = c("x" = D.max, "y" = g.D.max),
+                lm_left = lm_left,
+                lm_right = lm_right,
+                lm_simple = lm_simple))
 }
 
 
