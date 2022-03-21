@@ -62,12 +62,14 @@ orr <- function(.data,
         dplyr::mutate(method = "orr",
                       determinant_bp = determinant_bp,
                       bp = bp) %>%
-        select(bp, method, determinant_bp, time, vo2, vco2, ve)
+        relocate(bp, method, determinant_bp) %>%
+        select(-c(dist_x_sq, dist_y_sq, sum_sq)) %>%
 
     bp_dat <- orr_row %>%
         mutate(pct_slope_change = pct_slope_change,
                f_stat = f_stat,
-               p_val_f = pf_two)
+               p_val_f = pf_two) %>%
+        relocate(bp, method, determinant_bp, pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 # fitted_vals = pred, # TODO how to return fitted values?

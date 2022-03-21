@@ -71,14 +71,13 @@ jm <- function(.data,
     determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
     bp_dat <- .data[min_ss_idx+1,] %>%
-        select(time, vo2, vco2, ve) %>%
         mutate(method = "jm",
                bp = bp,
                determinant_bp = determinant_bp,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, method, determinant_bp)
+        relocate(bp, method, determinant_bp, pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
