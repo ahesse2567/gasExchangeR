@@ -4,10 +4,6 @@
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
 #' @param slope_change_lim The absolute amount by which the slope should change from the left to the right regression line. Default per Beaver (1986) is 0.1.
-#' @param vo2 The name of the \code{vo2} variable.
-#' @param vco2 The name of the \code{vco2} variable.
-#' @param ve The name of the \code{ve} variable.
-#' @param time The name of the \code{time} variable.
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this algorithm being used to find vt1 or vt2?
 #'
@@ -23,10 +19,6 @@ v_slope <- function(.data,
                     .x,
                     .y,
                     slope_change_lim = 0.1,
-                    vo2 = "vo2",
-                    vco2 = "vco2",
-                    ve = "ve",
-                    time = "time",
                     alpha_linearity = 0.05,
                     bp) {
     # browser()

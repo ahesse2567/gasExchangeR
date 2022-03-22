@@ -3,10 +3,6 @@
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
-#' @param vo2 The name of the \code{vo2} variable.
-#' @param vco2 The name of the \code{vco2} variable.
-#' @param ve The name of the \code{ve} variable.
-#' @param time The name of the \code{time} variable.
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this algorithm being used to find vt1 or vt2?
 #'
@@ -21,10 +17,6 @@
 dmax <- function(.data,
                        .x,
                        .y,
-                       vo2 = "vo2",
-                       vco2 = "vco2",
-                       ve = "ve",
-                       time = "time",
                        alpha_linearity = 0.05,
                        bp){
     browser()
