@@ -6,6 +6,10 @@
 #' @param degree The degree of polynomial spline to use. Default is 1 to mimic other methods.
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this algorithm being used to find vt1 or vt2?
+#' @param vo2 The name of the vo2 column in \code{.data}
+#' @param vco2 The name of the vco2 column in \code{.data}
+#' @param ve The name of the ve column in \code{.data}
+#' @param time The name of the time column in \code{.data}
 #'
 #' @return
 #' @export
@@ -16,6 +20,10 @@ spline_bp <- function(.data,
                       .x,
                       .y,
                       degree = 1,
+                      vo2 = "vo2",
+                      vco2 = "vco2",
+                      ve = "ve",
+                      time = "time",
                       alpha_linearity = 0.05,
                       bp) {
 

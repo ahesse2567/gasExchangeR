@@ -4,7 +4,18 @@
 \alias{spline_bp}
 \title{Finding a breakpoint by iteratively moving an indicator variable}
 \usage{
-spline_bp(.data, .x, .y, degree = 1, alpha_linearity = 0.05, bp)
+spline_bp(
+  .data,
+  .x,
+  .y,
+  degree = 1,
+  vo2 = "vo2",
+  vco2 = "vco2",
+  ve = "ve",
+  time = "time",
+  alpha_linearity = 0.05,
+  bp
+)
 }
 \arguments{
 \item{.data}{Gas exchange data.}
@@ -14,6 +25,14 @@ spline_bp(.data, .x, .y, degree = 1, alpha_linearity = 0.05, bp)
 \item{.y}{the y-axis variable.}
 
 \item{degree}{The degree of polynomial spline to use. Default is 1 to mimic other methods.}
+
+\item{vo2}{The name of the vo2 column in \code{.data}}
+
+\item{vco2}{The name of the vco2 column in \code{.data}}
+
+\item{ve}{The name of the ve column in \code{.data}}
+
+\item{time}{The name of the time column in \code{.data}}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 

@@ -4,7 +4,18 @@
 \alias{v_slope}
 \title{Finding a breakpoint using Beaver's V-slope algorithm}
 \usage{
-v_slope(.data, .x, .y, slope_change_lim = 0.1, alpha_linearity = 0.05, bp)
+v_slope(
+  .data,
+  .x,
+  .y,
+  vo2 = "vo2",
+  vco2 = "vco2",
+  ve = "ve",
+  time = "time",
+  slope_change_lim = 0.1,
+  alpha_linearity = 0.05,
+  bp
+)
 }
 \arguments{
 \item{.data}{Gas exchange data.}
@@ -12,6 +23,14 @@ v_slope(.data, .x, .y, slope_change_lim = 0.1, alpha_linearity = 0.05, bp)
 \item{.x}{The x-axis variable.}
 
 \item{.y}{the y-axis variable.}
+
+\item{vo2}{The name of the vo2 column in \code{.data}}
+
+\item{vco2}{The name of the vco2 column in \code{.data}}
+
+\item{ve}{The name of the ve column in \code{.data}}
+
+\item{time}{The name of the time column in \code{.data}}
 
 \item{slope_change_lim}{The absolute amount by which the slope should change from the left to the right regression line. Default per Beaver (1986) is 0.1.}
 
