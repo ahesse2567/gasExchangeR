@@ -1,4 +1,4 @@
-#' Finding a breakpoint using Cheng's Dmax method.
+#' Finding a breakpoint using Cheng's Dmax algorithm.
 #'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
@@ -89,23 +89,26 @@ dmax <- function(.data,
         slice(1) %>%
         select(-c(dist_x_sq, dist_y_sq, sum_sq)) %>%
         mutate(bp = bp,
-               method = "dmax",
+               algorithm = "dmax",
+               x_var = .x,
+               y_var = .y,
                determinant_bp = determinant_bp,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, method, determinant_bp, pct_slope_change, f_stat, p_val_f)
+        relocate(bp, algorithm, x_var, y_var, determinant_bp,
+                 pct_slope_change, f_stat, p_val_f)
 
-    # create linear model object so plotting behavior is similar to other methods
+    # create linear model object so plotting behavior is similar to other algorithms
     # y_hat <- .data[[.x]]*f[2] + f[1]
     # dmax_lm <- lm(y_hat ~ .data[[.x]] + 1)
     #
     # pred <- bind_rows(tibble(x = .data[[.x]],
     #                          y_hat = g.model$fitted.values,
-    #                          method = "dmax"),
+    #                          algorithm = "dmax"),
     #                   tibble(x = .data[[.x]],
     #                          y_hat = dmax_lm$fitted.values,
-    #                          method = "dmax_start_end"))
+    #                          algorithm = "dmax_start_end"))
 
     return(list(breakpoint_data = bp_dat,
                 # fitted_vals = pred,

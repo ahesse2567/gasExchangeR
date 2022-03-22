@@ -2,7 +2,7 @@
 % Please edit documentation in R/orr.R
 \name{orr}
 \alias{orr}
-\title{Finding a breakpoint using Orr's 'bruteforce' method.}
+\title{Finding a breakpoint using Orr's 'bruteforce' algorithm.}
 \usage{
 orr(
   .data,
@@ -39,7 +39,7 @@ orr(
 
 }
 \description{
-Finding a breakpoint using Orr's 'bruteforce' method.
+Finding a breakpoint using Orr's 'bruteforce' algorithm.
 }
 \examples{
 # TODO write examples

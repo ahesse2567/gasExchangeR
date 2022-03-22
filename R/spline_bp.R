@@ -3,7 +3,7 @@
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
-#' @param degree The degree of polynomial spline to use. Default is 1 to mimic other methods.
+#' @param degree The degree of polynomial spline to use. Default is 1 to mimic other algorithms.
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this algorithm being used to find vt1 or vt2?
 #' @param vo2 The name of the vo2 column in \code{.data}
@@ -45,7 +45,7 @@ spline_bp <- function(.data,
 
     pred <- bind_rows(x = .data[[.x]],
                       y_hat = lm_spline$fitted.values,
-                      method = "spline")
+                      algorithm = "spline")
 
     # slope BEFORE breakpoint = β1
     # slope AFTER breakpoint = β1 + β2
@@ -56,12 +56,15 @@ spline_bp <- function(.data,
     bp_dat <- .data[min_ss_idx,] %>%
         select(-s1) %>%
         mutate(bp = bp,
-               method = "spline_bp",
+               algorithm = "spline_bp",
+               x_var = .x,
+               y_var = .y,
                determinant_bp = determinant_bp,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, method, determinant_bp, pct_slope_change, f_stat, p_val_f)
+        relocate(bp, algorithm, x_var, y_var, determinant_bp,
+                 pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,

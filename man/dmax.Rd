@@ -2,7 +2,7 @@
 % Please edit documentation in R/dmax.R
 \name{dmax}
 \alias{dmax}
-\title{Finding a breakpoint using Cheng's Dmax method.}
+\title{Finding a breakpoint using Cheng's Dmax algorithm.}
 \usage{
 dmax(
   .data,
@@ -39,7 +39,7 @@ dmax(
 
 }
 \description{
-Finding a breakpoint using Cheng's Dmax method.
+Finding a breakpoint using Cheng's Dmax algorithm.
 }
 \examples{
 # TODO write examples

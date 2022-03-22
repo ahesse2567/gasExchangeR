@@ -24,7 +24,7 @@ spline_bp(
 
 \item{.y}{the y-axis variable.}
 
-\item{degree}{The degree of polynomial spline to use. Default is 1 to mimic other methods.}
+\item{degree}{The degree of polynomial spline to use. Default is 1 to mimic other algorithms.}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 

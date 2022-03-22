@@ -49,13 +49,15 @@ v_slope <- function(.data,
                 dplyr::slice(1) %>%
                 dplyr::select(time, vo2, vco2, ve) %>%
                 dplyr::mutate(bp = bp,
-                       method = "v-slope",
-                       determinant_bp = FALSE,
-                       pct_slope_change = NA,
-                       f_stat = NA,
-                       p_val_f = NA) %>%
-                dplyr::relocate(bp, method, determinant_bp) %>%
-                map_df(num_to_na)
+                              x_var = .x,
+                              y_var = .y,
+                              algorithm = "v-slope",
+                              determinant_bp = FALSE,
+                              pct_slope_change = NA,
+                              f_stat = NA,
+                              p_val_f = NA) %>%
+                dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp) %>%
+                purrr::map_df(num_to_na)
 
             return(list(breakpoint_data = bp_dat,
                         # fitted_vals = pred, # dTODO how to return fitted values?
@@ -95,13 +97,17 @@ v_slope <- function(.data,
         tibble::as_tibble() %>%
         dplyr::arrange(d) %>%
         dplyr::slice(1) %>%
-        dplyr::mutate(method = "v_slope",
+        dplyr::mutate(algorithm = "v_slope",
+                      bp = bp,
+                      x_var = .x,
+                      y_var = .y,
                       determinant_bp = determinant_bp,
-                      bp = bp) %>%
-        dplyr::select(bp, method, determinant_bp, time, vo2, vco2, ve) %>%
-        mutate(pct_slope_change = pct_slope_change,
-           f_stat = f_stat,
-           p_val_f = pf_two)
+                      pct_slope_change = pct_slope_change,
+                      f_stat = f_stat,
+                      p_val_f = pf_two) %>%
+        dplyr::select(-c(dist_x_sq, dist_y_sq, d)) %>%
+        relocate(bp, algorithm, x_var, y_var, determinant_bp,
+                 pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 # fitted_vals = pred, # TODO how to return fitted values?

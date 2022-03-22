@@ -1,4 +1,4 @@
-#' Finding a breakpoint using the Jones-Molitoris method.
+#' Finding a breakpoint using the Jones-Molitoris algorithm.
 #'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
@@ -43,7 +43,7 @@ jm <- function(.data,
         mutate(s1 = df_right[[.x]] - x_knot)
 
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-    # according to the JM method, the right regression line will have a constant equal to b0 + b1*x0
+    # according to the JM algorithm, the right regression line will have a constant equal to b0 + b1*x0
     b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][min_ss_idx+1]
 
     # for some reason, using I() function to try to force the regression to use b0_plus_b1x0 as an intercept doesn't work, while the offset argument does. The slope coefficient (b3) is the same, but the predicted values are not.
@@ -60,10 +60,10 @@ jm <- function(.data,
 
     y_hat_left <- tibble(x = df_left[[.x]],
                          y_hat = lm_left$fitted.values,
-                         method = "jm")
+                         algorithm = "jm")
     y_hat_right <- tibble(x = df_right[[.x]],
                           y_hat = lm_right$fitted.values,
-                          method = "jm")
+                          algorithm = "jm")
     pred <- bind_rows(y_hat_left, y_hat_right)
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
@@ -71,13 +71,16 @@ jm <- function(.data,
     determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
     bp_dat <- .data[min_ss_idx+1,] %>%
-        mutate(method = "jm",
+        mutate(algorithm = "jm",
                bp = bp,
+               x_var = .x,
+               y_var = .y,
                determinant_bp = determinant_bp,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, method, determinant_bp, pct_slope_change, f_stat, p_val_f)
+        relocate(bp, algorithm, x_var, y_var, determinant_bp,
+                 pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
@@ -110,7 +113,7 @@ loop_jm <- function(.data,
 
         lm_left <- lm(.data_left[[.y]] ~ 1 + .data_left[[.x]], data = .data_left)
 
-        # according to the JM method, the right regression line will have a constant equal to b0 + b1*x0
+        # according to the JM algorithm, the right regression line will have a constant equal to b0 + b1*x0
         b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][i+1]
 
         # for some reason, using I() function to try to force the regression to use b0_plus_b1x0 as an intercept doesn't work, while the offset argument does. The slope coefficient (b3) is the same, but the predicted values are not.

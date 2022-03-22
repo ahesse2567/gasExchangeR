@@ -1,4 +1,4 @@
-#' Finding a breakpoint using Orr's 'bruteforce' method.
+#' Finding a breakpoint using Orr's 'bruteforce' algorithm.
 #'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
@@ -59,17 +59,19 @@ orr <- function(.data,
                sum_dist_sq = dist_x_sq + dist_y_sq) %>%
         arrange(sum_dist_sq) %>%
         slice(1) %>%
-        dplyr::mutate(method = "orr",
+        dplyr::mutate(algorithm = "orr",
+                      x_var = .x,
+                      y_var = .y,
                       determinant_bp = determinant_bp,
                       bp = bp) %>%
-        relocate(bp, method, determinant_bp) %>%
+        relocate(bp, algorithm, x_var, y_var, determinant_bp) %>%
         select(-c(dist_x_sq, dist_y_sq, sum_sq)) %>%
 
     bp_dat <- orr_row %>%
         mutate(pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, method, determinant_bp, pct_slope_change, f_stat, p_val_f)
+        relocate(bp, algorithm, determinant_bp, pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 # fitted_vals = pred, # TODO how to return fitted values?

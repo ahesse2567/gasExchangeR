@@ -2,7 +2,7 @@
 % Please edit documentation in R/jm.R
 \name{jm}
 \alias{jm}
-\title{Finding a breakpoint using the Jones-Molitoris method.}
+\title{Finding a breakpoint using the Jones-Molitoris algorithm.}
 \usage{
 jm(
   .data,
@@ -39,7 +39,7 @@ jm(
 
 }
 \description{
-Finding a breakpoint using the Jones-Molitoris method.
+Finding a breakpoint using the Jones-Molitoris algorithm.
 }
 \examples{
 # TODO write examples
