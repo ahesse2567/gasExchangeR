@@ -2,7 +2,7 @@
 % Please edit documentation in R/orr.R
 \name{orr}
 \alias{orr}
-\title{Finding a breakpoint using Orr's 'bruteforce' method.}
+\title{Finding a breakpoint using Orr's 'bruteforce' algorithm.}
 \usage{
 orr(
   .data,
@@ -23,13 +23,13 @@ orr(
 
 \item{.y}{the y-axis variable.}
 
-\item{vo2}{The name of the \code{vo2} variable.}
+\item{vo2}{The name of the vo2 column in \code{.data}}
 
-\item{vco2}{The name of the \code{vco2} variable.}
+\item{vco2}{The name of the vco2 column in \code{.data}}
 
-\item{ve}{The name of the \code{ve} variable.}
+\item{ve}{The name of the ve column in \code{.data}}
 
-\item{time}{The name of the \code{time} variable.}
+\item{time}{The name of the time column in \code{.data}}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
@@ -39,7 +39,7 @@ orr(
 
 }
 \description{
-Finding a breakpoint using Orr's 'bruteforce' method.
+Finding a breakpoint using Orr's 'bruteforce' algorithm.
 }
 \examples{
 # TODO write examples

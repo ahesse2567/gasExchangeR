@@ -18,7 +18,9 @@ breakpoint(
   vco2 = "vco2",
   ve = "ve",
   time = "time",
-  bps = "both"
+  bps = "both",
+  truncate = TRUE,
+  ...
 )
 }
 \arguments{
@@ -48,7 +50,11 @@ breakpoint(
 
 \item{time}{The name of the time column in \code{.data}}
 
-\item{bps}{Should the function find the breakpoints for vt1, vt2, or both. Default is \code{both}.}
+\item{bps}{Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.}
+
+\item{truncate}{By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.}
+
+\item{...}{}
 }
 \value{
 
@@ -64,4 +70,7 @@ Since there aren't common names for every way to find a breakpoint, you can also
 \examples{
 # TODO write an an example
 
+}
+\references{
+Gaskill, S. E., Ruby, B. C., Walker, A. V. A. J., Sanchez, O. A., Serfass, R. C., & Leon, A. S. (2001). Validity and reliability of combining three methods to determine ventilatory threshold. Medicine & Science in Sports & Exercise, 33(11), 1841–1848.
 }

@@ -29,6 +29,21 @@ breakpoint(.data = df_avg,
            vo2 = "vo2_abs",
            bps = "both")
 
+num_to_na <- function(x) {
+    if(is.numeric(x)) {
+        x <- NA
+    }
+    x
+}
+
+num_to_na(bp_dat$bp)
+
+map_df(bp_dat, num_to_na)
+
+na_if(is.numeric(bp_dat$ve), NA)
+
+bp_dat[is.character(bp_dat)]
+
 ss <- loop_v_slope(df_avg, "vo2_abs", "vco2")
 plot(ss)
 bp_idx <- v_slope(df_avg, "vo2_abs", "vco2")

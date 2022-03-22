@@ -1,14 +1,14 @@
-#' Finding a breakpoint using Orr's 'bruteforce' method.
+#' Finding a breakpoint using Orr's 'bruteforce' algorithm.
 #'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
-#' @param vo2 The name of the \code{vo2} variable.
-#' @param vco2 The name of the \code{vco2} variable.
-#' @param ve The name of the \code{ve} variable.
-#' @param time The name of the \code{time} variable.
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this algorithm being used to find vt1 or vt2?
+#' @param vo2 The name of the vo2 column in \code{.data}
+#' @param vco2 The name of the vco2 column in \code{.data}
+#' @param ve The name of the ve column in \code{.data}
+#' @param time The name of the time column in \code{.data}
 #'
 #' @return
 #' @export
@@ -33,8 +33,8 @@ orr <- function(.data,
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
 
-    df_left <- df_avg[1:min_ss_idx,]
-    df_right <- df_avg[min_ss_idx:nrow(df_avg),]
+    df_left <- .data[1:min_ss_idx,]
+    df_right <- .data[min_ss_idx:nrow(.data),]
 
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
     lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
@@ -42,9 +42,9 @@ orr <- function(.data,
 
     RSS_simple <- sum(resid(lm_simple)^2)
     RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
-    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
@@ -59,15 +59,19 @@ orr <- function(.data,
                sum_dist_sq = dist_x_sq + dist_y_sq) %>%
         arrange(sum_dist_sq) %>%
         slice(1) %>%
-        dplyr::mutate(method = "orr",
+        dplyr::mutate(algorithm = "orr",
+                      x_var = .x,
+                      y_var = .y,
                       determinant_bp = determinant_bp,
                       bp = bp) %>%
-        select(bp, method, determinant_bp, time, vo2, vco2, ve)
+        relocate(bp, algorithm, x_var, y_var, determinant_bp) %>%
+        select(-c(dist_x_sq, dist_y_sq, sum_sq)) %>%
 
     bp_dat <- orr_row %>%
         mutate(pct_slope_change = pct_slope_change,
                f_stat = f_stat,
-               p_val_f = pf_two)
+               p_val_f = pf_two) %>%
+        relocate(bp, algorithm, determinant_bp, pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 # fitted_vals = pred, # TODO how to return fitted values?

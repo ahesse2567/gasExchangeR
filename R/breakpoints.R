@@ -13,7 +13,9 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
-#' @param bps Should the function find the breakpoints for vt1, vt2, or both. Default is \code{both}.
+#' @param bps Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
+#' @param truncate By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.
+#' @param ...
 #'
 #' @return
 #' @export
@@ -22,6 +24,9 @@
 #' There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for \code{x_vt1}, and 'vco2' for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.
 #'
 #' Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{x}, and \code{y}.
+#'
+#' @references
+#' Gaskill, S. E., Ruby, B. C., Walker, A. V. A. J., Sanchez, O. A., Serfass, R. C., & Leon, A. S. (2001). Validity and reliability of combining three methods to determine ventilatory threshold. Medicine & Science in Sports & Exercise, 33(11), 1841–1848.
 #'
 #' @examples
 #' # TODO write an an example
@@ -39,7 +44,9 @@ breakpoint <- function(.data,
                        vco2 = "vco2",
                        ve = "ve",
                        time = "time",
-                       bps = "both") {
+                       bps = "both",
+                       truncate = TRUE,
+                       ...) {
     stopifnot(!missing(.data),
               !all(is.null(method), is.null(algorithm_vt1),
                   is.null(x_vt1), is.null(y_vt1)),
@@ -60,12 +67,30 @@ breakpoint <- function(.data,
                                        "orr",
                                        "v-slope",
                                        "v_slope_simple"))
-        # class(.data) <- append(class(.data), method) # could be useful to
-        # use class to pre-select .x and .y variable?
+        if(method == "excess_co2") {
+            if(!is.null(x_vt1)) {
+                if(x_vt1 != time | x_vt1 != vo2) {
+                    warning("x_vt1 is not set to an appropriate value for the excess co2 method. Appropriate values are time and VO2.")
+                }
+            }
+            if(is.null(x_vt1)) {
+                x_vt1 <- time
+            }
+            if(!is.null(y_vt1)) {
+                warning("Overriding calculation of excess co2 for y_vt1")
+            }
+            if(mean(.data[[vco2]] / .data[[vo2]]) > 2) {
+                warning("VO2 and VCO2 columns are unlikely to both be in the same absolute units\nCheck if VO2 column indicated in arguments is absolute and that units match VCO2")
+            }
+            .data <- .data %>%
+                mutate(excess_co2 = .data[[vco2]]^2 / .data[[vo2]] - .data[[vco2]])
+            y_vt1 <- "excess_co2"
+        }
     }
 
     # if a specific method was chosen, a function pre-fills algorithms, .x, .y
     # based on the method so long as .x and .y are not already specified
+
     # orr: VE vs. VO2. This kinda finds RC first if the three-regression model is
     # best, but then only returns vt1. Given that, does this change the truncation
     # decision at RC?
@@ -76,44 +101,29 @@ breakpoint <- function(.data,
                               "orr", "v-slope", "simplified_v-slope",
                               "splines"))
     # there's some lactate breakpoints that may be worth adding
-
+    # browser()
     if(bps == "both" | bps == "vt2") {
-        bp <- "vt2"
+        params = list(.data = .data,
+                      .x = x_vt2,
+                      .y = y_vt2,
+                      vo2 = vo2,
+                      vco2 = vco2,
+                      ve = ve,
+                      time = time,
+                      alpha_linearity = alpha_linearity,
+                      bp = "vt2")
         vt2_out <- switch(algorithm_vt2,
-                          "jm" = jm(.data = .data,
-                                    .x = x_vt2,
-                                    .y = y_vt2,
-                                    vo2 = vo2,
-                                    vco2 = vco2,
-                                    ve = ve,
-                                    time = time,
-                                    alpha_linearity = alpha_linearity,
-                                    bp = bp),
-                          "orr" = orr(.data = .data,
-                                      .x = x_vt2,
-                                      .y = y_vt2,
-                                      vo2 = vo2,
-                                      vco2 = vco2,
-                                      ve = ve,
-                                      time = time,
-                                      alpha_linearity = alpha_linearity,
-                                      bp = bp),
-                          "v-slope" = v_slope(.data = .data,
-                                               .x = x_vt2,
-                                               .y = y_vt2,
-                                               vo2 = vo2,
-                                               vco2 = vco2,
-                                               ve = ve,
-                                               time = time,
-                                               alpha_linearity = alpha_linearity,
-                                               bp = bp))
+                          "jm" = do.call(what = "jm", args = params),
+                          "orr" = do.call(what = "orr", args = params),
+                          "v-slope" = do.call(what = "v_slope", args = params))
 
         if(bps == "vt2") {
             return(vt2_out)
         }
 
         # truncate if VT2 is found
-        if(vt2_out$breakpoint_data$p_val_f < alpha_linearity) {
+        if(vt2_out$breakpoint_data$p_val_f < alpha_linearity &
+           !is.na(vt2_out$breakpoint_data$p_val_f) & truncate == TRUE) {
             trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
             vt1_df <- .data[1:trunc_idx,]
         } else {
@@ -125,43 +135,28 @@ breakpoint <- function(.data,
     }
 
     if(bps == "both" | bps == "vt1") {
-        bp <- "vt1"
+        params = list(.data = vt1_df,
+                      .x = x_vt1,
+                      .y = y_vt1,
+                      vo2 = vo2,
+                      vco2 = vco2,
+                      ve = ve,
+                      time = time,
+                      alpha_linearity = alpha_linearity,
+                      bp = "vt1")
         vt1_out <- switch(algorithm_vt1,
-                          "jm" = jm(.data = vt1_df,
-                                    .x = x_vt1,
-                                    .y = y_vt1,
-                                    vo2 = vo2,
-                                    vco2 = vco2,
-                                    ve = ve,
-                                    time = time,
-                                    alpha_linearity = alpha_linearity,
-                                    bp = bp),
-                          "orr" = orr(.data = vt1_df,
-                                      .x = x_vt1,
-                                      .y = y_vt1,
-                                      vo2 = vo2,
-                                      vco2 = vco2,
-                                      ve = ve,
-                                      time = time,
-                                      alpha_linearity = alpha_linearity,
-                                      bp = bp),
-                          "v-slope" = v_slope(.data = vt1_df,
-                                              .x = x_vt1,
-                                              .y = y_vt1,
-                                              vo2 = vo2,
-                                              vco2 = vco2,
-                                              ve = ve,
-                                              time = time,
-                                              alpha_linearity = alpha_linearity,
-                                              bp = bp))
+                          "jm" = do.call(what = "jm", args = params),
+                          "orr" = do.call(what = "orr", args = params),
+                          "v-slope" = do.call(what = "v_slope", args = params))
         if(bps == "vt1") {
             return(vt1_out)
         }
     }
 
-    vt_out <- rbind(vt1_out$breakpoint_data, vt2_out$breakpoint_data)
+    vt_out <- suppressMessages(full_join(vt1_out$breakpoint_data,
+                                         vt2_out$breakpoint_data))
     out <- list(bp_dat = vt_out,
-                vt1_dat = vt1_out[-1],
-                vt2_dat = vt2_out[-1])
+                vt1_dat = vt1_out,
+                vt2_dat = vt2_out)
     out
 }
