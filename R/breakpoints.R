@@ -25,6 +25,9 @@
 #'
 #' Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{x}, and \code{y}.
 #'
+#' @references
+#' Gaskill, S. E., Ruby, B. C., Walker, A. V. A. J., Sanchez, O. A., Serfass, R. C., & Leon, A. S. (2001). Validity and reliability of combining three methods to determine ventilatory threshold. Medicine & Science in Sports & Exercise, 33(11), 1841–1848.
+#'
 #' @examples
 #' # TODO write an an example
 #'
@@ -64,12 +67,30 @@ breakpoint <- function(.data,
                                        "orr",
                                        "v-slope",
                                        "v_slope_simple"))
-        # class(.data) <- append(class(.data), method) # could be useful to
-        # use class to pre-select .x and .y variable?
+        if(method == "excess_co2") {
+            if(!is.null(x_vt1)) {
+                if(x_vt1 != time | x_vt1 != vo2) {
+                    warning("x_vt1 is not set to an appropriate value for the excess co2 method. Appropriate values are time and VO2.")
+                }
+            }
+            if(is.null(x_vt1)) {
+                x_vt1 <- time
+            }
+            if(!is.null(y_vt1)) {
+                warning("Overriding calculation of excess co2 for y_vt1")
+            }
+            if(mean(.data[[vco2]] / .data[[vo2]]) > 2) {
+                warning("VO2 and VCO2 columns are unlikely to both be in the same absolute units\nCheck if VO2 column indicated in arguments is absolute and that units match VCO2")
+            }
+            .data <- .data %>%
+                mutate(excess_co2 = .data[[vco2]]^2 / .data[[vo2]] - .data[[vco2]])
+            y_vt1 <- "excess_co2"
+        }
     }
 
     # if a specific method was chosen, a function pre-fills algorithms, .x, .y
     # based on the method so long as .x and .y are not already specified
+
     # orr: VE vs. VO2. This kinda finds RC first if the three-regression model is
     # best, but then only returns vt1. Given that, does this change the truncation
     # decision at RC?
@@ -80,7 +101,7 @@ breakpoint <- function(.data,
                               "orr", "v-slope", "simplified_v-slope",
                               "splines"))
     # there's some lactate breakpoints that may be worth adding
-
+    # browser()
     if(bps == "both" | bps == "vt2") {
         params = list(.data = .data,
                       .x = x_vt2,
@@ -99,7 +120,7 @@ breakpoint <- function(.data,
         if(bps == "vt2") {
             return(vt2_out)
         }
-        # browser()
+
         # truncate if VT2 is found
         if(vt2_out$breakpoint_data$p_val_f < alpha_linearity &
            !is.na(vt2_out$breakpoint_data$p_val_f) & truncate == TRUE) {
@@ -114,7 +135,7 @@ breakpoint <- function(.data,
     }
 
     if(bps == "both" | bps == "vt1") {
-        params = list(.data = .data,
+        params = list(.data = vt1_df,
                       .x = x_vt1,
                       .y = y_vt1,
                       vo2 = vo2,
@@ -132,7 +153,8 @@ breakpoint <- function(.data,
         }
     }
 
-    vt_out <- rbind(vt1_out$breakpoint_data, vt2_out$breakpoint_data)
+    vt_out <- suppressMessages(full_join(vt1_out$breakpoint_data,
+                                         vt2_out$breakpoint_data))
     out <- list(bp_dat = vt_out,
                 vt1_dat = vt1_out,
                 vt2_dat = vt2_out)

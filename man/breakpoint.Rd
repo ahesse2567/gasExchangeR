@@ -71,3 +71,6 @@ Since there aren't common names for every way to find a breakpoint, you can also
 # TODO write an an example
 
 }
+\references{
+Gaskill, S. E., Ruby, B. C., Walker, A. V. A. J., Sanchez, O. A., Serfass, R. C., & Leon, A. S. (2001). Validity and reliability of combining three methods to determine ventilatory threshold. Medicine & Science in Sports & Exercise, 33(11), 1841–1848.
+}
