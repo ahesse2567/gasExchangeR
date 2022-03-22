@@ -34,7 +34,11 @@ v_slope <- function(.data,
     dist_MSE_ratio <- loop_v_slope(.data = .data, .x = .x, .y = .y)
     slope_change <- 0
     i <- 1
-    while(slope_change < slope_change_lim) {
+    bp_idx <- order(-dist_MSE_ratio)[i]
+    df_left <- .data[1:bp_idx,]
+    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+
+    while(slope_change < slope_change_lim & lm_left$coefficients[2] > 0.6) {
         bp_idx <- order(-dist_MSE_ratio)[i]
         df_left <- .data[1:bp_idx,]
         df_right <- .data[(bp_idx+1):nrow(.data),]
@@ -47,7 +51,6 @@ v_slope <- function(.data,
             message("No breakpoint found. Change between slopes was never >= 0.1.")
             bp_dat <- .data %>%
                 dplyr::slice(1) %>%
-                dplyr::select(time, vo2, vco2, ve) %>%
                 dplyr::mutate(bp = bp,
                               x_var = .x,
                               y_var = .y,
@@ -82,10 +85,11 @@ v_slope <- function(.data,
     MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
     pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
-    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
+
+    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
     # find intersection point of left and right regressions
     lr_intersect <- intersection_point(lm_left, lm_right)

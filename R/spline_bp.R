@@ -41,11 +41,6 @@ spline_bp <- function(.data,
     MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
     pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
-    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
-
-    pred <- bind_rows(x = .data[[.x]],
-                      y_hat = lm_spline$fitted.values,
-                      algorithm = "spline")
 
     # slope BEFORE breakpoint = β1
     # slope AFTER breakpoint = β1 + β2
@@ -53,6 +48,9 @@ spline_bp <- function(.data,
     ref <- lm_spline$coefficients[2]
     new <- lm_spline$coefficients[2]+lm_spline$coefficients[3]
     pct_slope_change <- (new - ref)/ref * 100
+
+    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+
     bp_dat <- .data[min_ss_idx,] %>%
         select(-s1) %>%
         mutate(bp = bp,
@@ -65,6 +63,10 @@ spline_bp <- function(.data,
                p_val_f = pf_two) %>%
         relocate(bp, algorithm, x_var, y_var, determinant_bp,
                  pct_slope_change, f_stat, p_val_f)
+
+    pred <- bind_rows(x = .data[[.x]],
+                      y_hat = lm_spline$fitted.values,
+                      algorithm = "spline")
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
