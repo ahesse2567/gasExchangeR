@@ -67,9 +67,9 @@ dmax <- function(.data,
 
     RSS_simple <- sum(resid(lm_simple)^2)
     RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
-    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
     determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
     # find closest actual data point to dmax point and return data

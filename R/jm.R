@@ -46,9 +46,9 @@ jm <- function(.data,
 
     RSS_simple <- sum(resid(lm_simple)^2)
     RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
-    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
     y_hat_left <- tibble(x = df_left[[.x]],
                          y_hat = lm_left$fitted.values,
@@ -114,7 +114,7 @@ loop_jm <- function(.data,
 
         ss_left <- sum((lm_left$residuals)^2)
         ss_right <- sum((lm_right$residuals)^2)
-        ss_both[i-1] <- (ss_left + ss_right)
+        ss_both[i-1] <- (ss_left + ss_right) # is this off by 1?
 
         #ss_both <- c(ss_both, ss_left + ss_right)
     }

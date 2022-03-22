@@ -4,17 +4,7 @@
 \alias{orr}
 \title{Finding a breakpoint using Orr's 'bruteforce' method.}
 \usage{
-orr(
-  .data,
-  .x,
-  .y,
-  vo2 = "vo2",
-  vco2 = "vco2",
-  ve = "ve",
-  time = "time",
-  alpha_linearity = 0.05,
-  bp
-)
+orr(.data, .x, .y, alpha_linearity = 0.05, bp)
 }
 \arguments{
 \item{.data}{Gas exchange data.}
@@ -22,14 +12,6 @@ orr(
 \item{.x}{The x-axis variable.}
 
 \item{.y}{the y-axis variable.}
-
-\item{vo2}{The name of the \code{vo2} variable.}
-
-\item{vco2}{The name of the \code{vco2} variable.}
-
-\item{ve}{The name of the \code{ve} variable.}
-
-\item{time}{The name of the \code{time} variable.}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 

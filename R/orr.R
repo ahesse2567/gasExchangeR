@@ -25,8 +25,8 @@ orr <- function(.data,
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
 
-    df_left <- df_avg[1:min_ss_idx,]
-    df_right <- df_avg[min_ss_idx:nrow(df_avg),]
+    df_left <- .data[1:min_ss_idx,]
+    df_right <- .data[min_ss_idx:nrow(.data),]
 
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
     lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
@@ -34,9 +34,9 @@ orr <- function(.data,
 
     RSS_simple <- sum(resid(lm_simple)^2)
     RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
-    MSE_two <- RSS_two / (nrow(df_avg) - 4) # -4 b/c estimating 4 parameters
+    MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(df_avg) - 4, lower.tail = FALSE)
+    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
