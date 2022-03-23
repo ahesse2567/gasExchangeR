@@ -29,8 +29,8 @@ dmax <- function(.data,
                  time = "time",
                  alpha_linearity = 0.05,
                  bp){
-    # browser()
     # the original paper has something about 50 mL increments in O2
+    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 

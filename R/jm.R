@@ -27,6 +27,8 @@ jm <- function(.data,
                time = "time",
                alpha_linearity = 0.05,
                bp) {
+    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+    bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 
@@ -36,16 +38,16 @@ jm <- function(.data,
     # I don't think this actually intersects at x0 right now!!!!
 
     df_left <- .data[1:min_ss_idx,] # x < x0
-    df_right <- .data[(min_ss_idx+1):nrow(.data),] # x >= x0
+    df_right <- .data[(min_ss_idx):nrow(.data),] # x >= x0
 
-    x_knot <- .data[[.x]][min_ss_idx+1]
+    x_knot <- .data[[.x]][min_ss_idx]
 
     df_right <- df_right %>%
         mutate(s1 = df_right[[.x]] - x_knot)
 
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
     # according to the JM algorithm, the right regression line will have a constant equal to b0 + b1*x0
-    b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][min_ss_idx+1]
+    b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][min_ss_idx]
 
     # for some reason, using I() function to try to force the regression to use b0_plus_b1x0 as an intercept doesn't work, while the offset argument does. The slope coefficient (b3) is the same, but the predicted values are not.
     lm_right <- lm(df_right[[.y]] ~ 0 + s1, data = df_right,
@@ -71,7 +73,7 @@ jm <- function(.data,
 
     determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
 
-    bp_dat <- .data[min_ss_idx+1,] %>%
+    bp_dat <- .data[min_ss_idx,] %>%
         mutate(algorithm = "jm",
                bp = bp,
                x_var = .x,
@@ -92,44 +94,36 @@ jm <- function(.data,
 }
 
 #' @keywords internal
-loop_jm <- function(.data,
-                    .x,
-                    .y) {
-    # browser()
-    # rearranging data by the x variables was maybe a bad idea?
-    # .data <- .data %>%
-    #     arrange(.data[[.x]], .data[[time]])
+loop_jm <- function(.data, .x, .y) {
 
     ss_both <- numeric(length = nrow(.data)-2)
     for(i in 2:(nrow(.data)-1)) {
-        # algorithm data into left and right halves. x0 = i+1
-        .data_left <- .data[1:i,] # x < x0
-        .data_right <- .data[(i+1):nrow(.data),] # x >= x0
+        # split data into left and right halves. x0 = i
+        df_left <- .data[1:i,] # x <= x0
+        df_right <- .data[i:nrow(.data),] # x > x0
 
-        # the JM formula is y = b0 + b1*x0 + b3(x-x0). Therefore, we will create a new column in .data_right that is equal to x - x0.
-        .data_right <- .data_right %>%
-            mutate(s1 = .data_right[[.x]] - .data[[.x]][i+1])
+        # the JM formula is y = b0 + b1*x0 + b3(x-x0). Therefore, we will create a new column in df_right that is equal to x - x0.
+        df_right <- df_right %>%
+            mutate(s1 = df_right[[.x]] - .data[[.x]][i])
 
-        .data_right$s1 = .data_right[[.x]] - .data[[.x]][i+1]
+        df_right$s1 = df_right[[.x]] - .data[[.x]][i]
 
-        lm_left <- lm(.data_left[[.y]] ~ 1 + .data_left[[.x]], data = .data_left)
+        lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
 
         # according to the JM algorithm, the right regression line will have a constant equal to b0 + b1*x0
-        b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][i+1]
+        b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][i]
 
         # for some reason, using I() function to try to force the regression to use b0_plus_b1x0 as an intercept doesn't work, while the offset argument does. The slope coefficient (b3) is the same, but the predicted values are not.
-        lm_right <- lm(.data_right[[.y]] ~ 0 + s1, data = .data_right,
-                       offset = rep(b0_plus_b1x0, nrow(.data_right)))
+        lm_right <- lm(df_right[[.y]] ~ 0 + s1, data = df_right,
+                       offset = rep(b0_plus_b1x0, nrow(df_right)))
 
         # This should be the same as using the offset argument, but it's not
-        # lm_right <- lm(I(.data[[.y]] - b0_plus_b1x0) ~ 0 + .data[[.x]], data = .data_right)
+        # lm_right <- lm(I(.data[[.y]] - b0_plus_b1x0) ~ 0 + .data[[.x]], data = df_right)
 
         ss_left <- sum((lm_left$residuals)^2)
         ss_right <- sum((lm_right$residuals)^2)
-        ss_both[i-1] <- (ss_left + ss_right) # is this off by 1?
-
-        #ss_both <- c(ss_both, ss_left + ss_right)
+        ss_both[i] <- (ss_left + ss_right) # is this off by 1?
     }
-
+    ss_both[which(ss_both == 0)] <- NA
     ss_both
 }

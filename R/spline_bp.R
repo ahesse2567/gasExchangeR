@@ -26,6 +26,7 @@ spline_bp <- function(.data,
                       time = "time",
                       alpha_linearity = 0.05,
                       bp) {
+    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 

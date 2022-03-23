@@ -41,7 +41,7 @@ v_slope <- function(.data,
                     left_slope_lim = 0.6,
                     alpha_linearity = 0.05,
                     bp) {
-    # browser()
+    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 
