@@ -1,5 +1,13 @@
 #' Finding a breakpoint using Beaver's V-slope algorithm
 #'
+#' V-slope uses the v-slope \emph{algorithm} to find a breakpoint. Note, the v-slope algorithm is different from the v-slope \emph{method} as a whole because the latter also includes a specific set of data processing steps (see reference). In order to use the v-slope algorithm as originally described by Beaver et al. (1986), pass \code{"v-slope"} to the \code{method} argument in the \code{breakpoint} function. Without indicating the \code{method} as \code{"v-slope"}, the function returns the breakpoint associated with ratio of the highest distance between the single regression line to the intersection point of the two regression lines, to the mean square error of the single regression line. This can sometimes lead to odd behavior and it is therefore generally recommended to specify \code{"v-slope"} in the \code{method} argument of \code{breakpoint} when using this function. See the Warnings and Details sections for details.
+#'
+#' @section Warning:
+#' Using the v-slope algorithm as originally described by Beaver et al. (1986) is only intended to be used with the VCO2 vs. VO2 relationship when both are absolute measures of the same units (e.g. mL/min). The quality control criteria for this algorithm are an the increase in slope from the left to right regression line of > 0.1 and the slope of the left regression > 0.6. Using other x-y relationship leads to odd behavior that may not satisfy those criteria.
+#'
+#' @details
+#' If the \code{method} argument is set to \code{"v-slope"}, the function enters a while loop to satisfy the quality control criteria (see Warnings section for details). Otherwise, the function returns the breakpoint as described the initial description.
+#'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
@@ -10,6 +18,8 @@
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
+#' @param method Pass \code{"v-slope"} to the method argument to exactly reproduce the procedure from the original paper. See the Warnings section for details.
+#' @param left_slope_lim The original paper requires that the left regression line have a slope of > \code{0.6}.
 #'
 #' @return
 #' @export
@@ -26,11 +36,15 @@ v_slope <- function(.data,
                     vco2 = "vco2",
                     ve = "ve",
                     time = "time",
+                    method = NULL,
                     slope_change_lim = 0.1,
+                    left_slope_lim = 0.6,
                     alpha_linearity = 0.05,
                     bp) {
     # browser()
-    # TODO exclude data at the beginning if the VCO2 vs. VO2 slope is < 0.6
+    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
+        dplyr::arrange(.data[[.x]], .data[[time]])
+
     dist_MSE_ratio <- loop_v_slope(.data = .data, .x = .x, .y = .y)
     slope_change <- 0
     i <- 1
@@ -38,7 +52,10 @@ v_slope <- function(.data,
     df_left <- .data[1:bp_idx,]
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
 
-    while(slope_change < slope_change_lim & lm_left$coefficients[2] > 0.6) {
+    # TODO the slope_change < slope_change_lim and left slope > 0.6 only apply
+    # specifically when x = VO2 and y = VCO2. How do we check for that?
+    # I think actually specifically apply when method == "v-slope"
+    while(slope_change < slope_change_lim) {
         bp_idx <- order(-dist_MSE_ratio)[i]
         df_left <- .data[1:bp_idx,]
         df_right <- .data[(bp_idx+1):nrow(.data),]

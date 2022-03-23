@@ -12,7 +12,9 @@ v_slope(
   vco2 = "vco2",
   ve = "ve",
   time = "time",
+  method = NULL,
   slope_change_lim = 0.1,
+  left_slope_lim = 0.6,
   alpha_linearity = 0.05,
   bp
 )
@@ -32,7 +34,11 @@ v_slope(
 
 \item{time}{The name of the time column in \code{.data}}
 
+\item{method}{Pass \code{"v-slope"} to the method argument to exactly reproduce the procedure from the original paper. See the Warnings section for details.}
+
 \item{slope_change_lim}{The absolute amount by which the slope should change from the left to the right regression line. Default per Beaver (1986) is 0.1.}
+
+\item{left_slope_lim}{The original paper requires that the left regression line have a slope of > \code{0.6}.}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
@@ -42,8 +48,16 @@ v_slope(
 
 }
 \description{
-Finding a breakpoint using Beaver's V-slope algorithm
+V-slope uses the v-slope \emph{algorithm} to find a breakpoint. Note, the v-slope algorithm is different from the v-slope \emph{method} as a whole because the latter also includes a specific set of data processing steps (see reference). In order to use the v-slope algorithm as originally described by Beaver et al. (1986), pass \code{"v-slope"} to the \code{method} argument in the \code{breakpoint} function. Without indicating the \code{method} as \code{"v-slope"}, the function returns the breakpoint associated with ratio of the highest distance between the single regression line to the intersection point of the two regression lines, to the mean square error of the single regression line. This can sometimes lead to odd behavior and it is therefore generally recommended to specify \code{"v-slope"} in the \code{method} argument of \code{breakpoint} when using this function. See the Warnings and Details sections for details.
 }
+\details{
+If the \code{method} argument is set to \code{"v-slope"}, the function enters a while loop to satisfy the quality control criteria (see Warnings section for details). Otherwise, the function returns the breakpoint as described the initial description.
+}
+\section{Warning}{
+
+Using the v-slope algorithm as originally described by Beaver et al. (1986) is only intended to be used with the VCO2 vs. VO2 relationship when both are absolute measures of the same units (e.g. mL/min). The quality control criteria for this algorithm are an the increase in slope from the left to right regression line of > 0.1 and the slope of the left regression > 0.6. Using other x-y relationship leads to odd behavior that may not satisfy those criteria.
+}
+
 \examples{
 # TODO write an example
 }
