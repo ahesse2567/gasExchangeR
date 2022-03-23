@@ -1,5 +1,15 @@
 #' Find breakpoints in gas exchange data
 #'
+#' Breakpoint allows the user to specify particular x-y relationships, algorithms, and criteria for determining if a breakpoint was determinant or indeterminate. It is important to understand the order of steps the function takes.
+#' 1. The function preselects x and y variables for the first and sometimes second threshold if the user indicates they wish to use a well-known method. For example, the v-slope method uses VE vs. VCO2 for finding VT2 (RC), and VCO2 vs. VO2 for finding VT1 (GET).
+#' 2. Determine the breakpoint at VT2 and if it was determinant.
+#' 3. If determinant, truncate the data at VT2.
+#' 4. Determine the breakpoint at VT1 and if it was determinant.
+#' 5. Return results.
+#'
+#' @section Warning:
+#' It is strongly advised the user selects \emph{absolute VO2 of the same units as VCO2 (e.g. mL/min for both variables)} rather than relative VO2. Using relative VO2 will likely lead to incorrect results.
+#'
 #' @param .data Gas exchange data
 #' @param method Specify \code{excess_co2}, \code{v-slope}, or \code{v-slope_simple} and this fills in the most common variables used for these methods for those not already specified.
 #' @param algorithm_vt1 Algorithm to find VT1/GET
@@ -19,6 +29,7 @@
 #'
 #' @return
 #' @export
+#' @md
 #'
 #' @details
 #' There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for \code{x_vt1}, and 'vco2' for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.

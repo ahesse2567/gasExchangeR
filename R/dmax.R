@@ -1,4 +1,6 @@
-#' Finding a breakpoint using Cheng's Dmax algorithm.
+#' Finding a breakpoint using Cheng's Dmax algorithm
+#'
+#' As decribed by Cheng (1992) with modifications for brevity, a third order curvilinear regressions is first calculated. Pilot work demonstrated that a third order regression produced higher correlations coefficients than first and second order regressions, with the use of greater than a third order regression not significantly increasing the correlation coefficient. Next, a straight line formed by the two end points in each curve was drawn. Then a formula for computing the distance from point to line was used to calculate the distance from each point on the curve to the straight line. The point yielding the maximal distance (Dmax) derived from the computation was taken as the threshold.
 #'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
@@ -27,8 +29,10 @@ dmax <- function(.data,
                  time = "time",
                  alpha_linearity = 0.05,
                  bp){
-    browser()
+    # browser()
     # the original paper has something about 50 mL increments in O2
+    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
+        dplyr::arrange(.data[[.x]], .data[[time]])
 
     # Get limits of x-axis for plots
     xmin = min(.data[[.x]], na.rm = T)

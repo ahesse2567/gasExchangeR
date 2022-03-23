@@ -27,8 +27,9 @@ jm <- function(.data,
                time = "time",
                alpha_linearity = 0.05,
                bp) {
-    # TODO add which bp argument and determinate/indeterminate output
-    # browser()
+    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
+        dplyr::arrange(.data[[.x]], .data[[time]])
+
     ss <- loop_jm(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
 

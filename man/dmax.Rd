@@ -2,7 +2,7 @@
 % Please edit documentation in R/dmax.R
 \name{dmax}
 \alias{dmax}
-\title{Finding a breakpoint using Cheng's Dmax algorithm.}
+\title{Finding a breakpoint using Cheng's Dmax algorithm}
 \usage{
 dmax(
   .data,
@@ -39,7 +39,7 @@ dmax(
 
 }
 \description{
-Finding a breakpoint using Cheng's Dmax algorithm.
+As decribed by Cheng (1992) with modifications for brevity, a third order curvilinear regressions is first calculated. Pilot work demonstrated that a third order regression produced higher correlations coefficients than first and second order regressions, with the use of greater than a third order regression not significantly increasing the correlation coefficient. Next, a straight line formed by the two end points in each curve was drawn. Then a formula for computing the distance from point to line was used to calculate the distance from each point on the curve to the straight line. The point yielding the maximal distance (Dmax) derived from the computation was taken as the threshold.
 }
 \examples{
 # TODO write examples

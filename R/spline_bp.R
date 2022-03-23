@@ -26,6 +26,8 @@ spline_bp <- function(.data,
                       time = "time",
                       alpha_linearity = 0.05,
                       bp) {
+    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
+        dplyr::arrange(.data[[.x]], .data[[time]])
 
     ss <- loop_spline_bp(.data = .data, .x, .y, degree = degree)
     min_ss_idx <- which.min(ss) # re
