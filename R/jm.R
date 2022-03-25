@@ -96,8 +96,12 @@ jm <- function(.data,
 #' @keywords internal
 loop_jm <- function(.data, .x, .y) {
 
-    ss_both <- numeric(length = nrow(.data)-2)
-    for(i in 2:(nrow(.data)-1)) {
+    ss_both <- numeric(length = nrow(.data))
+    for(i in 1:nrow(.data)) {
+        if(i == 1 | i == nrow(.data)) {
+            ss_both[i] <- NA
+            next
+        }
         # split data into left and right halves. x0 = i
         df_left <- .data[1:i,] # x <= x0
         df_right <- .data[i:nrow(.data),] # x > x0

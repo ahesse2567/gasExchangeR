@@ -78,11 +78,15 @@ spline_bp <- function(.data,
 }
 
 #' @keywords internal
-loop_spline_bp <- function(.data, .x, .y, degree = 1){
+loop_spline_bp <- function(.data, .x, .y, degree = 1) {
     # browser()
-    ss_models <- numeric(length = nrow(.data)-2)
+    ss_models <- numeric(length = nrow(.data))
 
-    for(i in 2:(nrow(.data)-1)) {
+    for(i in 1:nrow(.data)) {
+        if(i == 1 | i == nrow(.data)) {
+            ss_models[i] <- NA
+            next
+        }
         temp <- .data %>%
             mutate(s1 = if_else(.data[[.x]] <= .data[[.x]][i], 0,
                                 (.data[[.x]] - .data[[.x]][i])^degree))

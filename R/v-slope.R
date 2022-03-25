@@ -143,12 +143,16 @@ loop_v_slope <- function(.data, .x, .y) {
     lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
     # find slope of line perpendicular to slope of lm_simple
     recip_slope <- (-1 / lm_simple$coefficients[2]) # used in for loop
-    dist_MSE_ratio <- vector(length = nrow(.data)-3)
-    for(i in 2:(nrow(.data)-2)) { # nrow(df)-2) b/c these DON'T share a point
-        # the curve is divided into two regions, each of which is fitted by linear regression
+    dist_MSE_ratio <- vector(length = nrow(.data))
+
+    for(i in 1:nrow(.data)) {
+        if(i == 1 | i == nrow(.data)) {
+            dist_MSE_ratio[i] <- NA
+            next
+        }
 
         df_left <- .data[1:i,] # split data into left half
-        df_right <- .data[(i+1):nrow(.data),] # split data into right half
+        df_right <- .data[i:nrow(.data),] # split data into right half
 
         # make linear models of the two regressions
         lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
@@ -167,7 +171,7 @@ loop_v_slope <- function(.data, .x, .y) {
         d <- sqrt((x_simple_recip - lr_intersect["x"])^2 +
                       (y_simple_recip - lr_intersect["y"])^2)
 
-        dist_MSE_ratio[i-1] <- d / anova(lm_simple)['Residuals', 'Mean Sq']
+        dist_MSE_ratio[i] <- d / anova(lm_simple)['Residuals', 'Mean Sq']
     }
 
     dist_MSE_ratio

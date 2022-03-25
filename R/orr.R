@@ -87,8 +87,13 @@ orr <- function(.data,
 #' @keywords internal
 loop_orr <- function(.data, .x, .y) {
     # browser()
-    ss_both <- vector(length = nrow(.data)-2)
-    for(i in 2:(nrow(.data)-1)) {
+    ss_both <- vector(length = nrow(.data))
+
+    for(i in 1:nrow(.data)) {
+        if(i == 1 | i == nrow(.data)) {
+            ss_both[i] <- NA
+            next
+        }
         # split data into left and right halves
         # should these share the same point? Or should, they be different by 1 point?
         df_left <- .data[1:i,]
@@ -101,7 +106,7 @@ loop_orr <- function(.data, .x, .y) {
         ss_left <- sum((lm_left$residuals)^2)
         ss_right <- sum((lm_right$residuals)^2)
         #ss_both <- c(ss_both, ss_left + ss_right)
-        ss_both[i-1] <- (ss_left + ss_right)
+        ss_both[i] <- (ss_left + ss_right)
     }
     return(ss_both)
 }
