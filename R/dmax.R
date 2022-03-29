@@ -11,6 +11,7 @@
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
 #' @return
 #' @export
@@ -28,7 +29,8 @@ dmax <- function(.data,
                  ve = "ve",
                  time = "time",
                  alpha_linearity = 0.05,
-                 bp){
+                 bp,
+                 pos_change = TRUE){
     # the original paper has something about 50 mL increments in O2
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
@@ -83,7 +85,9 @@ dmax <- function(.data,
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
     pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
-    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
+                                         (pos_change == (pct_slope_change > 0)),
+                                     TRUE, FALSE)
 
     # find closest actual data point to dmax point and return data
     bp_dat <- .data %>%

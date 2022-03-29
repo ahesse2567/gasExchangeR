@@ -20,6 +20,7 @@
 #' @param time The name of the time column in \code{.data}
 #' @param method Pass \code{"v-slope"} to the method argument to exactly reproduce the procedure from the original paper. See the Warnings section for details.
 #' @param left_slope_lim The original paper requires that the left regression line have a slope of > \code{0.6}.
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
 #' @return
 #' @export
@@ -40,7 +41,8 @@ v_slope <- function(.data,
                     slope_change_lim = 0.1,
                     left_slope_lim = 0.6,
                     alpha_linearity = 0.05,
-                    bp) {
+                    bp,
+                    pos_change = TRUE) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
@@ -106,7 +108,9 @@ v_slope <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
+                                         (pos_change == (pct_slope_change > 0)),
+                                     TRUE, FALSE)
 
     # find intersection point of left and right regressions
     lr_intersect <- intersection_point(lm_left, lm_right)

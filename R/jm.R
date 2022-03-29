@@ -9,6 +9,7 @@
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
 #' @return
 #' @export
@@ -26,7 +27,8 @@ jm <- function(.data,
                ve = "ve",
                time = "time",
                alpha_linearity = 0.05,
-               bp) {
+               bp,
+               pos_change = TRUE) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
@@ -71,7 +73,9 @@ jm <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
+                                         (pos_change == (pct_slope_change > 0)),
+                                     TRUE, FALSE)
 
     bp_dat <- .data[min_ss_idx,] %>%
         mutate(algorithm = "jm",
