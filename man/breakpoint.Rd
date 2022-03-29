@@ -60,13 +60,25 @@ breakpoint(
 
 }
 \description{
-Find breakpoints in gas exchange data
+Breakpoint allows the user to specify particular x-y relationships, algorithms, and criteria for determining if a breakpoint was determinant or indeterminate. It is important to understand the order of steps the function takes.
+\enumerate{
+\item The function preselects x and y variables for the first and sometimes second threshold if the user indicates they wish to use a well-known method. For example, the v-slope method uses VE vs. VCO2 for finding VT2 (RC), and VCO2 vs. VO2 for finding VT1 (GET).
+\item Determine the breakpoint at VT2 and if it was determinant.
+\item If determinant, truncate the data at VT2.
+\item Determine the breakpoint at VT1 and if it was determinant.
+\item Return results.
+}
 }
 \details{
 There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for \code{x_vt1}, and 'vco2' for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.
 
 Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{x}, and \code{y}.
 }
+\section{Warning}{
+
+It is strongly advised the user selects \emph{absolute VO2 of the same units as VCO2 (e.g. mL/min for both variables)} rather than relative VO2. Using relative VO2 will likely lead to incorrect results.
+}
+
 \examples{
 # TODO write an an example
 

@@ -25,7 +25,7 @@ df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
 x_vt2 <- "vco2"
 y_vt2 <- "ve"
 
-jm(.data, x_vt2, y_vt2, vo2 = "vo2_abs")
+jm(.data, x_vt2, y_vt2, vo2 = "vo2_abs", bp = "vt2")
 
 breakpoint(.data = df_avg,
            x_vt1 = "vo2_abs",
@@ -36,7 +36,6 @@ breakpoint(.data = df_avg,
            algorithm_vt2 = "jm",
            vo2 = "vo2_abs",
            bps = "both")
-
 
 
 

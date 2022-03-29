@@ -9,6 +9,7 @@
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
 #' @return
 #' @export
@@ -26,9 +27,11 @@ orr <- function(.data,
                 ve = "ve",
                 time = "time",
                 alpha_linearity = 0.05,
-                bp) {
-    # TODO add which bp argument and determinate/indeterminate output
-    # browser()
+                bp,
+                pos_change = TRUE) {
+    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
+        dplyr::arrange(.data[[.x]], .data[[time]])
 
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
@@ -49,11 +52,13 @@ orr <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
+                                         (pos_change == (pct_slope_change > 0)),
+                                     TRUE, FALSE)
 
     int_point <- intersection_point(lm_left, lm_right)
 
-    orr_row <- .data %>%
+    bp_dat <- .data %>%
         dplyr::mutate(dist_x_sq = (.data[[.x]] - int_point["x"])^2,
                dist_y_sq = (.data[[.y]] - int_point["y"])^2,
                sum_dist_sq = dist_x_sq + dist_y_sq) %>%
@@ -65,9 +70,9 @@ orr <- function(.data,
                       determinant_bp = determinant_bp,
                       bp = bp) %>%
         relocate(bp, algorithm, x_var, y_var, determinant_bp) %>%
-        select(-c(dist_x_sq, dist_y_sq, sum_sq)) %>%
+        select(-c(dist_x_sq, dist_y_sq, sum_dist_sq))
 
-    bp_dat <- orr_row %>%
+    bp_dat <- bp_dat %>%
         mutate(pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
@@ -86,8 +91,13 @@ orr <- function(.data,
 #' @keywords internal
 loop_orr <- function(.data, .x, .y) {
     # browser()
-    ss_both <- vector(length = nrow(.data)-2)
-    for(i in 2:(nrow(.data)-1)) {
+    ss_both <- vector(length = nrow(.data))
+
+    for(i in 1:nrow(.data)) {
+        if(i == 1 | i == nrow(.data)) {
+            ss_both[i] <- NA
+            next
+        }
         # split data into left and right halves
         # should these share the same point? Or should, they be different by 1 point?
         df_left <- .data[1:i,]
@@ -100,7 +110,7 @@ loop_orr <- function(.data, .x, .y) {
         ss_left <- sum((lm_left$residuals)^2)
         ss_right <- sum((lm_right$residuals)^2)
         #ss_both <- c(ss_both, ss_left + ss_right)
-        ss_both[i-1] <- (ss_left + ss_right)
+        ss_both[i] <- (ss_left + ss_right)
     }
     return(ss_both)
 }

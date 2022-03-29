@@ -1,5 +1,13 @@
 #' Finding a breakpoint using Beaver's V-slope algorithm
 #'
+#' V-slope uses the v-slope \emph{algorithm} to find a breakpoint. Note, the v-slope algorithm is different from the v-slope \emph{method} as a whole because the latter also includes a specific set of data processing steps (see reference). In order to use the v-slope algorithm as originally described by Beaver et al. (1986), pass \code{"v-slope"} to the \code{method} argument in the \code{breakpoint} function. Without indicating the \code{method} as \code{"v-slope"}, the function returns the breakpoint associated with ratio of the highest distance between the single regression line to the intersection point of the two regression lines, to the mean square error of the single regression line. This can sometimes lead to odd behavior and it is therefore generally recommended to specify \code{"v-slope"} in the \code{method} argument of \code{breakpoint} when using this function. See the Warnings and Details sections for details.
+#'
+#' @section Warning:
+#' Using the v-slope algorithm as originally described by Beaver et al. (1986) is only intended to be used with the VCO2 vs. VO2 relationship when both are absolute measures of the same units (e.g. mL/min). The quality control criteria for this algorithm are an the increase in slope from the left to right regression line of > 0.1 and the slope of the left regression > 0.6. Using other x-y relationship leads to odd behavior that may not satisfy those criteria.
+#'
+#' @details
+#' If the \code{method} argument is set to \code{"v-slope"}, the function enters a while loop to satisfy the quality control criteria (see Warnings section for details). Otherwise, the function returns the breakpoint as described the initial description.
+#'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
@@ -10,6 +18,9 @@
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
+#' @param method Pass \code{"v-slope"} to the method argument to exactly reproduce the procedure from the original paper. See the Warnings section for details.
+#' @param left_slope_lim The original paper requires that the left regression line have a slope of > \code{0.6}.
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
 #' @return
 #' @export
@@ -26,11 +37,16 @@ v_slope <- function(.data,
                     vco2 = "vco2",
                     ve = "ve",
                     time = "time",
+                    method = NULL,
                     slope_change_lim = 0.1,
+                    left_slope_lim = 0.6,
                     alpha_linearity = 0.05,
-                    bp) {
-    # browser()
-    # TODO exclude data at the beginning if the VCO2 vs. VO2 slope is < 0.6
+                    bp,
+                    pos_change = TRUE) {
+    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
+        dplyr::arrange(.data[[.x]], .data[[time]])
+
     dist_MSE_ratio <- loop_v_slope(.data = .data, .x = .x, .y = .y)
     slope_change <- 0
     i <- 1
@@ -38,7 +54,10 @@ v_slope <- function(.data,
     df_left <- .data[1:bp_idx,]
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
 
-    while(slope_change < slope_change_lim & lm_left$coefficients[2] > 0.6) {
+    # TODO the slope_change < slope_change_lim and left slope > 0.6 only apply
+    # specifically when x = VO2 and y = VCO2. How do we check for that?
+    # I think actually specifically apply when method == "v-slope"
+    while(slope_change < slope_change_lim) {
         bp_idx <- order(-dist_MSE_ratio)[i]
         df_left <- .data[1:bp_idx,]
         df_right <- .data[(bp_idx+1):nrow(.data),]
@@ -89,7 +108,9 @@ v_slope <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    determinant_bp <- dplyr::if_else(pf_two > alpha_linearity, FALSE, TRUE)
+    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
+                                         (pos_change == (pct_slope_change > 0)),
+                                     TRUE, FALSE)
 
     # find intersection point of left and right regressions
     lr_intersect <- intersection_point(lm_left, lm_right)
@@ -126,12 +147,16 @@ loop_v_slope <- function(.data, .x, .y) {
     lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
     # find slope of line perpendicular to slope of lm_simple
     recip_slope <- (-1 / lm_simple$coefficients[2]) # used in for loop
-    dist_MSE_ratio <- vector(length = nrow(.data)-3)
-    for(i in 2:(nrow(.data)-2)) { # nrow(df)-2) b/c these DON'T share a point
-        # the curve is divided into two regions, each of which is fitted by linear regression
+    dist_MSE_ratio <- vector(length = nrow(.data))
+
+    for(i in 1:nrow(.data)) {
+        if(i == 1 | i == nrow(.data)) {
+            dist_MSE_ratio[i] <- NA
+            next
+        }
 
         df_left <- .data[1:i,] # split data into left half
-        df_right <- .data[(i+1):nrow(.data),] # split data into right half
+        df_right <- .data[i:nrow(.data),] # split data into right half
 
         # make linear models of the two regressions
         lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
@@ -150,7 +175,7 @@ loop_v_slope <- function(.data, .x, .y) {
         d <- sqrt((x_simple_recip - lr_intersect["x"])^2 +
                       (y_simple_recip - lr_intersect["y"])^2)
 
-        dist_MSE_ratio[i-1] <- d / anova(lm_simple)['Residuals', 'Mean Sq']
+        dist_MSE_ratio[i] <- d / anova(lm_simple)['Residuals', 'Mean Sq']
     }
 
     dist_MSE_ratio
