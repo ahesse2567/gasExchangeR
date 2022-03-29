@@ -52,6 +52,14 @@ orr <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
+    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+                         "{.y}" := lm_left$fitted.values,
+                         algorithm = "orr")
+    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+                          "{.y}" := lm_right$fitted.values,
+                          algorithm = "orr")
+    pred <- bind_rows(y_hat_left, y_hat_right)
+
     determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
                                          (pos_change == (pct_slope_change > 0)),
                                      TRUE, FALSE)
@@ -79,7 +87,7 @@ orr <- function(.data,
         relocate(bp, algorithm, determinant_bp, pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
-                # fitted_vals = pred, # TODO how to return fitted values?
+                fitted_vals = pred,
                 lm_left = lm_left,
                 lm_right = lm_right,
                 lm_simple = lm_simple))

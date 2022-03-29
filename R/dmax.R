@@ -89,6 +89,14 @@ dmax <- function(.data,
                                          (pos_change == (pct_slope_change > 0)),
                                      TRUE, FALSE)
 
+    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+                         "{.y}" := lm_left$fitted.values,
+                         algorithm = "dmax")
+    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+                          "{.y}" := lm_right$fitted.values,
+                          algorithm = "dmax")
+    pred <- bind_rows(y_hat_left, y_hat_right)
+
     # find closest actual data point to dmax point and return data
     bp_dat <- .data %>%
         mutate(dist_x_sq = (.data[[.x]] - D.max)^2,
@@ -120,7 +128,7 @@ dmax <- function(.data,
     #                          algorithm = "dmax_start_end"))
 
     return(list(breakpoint_data = bp_dat,
-                # fitted_vals = pred,
+                fitted_vals = pred,
                 poly_model = g.model,
                 dmax_point = c("x" = D.max, "y" = g.D.max),
                 lm_left = lm_left,

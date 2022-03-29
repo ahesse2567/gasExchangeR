@@ -25,6 +25,7 @@
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bps Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
 #' @param truncate By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param ...
 #'
 #' @return
@@ -59,6 +60,7 @@ breakpoint <- function(.data,
                        time = "time",
                        bps = "both",
                        truncate = TRUE,
+                       pos_change = TRUE,
                        ...) {
     stopifnot(!missing(.data),
               !all(is.null(method), is.null(algorithm_vt1),
@@ -124,11 +126,13 @@ breakpoint <- function(.data,
                       ve = ve,
                       time = time,
                       alpha_linearity = alpha_linearity,
-                      bp = "vt2")
+                      bp = "vt2",
+                      pos_change = pos_change)
         vt2_out <- switch(algorithm_vt2,
                           "jm" = do.call(what = "jm", args = params),
                           "orr" = do.call(what = "orr", args = params),
-                          "v-slope" = do.call(what = "v_slope", args = params))
+                          "v-slope" = do.call(what = "v_slope", args = params),
+                          "dmax" = do.call(what = "dmax", args = params))
 
         if(bps == "vt2") {
             return(vt2_out)
@@ -156,11 +160,13 @@ breakpoint <- function(.data,
                       ve = ve,
                       time = time,
                       alpha_linearity = alpha_linearity,
-                      bp = "vt1")
+                      bp = "vt1",
+                      pos_change = TRUE)
         vt1_out <- switch(algorithm_vt1,
                           "jm" = do.call(what = "jm", args = params),
                           "orr" = do.call(what = "orr", args = params),
-                          "v-slope" = do.call(what = "v_slope", args = params))
+                          "v-slope" = do.call(what = "v_slope", args = params),
+                          "dmax" = do.call(what = "dmax", args = params))
         if(bps == "vt1") {
             return(vt1_out)
         }

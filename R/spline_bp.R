@@ -71,9 +71,9 @@ spline_bp <- function(.data,
         relocate(bp, algorithm, x_var, y_var, determinant_bp,
                  pct_slope_change, f_stat, p_val_f)
 
-    pred <- bind_rows(x = .data[[.x]],
-                      y_hat = lm_spline$fitted.values,
-                      algorithm = "spline")
+    pred <- tibble("{.x}" := .data[[.x]],
+                   "{.y}" := lm_spline$fitted.values,
+                   algorithm = "spline_bp")
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,

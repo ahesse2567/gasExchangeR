@@ -63,11 +63,11 @@ jm <- function(.data,
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
     pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
-    y_hat_left <- tibble(x = df_left[[.x]],
-                         y_hat = lm_left$fitted.values,
+    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+                         "{.y}" := lm_left$fitted.values,
                          algorithm = "jm")
-    y_hat_right <- tibble(x = df_right[[.x]],
-                          y_hat = lm_right$fitted.values,
+    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+                          "{.y}" := lm_right$fitted.values,
                           algorithm = "jm")
     pred <- bind_rows(y_hat_left, y_hat_right)
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
