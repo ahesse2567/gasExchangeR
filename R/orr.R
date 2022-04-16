@@ -108,8 +108,10 @@ loop_orr <- function(.data, .x, .y) {
         }
         # split data into left and right halves
         # should these share the same point? Or should, they be different by 1 point?
+        # Ekkekakis said WB makes them differ by 1 pt
+        # I wonder exactly what the word 'contiguous' means in this context
         df_left <- .data[1:i,]
-        df_right <- .data[(i):nrow(.data),] # each side of the regression is contiguous
+        df_right <- .data[i:nrow(.data),]
 
         # make linear models of the two halves
         lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
