@@ -85,7 +85,7 @@ breakpoint <- function(.data,
         if(method == "excess_co2") {
             if(!is.null(x_vt1)) {
                 if(x_vt1 != time | x_vt1 != vo2) {
-                    warning("x_vt1 is not set to an appropriate value for the excess co2 method. Appropriate values are time and VO2.")
+                    warning("x_vt1 is not set to an appropriate value for the excess co2 method. Appropriate x values are time and VO2.")
                 }
             }
             if(is.null(x_vt1)) {

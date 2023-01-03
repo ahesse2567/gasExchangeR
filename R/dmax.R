@@ -68,6 +68,10 @@ dmax <- function(.data,
         pull() %>%
         which.min()
 
+    # this needs to be fixed. This does NOT constrain the left line to
+    # go from the first data point on the curve to the dmax point. It
+    # also does not currently constrain the right line to go from the
+    # dmax point to the last point on the curve
     df_left <- .data[1:dmax_idx,]
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], df_left)
 

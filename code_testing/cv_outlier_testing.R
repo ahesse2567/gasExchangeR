@@ -5,6 +5,7 @@ library(AICcmodavg)
 library(ggfortify)
 library(car)
 library(broom)
+library(hms)
 
 df_raw <- read_csv("inst/extdata/37818_vo2max_unavg.csv")
 df_unavg <- df_raw %>%
@@ -18,7 +19,8 @@ df_unavg <- df_raw %>%
                   pre_ex_intensity = 300.1,
                   post_ex_intensity = 300.1) %>%
     mutate(ve_vo2 = ve / (vo2_abs/1000),
-           ve_vco2 = ve / (vco2/1000))
+           ve_vco2 = ve / (vco2/1000),
+           time = as.numeric(ms(str_remove(as.character(time), ":00"))))
 
 ggplot(data = df_unavg, aes(x = time)) +
     geom_point(aes(y = ve_vo2), color = "orange") +

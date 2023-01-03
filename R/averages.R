@@ -260,7 +260,7 @@ avg_exercise_test.digital <- function(.data,
 }
 
 #' @keywords internal
-butter_lowpass <- function(cutoff, fs, order = 5){
+butter_lowpass <- function(cutoff, fs, order = 3){
     nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
     # at a minimum two data points per wave in order to construct the wave
     normal_cutoff <- cutoff / nyq
