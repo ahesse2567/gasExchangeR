@@ -8,6 +8,9 @@
 #' @return
 #' @export
 #'
+#' @details
+#' The time column must be in seconds.
+#'
 #' @examples
 #' time <- sample.int(100, 20)
 #' time <- sort(time)
