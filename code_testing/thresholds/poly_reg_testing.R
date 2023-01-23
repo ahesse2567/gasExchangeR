@@ -86,8 +86,6 @@ poly_regression <- function(.data,
                             time = "time",
                             alpha_linearity = 0.05, # change to just alpha?
                             bp) {
-    # this function fits a polynomial regression to the data by increasing
-    # the degree until the best fit is found
 
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -193,7 +191,6 @@ ggplot(data = .data, aes(x = time)) +
 loop_poly_reg <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
     # browser()
-    # we also need a vector to hold likelihood ratio test results
 
     # if the user specifies a degree, find that and be done with it
     if (!is.null(degree)) {
