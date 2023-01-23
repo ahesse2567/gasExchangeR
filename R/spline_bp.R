@@ -1,5 +1,7 @@
 #' Finding a breakpoint by iteratively moving an indicator variable
 #'
+#' This function is similar to other piecewise regression formulas in that it iteratively moves the breakpoint along all n-2 inner data points. We recommend using this function for relationships such as VCO2 vs. VO2 (V-slope), VE vs. VCO2 (respiratory compensation point), and excess CO2, provided that the first ~1 minute of data is removed from excess CO2 prior to fitting the curve.
+#'
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
