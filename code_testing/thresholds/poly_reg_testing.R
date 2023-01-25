@@ -19,7 +19,7 @@ library(Ryacas)
 #                      na = c("", "NA", " "),
 #                      show_col_types = FALSE)
 
-df_raw <- read_csv("inst/extdata/mar22_140_pre.csv",
+df_raw <- read_csv("inst/extdata/mar22_182_pre.csv",
                    show_col_types = FALSE)
 
 df_unavg <- df_raw %>%
@@ -67,14 +67,71 @@ ggplot(data = df_avg, aes(x = time)) +
     theme_minimal() +
     ggtitle("Ventilatory Equivalents")
 
+loop_poly_reg <- function(.data, .x, .y,
+                          degree = NULL, alpha_linearity = 0.05) {
+    # browser()
+
+    # if the user specifies a degree, find that and be done with it
+    if (!is.null(degree)) {
+        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree),
+                      data = .data)
+        # if the user does NOT specify a degree, find the best degree using
+        # likelihood ratio test
+    } else {
+        degree = 5
+        lm_list = vector(mode = "list", length = 0) # hold lm data
+        # keep raw = TRUE for now b/c it's way easier for me to test
+        # if the derivative expressions are working
+        # starting with degree = 5 b/c that's the minimum I've seen in
+        # other papers that seemed to use polynomial fits
+        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
+                                             degree = degree, raw = TRUE),
+                      data = .data)
+        lm_list <- append(lm_list, list(lm_poly))
+
+        cont <- TRUE
+        i <- 1 # start at 2 b/c we already made linear (degree = 1) model
+        while(cont == TRUE) {
+            lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
+                                                 degree = degree + i,
+                                                 raw = TRUE),
+                          data = .data)
+            lm_list <- append(lm_list, list(lm_poly))
+            lrt <- anova(lm_list[[i]], lm_list[[i+1]])
+            if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
+                cont = FALSE
+                lm_poly <- lm_list[[i]] # take the previous model
+            }
+            i <- i + 1
+        }
+    }
+
+    lm_poly
+}
+
+expr_from_coefs <- function(poly_coefs, expr = TRUE) {
+    string_expr <- paste("x", seq_along(poly_coefs) - 1, sep = "^")
+    string_expr <- paste(string_expr, poly_coefs, sep = " * ")
+    string_expr <- paste(string_expr, collapse = " + ")
+    if (expr) {
+        return(parse(text = string_expr))
+    } else {
+        return(string_expr)
+    }
+}
+
+find_real_roots <- function(v, threshold = 1e-6) {
+    # find real roots by fixing rounding errors
+    Re(v)[abs(Im(v)) < threshold]
+}
 
 .x <- "time"
-.y <- "ve_vco2"
+.y <- "ve_vo2"
 time <- "time"
-.data <- df_avg
+.data <- df_avg[1:threshold_idx,]
 degree <- NULL
 alpha_linearity = 0.05
-bp = "vt2"
+bp = "vt1"
 
 poly_regression <- function(.data,
                             .x,
@@ -94,7 +151,7 @@ poly_regression <- function(.data,
         dplyr::arrange(.data[[.x]], .data[[time]])
 
 
-    lm_poly <- loop_poly_reg(.data = df_avg, .x = .x, .y = .y,
+    lm_poly <- loop_poly_reg(.data = .data, .x = .x, .y = .y,
                              degree = NULL,
                              alpha_linearity = alpha_linearity)
 
@@ -105,6 +162,7 @@ poly_regression <- function(.data,
     # b/c you essentially need to take a third derivative and still have an x term
 
     # lm_poly <- lm_list[[3]] # keep for testing, delete later
+    # this definitely breaks if the best-fit polynomial order is too low
     poly_expr <- expr_from_coefs(lm_poly$coefficients)
     deriv1 <- Deriv(poly_expr, x = "x", nderiv = 1) # slope
     deriv2 <- Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
@@ -121,10 +179,15 @@ poly_regression <- function(.data,
         polyroot() %>%
         find_real_roots()
 
-    local_maxima <- roots_deriv3[eval(deriv4, envir = list(x = roots_deriv3)) < 0]
+    local_maxima <- roots_deriv3[eval(deriv4,
+                                      envir = list(x = roots_deriv3)) < 0]
+
     # you would generally expect the threshold to be the highest of any possible
     # local maxima
-    # TODO local maxima need to be within the range of valid x values, too
+    # filter by local maxima within the valid x values
+    local_maxima <- local_maxima[
+        local_maxima >= min(.data[[.x]] & local_maxima <= max(.data[[.x]]))]
+    # select higher of the two local maxima b/c we expect just one large change
     threshold_idx <- which.min(abs(.data[[.x]] - max(local_maxima)))
 
     # get values at threshold
@@ -159,22 +222,24 @@ plot_data
 
 # plot to see how the model fits the data
 ggplot(data = .data, aes(x = time)) +
-    # geom_line(aes(y = ve_vo2), color = "purple", alpha = 0.5) +
+    geom_line(aes(y = ve_vo2), color = "purple", alpha = 0.5) +
     geom_line(aes(y = ve_vco2), color = "green", alpha = 0.5) +
+    geom_line(aes(y = lm_poly$fitted.values)) +
     # scale_color_manual(name = "Ventilatory\nEquivalents",
     #                    values = c("ve_vo2" = "purple", "ve_vco2" = "green"),
     #                    labels = c("VE/VO2", "VE/VCO2")) +
     ylab("mm Hg") +
     xlab("Time (min)") +
     # ylim(c(-2.5,5)) +
-    geom_line(data = plot_data, aes(x = time, y = y_hat/max(y_hat))) +
     geom_line(data = plot_data,
-              aes(x = time, y = y_hat_deriv1/y_hat_deriv1), linetype = "dashed") +
+              aes(x = time, y = y_hat_deriv1),
+              linetype = "dashed") +
     geom_line(data = plot_data,
-              aes(x = time, y = y_hat_deriv2/y_hat_deriv2), linetype = "dotted") +
+              aes(x = time, y = y_hat_deriv2), linetype = "dotted") +
     # geom_line(data = plot_data,
     #           aes(x = time, y = y_hat_deriv3/max(abs(y_hat_deriv3))), linetype = "dotdash") +
-    geom_vline(xintercept = max(local_maxima)) +
+    geom_vline(xintercept = max(local_maxima), linetype = "dotted") +
+    ylim(c(-3, 50)) +
     theme_minimal()
 
 # zoomed in on derivatives
@@ -183,62 +248,10 @@ ggplot(data = .data, aes(x = time)) +
     ylab("mm Hg") +
     xlab("Time (min)") +
     geom_line(data = plot_data,
-              aes(x = time, y = y_had_ve_vo2_deriv1), linetype = "dashed") +
+              aes(x = time, y = y_hat_deriv1), linetype = "dashed") +
     geom_line(data = plot_data,
-              aes(x = time, y = y_had_ve_vo2_deriv2), linetype = "dotted")
+              aes(x = time, y = y_hat_deriv2), linetype = "dotted") +
+    geom_vline(xintercept = max(local_maxima), linetype = "dotted") +
+    ylim(c(-2.5, 5))
 
 
-loop_poly_reg <- function(.data, .x, .y,
-                          degree = NULL, alpha_linearity = 0.05) {
-    # browser()
-
-    # if the user specifies a degree, find that and be done with it
-    if (!is.null(degree)) {
-        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree),
-                      data = .data)
-    # if the user does NOT specify a degree, find the best degree using
-    # likelihood ratio test
-    } else {
-        lm_list = vector(mode = "list", length = 0) # hold lm data
-        # keep raw = TRUE for now b/c it's way easier for me to test
-        # if the derivative expressions are working
-        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
-                                             degree = 1, raw = TRUE),
-                      data = .data)
-        lm_list <- append(lm_list, list(lm_poly))
-
-        cont <- TRUE
-        i <- 2 # start at 2 b/c we already made linear (degree = 1) model
-        while(cont == TRUE) {
-            lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
-                                                 degree = i,
-                                                 raw = TRUE),
-                          data = .data)
-            lm_list <- append(lm_list, list(lm_poly))
-            lrt <- anova(lm_list[[i-1]], lm_list[[i]])
-            if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-                cont = FALSE
-                lm_poly <- lm_list[[i-1]] # take the previous model
-            }
-            i <- i + 1
-        }
-    }
-
-    lm_poly
-}
-
-expr_from_coefs <- function(poly_coefs, expr = TRUE) {
-    string_expr <- paste("x", seq_along(poly_coefs) - 1, sep = "^")
-    string_expr <- paste(string_expr, poly_coefs, sep = " * ")
-    string_expr <- paste(string_expr, collapse = " + ")
-    if (expr) {
-        return(parse(text = string_expr))
-    } else {
-        return(string_expr)
-    }
-}
-
-find_real_roots <- function(v, threshold = 1e-6) {
-    # find real roots by fixing rounding errors
-    Re(v)[abs(Im(v)) < threshold]
-}

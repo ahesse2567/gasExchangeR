@@ -1,20 +1,67 @@
 library(gasExchangeR)
 library(tidyverse)
-library(devtools)
 library(janitor)
 library(broom)
-library(Deriv)
-library(Ryacas)
 library(splines)
-library(SplinesUtils)
 library(zoo)
-library(numDeriv)
+# library(Deriv)
+# library(Ryacas)
+# library(SplinesUtils)
 
 # big thanks to this stack overflow post
 # https://stackoverflow.com/questions/44739192/export-fitted-regression-splines-constructed-by-bs-or-ns-as-piecewise-poly
 
 # maybe try this one?
 # https://stackoverflow.com/questions/29499686/how-to-extract-the-underlying-coefficients-from-fitting-a-linear-b-spline-regres
+
+sign_changes <- function(y, change = "both") {
+    # return the index of sign changes in a vector
+    change <- match.arg(change,
+                        choices = c("both", "maxima", "minima"),
+                        several.ok = FALSE)
+    if(change == "both") {
+        return(which(diff(sign(diff(y))) != 0) + 1)
+    } else if (change == "maxima") {
+        return(which(diff(sign(diff(y))) < 0) + 1)
+    } else {
+        return(which(diff(sign(diff(y))) > 0) + 1)
+    }
+}
+
+loop_reg_spline <- function(.data, .x, .y, df = NULL, knots = NULL,
+                            degree = 3, alpha_linearity = 0.05) {
+    # TODO allow users to specify b-spline or natural-spline basis
+    # would that use do.call()?
+
+    # if statement for if users specify the knots
+
+    spline_mod_list = vector(mode = "list", length = 0)
+    cont <- TRUE
+    i <- 0
+    # reference model without any interior knots
+    lm_spline <- paste0(.y, " ~ ", "1 + ",
+                        "bs(", .x, ", df = ", i + degree, ")") %>%
+        as.formula() %>%
+        lm(data = .data)
+    spline_mod_list <- append(spline_mod_list, list(lm_spline))
+    # while loop beings with 1 knot (3 df already used assuming a 3rd spline)
+    while(cont == TRUE) {
+        # browser()
+        i <- i + 1
+        # TODO add options for user-defined knots and df
+        lm_spline <- paste0(.y, " ~ ", "1 + ",
+                            "bs(", .x, ", df = ", i + degree, ")") %>%
+            as.formula() %>%
+            lm(data = .data)
+        spline_mod_list <- append(spline_mod_list, list(lm_spline))
+        lrt <- anova(spline_mod_list[[i]], spline_mod_list[[i+1]])
+        if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
+            cont = FALSE
+            lm_spline <- spline_mod_list[[i]] # take the previous model
+        }
+    }
+    lm_spline
+}
 
 df_raw <- read_csv("inst/extdata/mar22_140_pre.csv",
                    show_col_types = FALSE)
@@ -79,6 +126,40 @@ spline_reg <- function(.data,
     # find best number of knots
     lm_spline <- loop_reg_spline(.data = .data, .x = .x, .y = .y,
                                  degree = degree, knots = NULL)
+    # find maxima in 2nd derivative. This is accomplished by making
+    # a spline interpolation function. Use this with optimize() function.
+    spline_func <- splinefun(x = .data[[.x]],
+                            y = lm_spline$fitted.values)
+    # find number of maxima
+    sign_change_idx <- sign_changes(y = spline_func(x = .data[[.x]], deriv = 2),
+                                   change = "maxima")
+    lm_spline$fitted.values[sign_change_idx]
+    # build on this for if there is more than one sign change (for loop?)
+    if(length(sign_change_idx) < 2) {
+        interval <- c(.data[[.x]][sign_change_idx-1],
+                      .data[[.x]][sign_change_idx+1])
+
+        extrema_deriv2 <- optimize(f = spline_func,
+                                interval = interval,
+                                deriv = 2, maximum = TRUE)
+    }
+
+    ggplot(data = .data, aes(x = time, y = ve_vco2)) +
+        geom_line(color = "green") +
+        geom_line(aes(y = lm_spline$fitted.values)) +
+        # geom_vline(xintercept = extrema_deriv2$maximum,
+        #            linetype = "dotted") +
+        geom_line(aes(y = spline_func(x = .data[[.x]], deriv = 1)),
+                  linetype = "dashed") +
+        geom_line(aes(y = spline_func(x = .data[[.x]], deriv = 2)),
+                  linetype = "dotted") +
+        ylim(c(-2, 38)) +
+        # geom_vline(xintercept = 23.5) +
+        geom_vline(xintercept = .data[[.x]][sign_change_idx]) +
+        theme_minimal()
+
+    threshold_idx <- which.min(abs(.data[[.x]] - extrema_deriv2$maximum))
+    .data[threshold_idx,]
 
     # for use with grad from numDeriv package?
     fx <- function(mod, x, col_name) {
@@ -205,6 +286,11 @@ spline_reg <- function(.data,
         geom_vline(xintercept = peak_d2$maximum, color = "cyan") +
         theme_minimal()
 
+
+    # note to myself that I can take the crossing point of
+    # some of the the 2nd derivatives
+    # of the polynomial transformation of the b-spline to find the peak
+    # in the 2nd derivative.
 
     # this seems like a good page on derivatives in R
 
@@ -334,39 +420,7 @@ ggplot(data = .data, aes(x = time)) +
                linetype = "dashed") +
     theme_minimal()
 
-loop_reg_spline <- function(.data, .x, .y, degree = 3, knots = NULL,
-                            alpha_linearity = 0.05) {
-    # TODO allow users to specify b-spline or natural-spline basis
-    # would that use do.call()?
 
-    # if statement for if users specify the knots
-
-    spline_mod_list = vector(mode = "list", length = 0)
-    cont <- TRUE
-    i <- 0
-    # reference model without any interior knots
-    lm_spline <- paste0(.y, " ~ ", "1 + ",
-                        "bs(", .x, ", df = ", i + degree, ")") %>%
-        as.formula() %>%
-        lm(data = .data)
-    spline_mod_list <- append(spline_mod_list, list(lm_spline))
-    # while loop beings with 1 knot (3 df already used assuming a 3rd spline)
-    while(cont == TRUE) {
-        # browser()
-        i <- i + 1
-        lm_spline <- paste0(.y, " ~ ", "1 + ",
-                            "bs(", .x, ", df = ", i + degree, ")") %>%
-            as.formula() %>%
-            lm(data = .data)
-        spline_mod_list <- append(spline_mod_list, list(lm_spline))
-        lrt <- anova(spline_mod_list[[i]], spline_mod_list[[i+1]])
-        if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-            cont = FALSE
-            lm_spline <- spline_mod_list[[i]] # take the previous model
-        }
-    }
-    lm_spline
-}
 
 expr_from_coefs <- function(poly_coefs, expr = TRUE) {
     string_expr <- paste("x", seq_along(poly_coefs) - 1, sep = "^")
@@ -391,19 +445,7 @@ num_deriv <- function(x, y, n = 1L) {
     dydx
 }
 
-sign_changes <- function(y, change = "both") {
-    # return the index of sign changes in a vector
-    change <- match.arg(change,
-                        choices = c("both", "maxima", "minima"),
-                        several.ok = FALSE)
-    if(change == "both") {
-        return(which(diff(sign(diff(y))) != 0) + 1)
-    } else if (change == "maxima") {
-        return(which(diff(sign(diff(y))) < 0) + 1)
-    } else {
-        return(which(diff(sign(diff(y))) > 0) + 1)
-    }
-}
+
 
 x <- seq(-7, 5, by = 0.1)
 y <- (x - 4)*(x + 2)*(x - 1)*(x + 6)
