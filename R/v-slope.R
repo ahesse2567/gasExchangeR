@@ -112,6 +112,14 @@ v_slope <- function(.data,
                                          (pos_change == (pct_slope_change > 0)),
                                      TRUE, FALSE)
 
+    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+                         "{.y}" := lm_left$fitted.values,
+                         algorithm = "v-slope")
+    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+                          "{.y}" := lm_right$fitted.values,
+                          algorithm = "v-slope")
+    pred <- bind_rows(y_hat_left, y_hat_right)
+
     # find intersection point of left and right regressions
     lr_intersect <- intersection_point(lm_left, lm_right)
     # find closest data point to intersection point and prepare output
@@ -135,7 +143,7 @@ v_slope <- function(.data,
                  pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
-                # fitted_vals = pred, # TODO how to return fitted values?
+                fitted_vals = pred,
                 lm_left = lm_left,
                 lm_right = lm_right,
                 lm_simple = lm_simple))

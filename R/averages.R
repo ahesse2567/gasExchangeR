@@ -31,6 +31,9 @@
 #'
 #' # TODO write an example
 #'
+#'
+#'TODO force people to use this function twice if doing bin-roll or rolling-bin
+#'
 avg_exercise_test <- function(.data,
                               type = "breath",
                               subtype = "rolling",
@@ -186,7 +189,7 @@ avg_exercise_test.time <- function(.data,
     } else if (subtype == "bin") {
         out <- data_num %>%
             dplyr::group_by_at(.vars = time_col,
-                               function(x) round(x / bin_w) * bin_w) %>%
+                               function(x) ceiling(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
                                  trim = bin_trim / bin_w / 2)
@@ -203,7 +206,7 @@ avg_exercise_test.time <- function(.data,
 
         block <- data_num %>%
             dplyr::group_by_at(.vars = time_col,
-                               function(x) round(x / bin_w) * bin_w) %>%
+                               function(x) ceiling(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
                                  trim = bin_trim / bin_w / 2)
@@ -260,7 +263,7 @@ avg_exercise_test.digital <- function(.data,
 }
 
 #' @keywords internal
-butter_lowpass <- function(cutoff, fs, order = 5){
+butter_lowpass <- function(cutoff, fs, order = 3){
     nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
     # at a minimum two data points per wave in order to construct the wave
     normal_cutoff <- cutoff / nyq

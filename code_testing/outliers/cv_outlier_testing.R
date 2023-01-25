@@ -5,6 +5,7 @@ library(AICcmodavg)
 library(ggfortify)
 library(car)
 library(broom)
+library(hms)
 
 df_raw <- read_csv("inst/extdata/37818_vo2max_unavg.csv")
 df_unavg <- df_raw %>%
@@ -18,55 +19,13 @@ df_unavg <- df_raw %>%
                   pre_ex_intensity = 300.1,
                   post_ex_intensity = 300.1) %>%
     mutate(ve_vo2 = ve / (vo2_abs/1000),
-           ve_vco2 = ve / (vco2/1000))
+           ve_vco2 = ve / (vco2/1000),
+           time = as.numeric(ms(str_remove(as.character(time), ":00"))))
 
 ggplot(data = df_unavg, aes(x = time)) +
     geom_point(aes(y = ve_vo2), color = "orange") +
     geom_point(aes(y = ve_vco2), color = "green") +
     theme_bw()
-
-knot_max <- 100
-bs_mod_list <- vector(mode = "list", length = length(seq_along(3:knot_max)))
-for (i in 3:knot_max) {
-    spline_mod_name <- paste0("bs.", i)
-    bs_mod_list[[i-2]] <- lm(ve_vo2 ~ 1 + bs(time,
-                                             df = i + 3,
-                                             degree = 3),
-                             data = df_unavg)
-    names(bs_mod_list)[i-2] <- spline_mod_name
-}
-
-bs_mod_comp <- aictab(cand.set = bs_mod_list, modnames = names(bs_mod_list)) %>%
-    as_tibble() %>%
-    dplyr::select(1:4)
-bs_mod_comp
-
-best_bs <- bs_mod_comp %>%
-    dplyr::filter(AICc == min(AICc))
-
-best_bs_idx <- which(names(bs_mod_list) == best_bs$Modnames)
-
-autoplot(bs_mod_list[best_bs_idx], which = 1:6, ncol = 3, label.size = 3)
-influenceIndexPlot(bs_mod_list[[best_bs_idx]])
-outlierTest(bs_mod_list[[best_bs_idx]])
-
-pred <- predict(bs_mod_list[[best_bs_idx]],
-                interval = "prediction") %>%
-    as_tibble()
-
-plot_data <- df_unavg %>%
-    select(time, ve_vo2) %>%
-    bind_cols(pred) %>%
-    mutate(outlier = ve_vo2 < lwr | ve_vo2 > upr)
-
-ggplot(data = plot_data, aes(x = time, y = ve_vo2)) +
-    geom_point(aes(color = outlier), alpha = 0.5) +
-    geom_line(aes(y = fit)) +
-    geom_line(aes(y = lwr), linetype = "dashed") +
-    geom_line(aes(y = upr), linetype = "dashed") +
-    theme_bw()
-
-
 
 ## with k-fold CV
 library(boot)
@@ -74,7 +33,7 @@ library(lmvar)
 
 # using glm()
 set.seed(1234987)
-k <- 10
+k <- 5
 knot_max <- nrow(df_unavg) / 2
 cv_error <- numeric(length = length(0:knot_max))
 cv_mod_list <- vector(mode = "list", length = length(0:knot_max))
@@ -94,6 +53,7 @@ knot_tab <- tibble(knots = 0:knot_max,
                    df = 0:knot_max + degree,
                    cv_error = cv_error)
 knot_tab
+plot(knot_tab$cv_error)
 plot(knot_tab$cv_error, ylim = c(1, 2.5))
 
 
@@ -109,10 +69,10 @@ best_cv_mod <- lm(ve_vo2 ~ 1 + bs(as.numeric(time),
                                   degree = degree),
                   data = df_unavg)
 
-autoplot(best_cv_mod, which = 1:6, ncol = 3, label.size = 3)
-influenceIndexPlot(cv_mod_list[[best_cv]])
-outlierTest(cv_mod_list[[best_cv]])
-predict(cv_mod_list[[best_cv]], se.fit = TRUE)
+# autoplot(best_cv_mod, which = 1:6, ncol = 3, label.size = 3)
+# influenceIndexPlot(cv_mod_list[[best_cv]])
+# outlierTest(cv_mod_list[[best_cv]])
+# predict(cv_mod_list[[best_cv]], se.fit = TRUE)
 
 ## prediction errors are not built into a glm model
 sd_to_pct <- function(sd) {
@@ -120,9 +80,11 @@ sd_to_pct <- function(sd) {
     pct
 }
 
+sd_lim <- 3
+
 pred_cv <- predict(best_cv_mod,
                 interval = "prediction",
-                level = sd_to_pct(2)) %>%
+                level = sd_to_pct(sd_lim)) %>%
     as_tibble()
 
 plot_data <- df_unavg %>%
@@ -136,9 +98,13 @@ ggplot(data = plot_data, aes(x = time, y = ve_vo2)) +
     geom_line(aes(y = lwr), linetype = "dashed") +
     geom_line(aes(y = upr), linetype = "dashed") +
     theme_bw() +
-    ggtitle(paste("Local outlier removal of points ± 2 sd in non-linear\nrelationship using a b-spline model, 10-fold cv, and",
-                  best_cv - 1,
-                  "knots"))
+    ggtitle(paste0("Local outlier removal of points ± ",
+                   sd_lim,
+                   " sd in non-linear\nrelationship using a b-spline model ",
+                   k,
+                   "-fold cv, and ",
+                   best_cv - 1,
+                   " knots"))
 
 # now, refit the spline model but with the outliers removed
 
@@ -158,7 +124,7 @@ one_se_cv_err <- which((cv_error - min(cv_error) - se(cv_error)) < 0)[1]
 ggplot(data = cv_error_df, aes(x = as.integer(rownames(cv_error_df)),
                                y = cv_error)) +
     geom_point() +
-    ylim(c(0.5, 2.5)) + # major outliers so I adjusted the axes
+    ylim(c(0.25, 2.5)) + # major outliers so I adjusted the axes
     theme_bw() +
     geom_hline(yintercept = min(cv_error), color = "red") +
     geom_hline(yintercept = min(cv_error) - se(cv_error),
@@ -177,10 +143,10 @@ one_se_cv_mod <- lm(ve_vo2 ~ 1 + bs(as.numeric(time),
                                   degree = degree),
                   data = df_unavg)
 
-autoplot(one_se_cv_mod, which = 1:6, ncol = 3, label.size = 3)
-influenceIndexPlot(cv_mod_list[[one_se_cv_err]])
-outlierTest(cv_mod_list[[one_se_cv_err]])
-predict(cv_mod_list[[one_se_cv_err]], se.fit = TRUE)
+# autoplot(one_se_cv_mod, which = 1:6, ncol = 3, label.size = 3)
+# influenceIndexPlot(cv_mod_list[[one_se_cv_err]])
+# outlierTest(cv_mod_list[[one_se_cv_err]])
+# predict(cv_mod_list[[one_se_cv_err]], se.fit = TRUE)
 
 ## prediction errors are not built into a glm model
 sd_to_pct <- function(sd) {
@@ -188,9 +154,14 @@ sd_to_pct <- function(sd) {
     pct
 }
 
+lims <- 1:5
+map(lims, sd_to_pct)
+
+sd_lim <- 2
+
 pred_one_se_cv <- predict(one_se_cv_mod,
-                   interval = "prediction",
-                   level = sd_to_pct(2)) %>%
+                            interval = "prediction",
+                            level = sd_to_pct(sd_lim)) %>%
     as_tibble()
 
 plot_data_one_se <- df_unavg %>%
@@ -204,6 +175,64 @@ ggplot(data = plot_data_one_se, aes(x = time, y = ve_vo2)) +
     geom_line(aes(y = lwr), linetype = "dashed") +
     geom_line(aes(y = upr), linetype = "dashed") +
     theme_bw() +
-    ggtitle(paste("Local outlier removal of points ± 2 sd in non-linear\nrelationship using a b-spline model, 10-fold cv, and",
-                  one_se_cv_err - 1,
-                  "knots"))
+    ggtitle(paste0("Local outlier removal of points ± ",
+                   sd_lim,
+                   " sd in non-linear\nrelationship using a b-spline model ",
+                   k,
+                   "-fold cv, and ",
+                   one_se_cv_err - 1,
+                   " knots"))
+
+### show multiple prediction intervals at once
+
+
+pred_one_se_cv_3 <- predict(one_se_cv_mod,
+                   interval = "prediction",
+                   level = sd_to_pct(3)) %>%
+    as_tibble()
+
+plot_data_one_se_3 <- df_unavg %>%
+    select(time, ve_vo2) %>%
+    bind_cols(pred_one_se_cv_3) %>%
+    mutate(outlier_3 = ve_vo2 < lwr | ve_vo2 > upr) %>%
+    rename(fit3 = fit,
+           lwr3 = lwr,
+           upr3 = upr)
+
+pred_one_se_cv_4 <- predict(one_se_cv_mod,
+                            interval = "prediction",
+                            level = sd_to_pct(4)) %>%
+    as_tibble()
+
+plot_data_one_se_4 <- df_unavg %>%
+    select(time, ve_vo2) %>%
+    bind_cols(pred_one_se_cv) %>%
+    mutate(outlier_4 = ve_vo2 < lwr | ve_vo2 > upr) %>%
+    rename(fit4 = fit,
+           lwr4 = lwr,
+           upr4 = upr)
+
+plot_data_one_se_comb <- full_join(plot_data_one_se_3, plot_data_one_se_4) %>%
+    mutate(outlier = case_when(outlier_3 == TRUE & outlier_4 == TRUE ~ "4sd",
+                               outlier_3 == FALSE & outlier_4 == FALSE ~ "Not",
+                               outlier_3 == FALSE & outlier_4 == TRUE ~ "3sd"))
+
+ggplot(data = plot_data_one_se_comb, aes(x = time, y = ve_vo2)) +
+    geom_point(aes(color = outlier), alpha = 0.5) +
+    geom_line(aes(y = fit3)) +
+    geom_line(aes(y = lwr3), linetype = "dashed") +
+    geom_line(aes(y = upr3), linetype = "dashed") +
+    geom_line(aes(y = fit4)) +
+    geom_line(aes(y = lwr4), linetype = "dashed") +
+    geom_line(aes(y = upr4), linetype = "dashed") +
+    theme_bw()
+
+
+# +
+#     ggtitle(paste0("Local outlier removal of points ± ",
+#                    sd_lim,
+#                    " sd in non-linear\nrelationship using a b-spline model ",
+#                    k,
+#                    "-fold cv, and ",
+#                    one_se_cv_err - 1,
+#                    " knots"))

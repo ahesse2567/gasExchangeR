@@ -14,7 +14,8 @@ spline_bp(
   ve = "ve",
   time = "time",
   alpha_linearity = 0.05,
-  bp
+  bp,
+  pos_change = TRUE
 )
 }
 \arguments{
@@ -37,6 +38,8 @@ spline_bp(
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
+
+\item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 }
 \value{
 

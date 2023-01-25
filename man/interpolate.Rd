@@ -4,7 +4,7 @@
 \alias{interpolate}
 \title{Interpolate graded exercise test data with linear or cubic spline interpolation}
 \usage{
-interpolate(.data, time_col, method = c("linear", "cubic"), every_s = 1)
+interpolate(.data, time_col, method = "linear", every_s = 1)
 }
 \arguments{
 \item{.data}{Data frame to interpolate}

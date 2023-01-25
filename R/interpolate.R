@@ -8,6 +8,9 @@
 #' @return
 #' @export
 #'
+#' @details
+#' The time column must be in seconds.
+#'
 #' @examples
 #' time <- sample.int(100, 20)
 #' time <- sort(time)
@@ -17,10 +20,12 @@
 
 interpolate <- function(.data,
                         time_col,
-                        method = c("linear", "cubic"),
+                        method = "linear",
                         every_s = 1) {
     # TODO add stopifnot()
-    method <- match.arg(method, choices = c("linear", "cubic"))
+    method <- match.arg(method,
+                        choices = c("linear", "cubic"),
+                        several.ok = FALSE)
     # turn this into a method later
     # class(.data) <- method
     # UseMethod("interpolate", .data)

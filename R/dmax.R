@@ -68,6 +68,10 @@ dmax <- function(.data,
         pull() %>%
         which.min()
 
+    # this needs to be fixed. This does NOT constrain the left line to
+    # go from the first data point on the curve to the dmax point. It
+    # also does not currently constrain the right line to go from the
+    # dmax point to the last point on the curve
     df_left <- .data[1:dmax_idx,]
     lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], df_left)
 
@@ -88,6 +92,14 @@ dmax <- function(.data,
     determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
                                          (pos_change == (pct_slope_change > 0)),
                                      TRUE, FALSE)
+
+    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+                         "{.y}" := lm_left$fitted.values,
+                         algorithm = "dmax")
+    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+                          "{.y}" := lm_right$fitted.values,
+                          algorithm = "dmax")
+    pred <- bind_rows(y_hat_left, y_hat_right)
 
     # find closest actual data point to dmax point and return data
     bp_dat <- .data %>%
@@ -120,7 +132,7 @@ dmax <- function(.data,
     #                          algorithm = "dmax_start_end"))
 
     return(list(breakpoint_data = bp_dat,
-                # fitted_vals = pred,
+                fitted_vals = pred,
                 poly_model = g.model,
                 dmax_point = c("x" = D.max, "y" = g.D.max),
                 lm_left = lm_left,
