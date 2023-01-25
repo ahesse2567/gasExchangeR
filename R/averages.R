@@ -31,6 +31,9 @@
 #'
 #' # TODO write an example
 #'
+#'
+#'TODO force people to use this function twice if doing bin-roll or rolling-bin
+#'
 avg_exercise_test <- function(.data,
                               type = "breath",
                               subtype = "rolling",
@@ -186,7 +189,7 @@ avg_exercise_test.time <- function(.data,
     } else if (subtype == "bin") {
         out <- data_num %>%
             dplyr::group_by_at(.vars = time_col,
-                               function(x) round(x / bin_w) * bin_w) %>%
+                               function(x) ceiling(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
                                  trim = bin_trim / bin_w / 2)
@@ -203,7 +206,7 @@ avg_exercise_test.time <- function(.data,
 
         block <- data_num %>%
             dplyr::group_by_at(.vars = time_col,
-                               function(x) round(x / bin_w) * bin_w) %>%
+                               function(x) ceiling(x / bin_w) * bin_w) %>%
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
                                  trim = bin_trim / bin_w / 2)
