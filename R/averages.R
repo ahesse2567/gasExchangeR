@@ -74,14 +74,14 @@ avg_exercise_test.breath <- function(.data,
                                      cutoff = 0.04,
                                      fs = 1,
                                      order = 3) {
-    # browser()
     subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
 
     char_cols <- .data[, purrr::map(.data, class) == "character"]
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
         char_cols <- unique(char_cols)
         # delete char col b/c they don't play well with rollapply(). Add back later
-        .data <- .data[,-which(colnames(x) %in% names(char_cols))]
+        .data <- .data[,-which(colnames(.data) %in% names(char_cols))]
+        # should I automatically add them back to the original positions later?
     } else {
         char_cols <- NULL
     }
