@@ -80,7 +80,7 @@ loop_poly_reg <- function(.data, .x, .y,
         i <- 1 # start at 2 b/c we already made linear (degree = 1) model
         while(cont == TRUE) {
             lm_poly <- paste0(.y, " ~ ", "1 + ",
-                              "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
+                              "poly(", .x, ", degree = ", degree + i, ", raw = TRUE)") %>%
                 as.formula() %>%
                 lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
