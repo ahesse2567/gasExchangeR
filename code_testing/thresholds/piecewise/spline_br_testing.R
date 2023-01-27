@@ -7,6 +7,7 @@ library(Deriv)
 library(Ryacas)
 
 # big thanks to this stack overflow thread: https://stackoverflow.com/questions/40438195/function-for-polynomials-of-arbitrary-order-symbolic-method-preferred
+# splineDesign function to get higher order spline functions?
 
 # df_raw <- read_delim("inst/extdata/Aaron_VO2max.txt",
 #                      delim = "\t",
