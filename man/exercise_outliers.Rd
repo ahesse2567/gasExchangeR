@@ -35,9 +35,6 @@ exercise_outliers(
 
 \item{keep_outliers}{Should the function only identify outliers (\code{TRUE}) or remove them (\code{FALSE})?}
 }
-\value{
-
-}
 \description{
 Identify and remove outliers from exercise testing data
 }

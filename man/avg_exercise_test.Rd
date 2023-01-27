@@ -47,9 +47,6 @@ avg_exercise_test(
 
 \item{order}{The Butterworth low-pass filter order. Only used by digital filter.}
 }
-\value{
-
-}
 \description{
 This function averages first by either breath, time, or digital filtering
 If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
@@ -62,5 +59,8 @@ If you combine rolling and bin averages with \code{subtype = bin_roll} it is imp
 \examples{
 
 # TODO write an example
+
+
+# TODO force people to use this function twice if doing bin-roll or rolling-bin
 
 }

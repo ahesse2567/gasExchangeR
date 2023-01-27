@@ -61,6 +61,8 @@ breakpoint <- function(.data,
                        bps = "both",
                        truncate = TRUE,
                        pos_change = TRUE,
+                       # should I add a "front trim" argument? Exercise onset seems to cause
+                       # weird issues within fitting lines properly
                        ...) {
     stopifnot(!missing(.data),
               !all(is.null(method), is.null(algorithm_vt1),

@@ -32,18 +32,16 @@ vo2_plateau(
 
 \item{alpha}{= The level of significance to use when applying the \code{zero_slope} method.}
 }
-\value{
-
-}
 \description{
 Determine if a graded exercise test demonstrated a VO2 plateau. Should there be an "all" method?
 }
 \details{
 See Yoon et al. (2007) for a description of the slope_eot method. Briefly, if VO2-time slope in the last 30 seconds of exercise is less than 50 mL O2/min, the participant demonstrated a plateau. This method is likely more suitable when using rolling averages or digital filtering.
 
-See Myers et al. (1989) and Myers et al. (1990) for a description of the zero_slope method. In short, this method tests if the slope is not significantly different from zero. If it was not significantly different from zero, the participant demonstrated a plateau. In this code, we also consider a VO2 plateau to be present if the slope was significantly different from zero while the sign is negative. Some subjects will demonstrate a plateau or a peak followed by a decrease in VO2 within the last 1-2 minutes of the test.
+See Myers et al. (1989) and Myers et al. (1990) for a description of the zero_slope method. In short, this method tests if the slope is not significantly different from zero. If it was not significantly different from zero, the participant demonstrated a plateau. In this code, we also consider a VO2 plateau to be present if the slope was significantly different from zero while the sign is negative. In our personal experience, some subjects will demonstrate a plateau or a peak followed by a decrease in VO2 within the last 1-2 minutes of the test.
+TODO technically this implementation is different from the Myers et al. study. They used an 8-breath rolling average of the entire test and regressed that 8-breath rolling average of VO2 vs. time. Then they calculated the slope of VO2 vs. time. What I don't understand is how they calculated the slope of VO2 vs. time. Was it the slope from one point to the next? That's my best guess. Once they had the slopes, they regressed that vs. time (?) and determined which points were statistically significantly different from 0.
 
-See Astorino (2009), Astorino et al. (2000), and Robergs (2001) for a description of the vo2max_neighbor method. This method finds VO2max and then looks at the closest neighboring .data point. If the difference between those two points is less than the specified delta_VO2, the participant demonstrated a plateau. This method is likely better suited when using bin averaging or in historical work when there were far fewer .data points.
+See Astorino (2009), Astorino et al. (2000), and Robergs (2001) for a description of the vo2max_neighbor method. This method finds VO2max and then looks at the closest neighboring data point. If the difference between those two points is less than the specified delta_VO2, the participant demonstrated a plateau. This method is likely better suited when using bin averaging or in historical work when there were far fewer data points.
 }
 \examples{
 # write example later

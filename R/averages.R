@@ -32,7 +32,7 @@
 #' # TODO write an example
 #'
 #'
-#'TODO force people to use this function twice if doing bin-roll or rolling-bin
+#' # TODO force people to use this function twice if doing bin-roll or rolling-bin
 #'
 avg_exercise_test <- function(.data,
                               type = "breath",
