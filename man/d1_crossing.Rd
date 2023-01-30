@@ -27,6 +27,16 @@ d1_crossing(
 
 \item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
 
+\item{vo2}{Name of the \code{vo2} variable}
+
+\item{vco2}{Name of the \code{vco2} variable}
+
+\item{ve}{Name of the \code{ve} variable}
+
+\item{time}{Name of the \code{time} variable}
+
+\item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
 \item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint? This method is specifically designed for finding VT1 (GET)}

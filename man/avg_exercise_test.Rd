@@ -47,6 +47,9 @@ avg_exercise_test(
 
 \item{order}{The Butterworth low-pass filter order. Only used by digital filter.}
 }
+\value{
+A data frame.
+}
 \description{
 This function averages first by either breath, time, or digital filtering
 If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.

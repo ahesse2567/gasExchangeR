@@ -8,13 +8,13 @@ d2_poly_reg_maxima(
   .data,
   .x,
   .y,
+  bp,
   degree = NULL,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
-  alpha_linearity = 0.05,
-  bp
+  alpha_linearity = 0.05
 )
 }
 \arguments{
@@ -24,11 +24,22 @@ d2_poly_reg_maxima(
 
 \item{.y}{the y-axis variable.}
 
-\item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
-
 \item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?}
 
-\item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+\item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
+
+\item{vo2}{Name of the \code{vo2} variable}
+
+\item{vco2}{Name of the \code{vco2} variable}
+
+\item{ve}{Name of the \code{ve} variable}
+
+\item{time}{Name of the \code{time} variable}
+
+\item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+}
+\value{
+A slice of the original data frame at the threshold index with a new `algorithm` column.
 }
 \description{
 Use polynomial regression of increasing order to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.

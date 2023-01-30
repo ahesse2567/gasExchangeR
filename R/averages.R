@@ -19,7 +19,8 @@
 #'
 #' @import magrittr
 #'
-#' @return
+#' @returns A data frame.
+#'
 #' @export
 #'
 #' @details
@@ -87,7 +88,7 @@ avg_exercise_test.breath <- function(.data,
     }
 
     data_num <- .data %>% # coerce to numeric b/c time may not be of another class
-        dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
+        dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
                                     as.numeric))
     if(subtype == "rolling") {
         # rm comments if you want to exactly replicate how breeze does rolling avgs
@@ -118,12 +119,12 @@ avg_exercise_test.breath <- function(.data,
         # that's probably okay b/c we need to group by breath. For time averaging
         # we should actually find the time_col
         out <- data_num %>%
-            mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
-            group_by(bin) %>%
-            summarize_all(.funs = list(mos),
+            dplyr::mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
+            dplyr::group_by(bin) %>%
+            dplyr::summarize_all(.funs = list(mos),
                           na.rm = TRUE,
                           trim = bin_trim / bin_w / 2) %>%
-            select(-bin)
+            dplyr::select(-bin)
         out <- dplyr::bind_cols(char_cols, out)
         return(out)
     } else {
@@ -134,12 +135,12 @@ avg_exercise_test.breath <- function(.data,
         mos <- match.arg(mos, choices = c("mean", "median"))
 
         block <- data_num %>%
-            mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
-            group_by(bin) %>%
-            summarize_all(.funs = list(mos),
+            dplyr::mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
+            dplyr::group_by(bin) %>%
+            dplyr::summarize_all(.funs = list(mos),
                           na.rm = TRUE,
                           trim = bin_trim / bin_w / 2) %>%
-            select(-bin)
+            dplyr::select(-bin)
         rolled_block <- block %>%
             zoo::rollapply(data = .,
                            width = roll_window / bin_w,
@@ -179,7 +180,7 @@ avg_exercise_test.time <- function(.data,
     }
 
     data_num <- .data %>% # coerce to numeric b/c time may not be of another class
-        dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
+        dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
                                     as.numeric))
     if(subtype == "rolling") {
         align <- match.arg(align, choices = c("left", "right", "center"))
@@ -248,7 +249,7 @@ avg_exercise_test.digital <- function(.data,
     }
 
     data_num <- .data %>% # coerce to numeric b/c time may not be of another class
-        dplyr::mutate(dplyr::across(where(purrr::negate(is.character)),
+        dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
                                     as.numeric))
 
     bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)

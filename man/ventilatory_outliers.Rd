@@ -48,7 +48,7 @@ ventilatory_outliers(
 \item{plot_outliers}{Plot outliers every iteration of the filter? Default is \code{FALSE}.}
 }
 \value{
-A data frame or tibble.
+A data frame or tibble with the rows containing outliers removed or retained according to the `remove_outliers` parameter. If outliers are removed, then the data frame returns a new column named `outliers`.
 }
 \description{
 The current implementation only offers rolling-breath averages.

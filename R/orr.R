@@ -11,7 +11,9 @@
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
-#' @return
+#' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
+#'
+#' @importFrom rlang :=
 #' @export
 #'
 #' @references
@@ -39,26 +41,26 @@ orr <- function(.data,
     df_left <- .data[1:min_ss_idx,]
     df_right <- .data[min_ss_idx:nrow(.data),]
 
-    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-    lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
-    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+    lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+    lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
 
-    RSS_simple <- sum(resid(lm_simple)^2)
-    RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+    RSS_simple <- sum(stats::resid(lm_simple)^2)
+    RSS_two <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
     MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
+    pf_two <- stats::pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+    y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
                          "{.y}" := lm_left$fitted.values,
                          algorithm = "orr")
-    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+    y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
                           "{.y}" := lm_right$fitted.values,
                           algorithm = "orr")
-    pred <- bind_rows(y_hat_left, y_hat_right)
+    pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
     determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
                                          (pos_change == (pct_slope_change > 0)),
@@ -70,21 +72,21 @@ orr <- function(.data,
         dplyr::mutate(dist_x_sq = (.data[[.x]] - int_point["x"])^2,
                dist_y_sq = (.data[[.y]] - int_point["y"])^2,
                sum_dist_sq = dist_x_sq + dist_y_sq) %>%
-        arrange(sum_dist_sq) %>%
-        slice(1) %>%
+        dplyr::arrange(sum_dist_sq) %>%
+        dplyr::slice(1) %>%
         dplyr::mutate(algorithm = "orr",
                       x_var = .x,
                       y_var = .y,
                       determinant_bp = determinant_bp,
                       bp = bp) %>%
-        relocate(bp, algorithm, x_var, y_var, determinant_bp) %>%
-        select(-c(dist_x_sq, dist_y_sq, sum_dist_sq))
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp) %>%
+        dplyr::select(-c(dist_x_sq, dist_y_sq, sum_dist_sq))
 
     bp_dat <- bp_dat %>%
-        mutate(pct_slope_change = pct_slope_change,
+        dplyr::mutate(pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, algorithm, determinant_bp, pct_slope_change, f_stat, p_val_f)
+        dplyr::relocate(bp, algorithm, determinant_bp, pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
@@ -114,8 +116,8 @@ loop_orr <- function(.data, .x, .y) {
         df_right <- .data[i:nrow(.data),]
 
         # make linear models of the two halves
-        lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-        lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+        lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+        lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
 
         ss_left <- sum((lm_left$residuals)^2)
         ss_right <- sum((lm_right$residuals)^2)

@@ -26,9 +26,9 @@
 #' @param bps Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
 #' @param truncate By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
-#' @param ...
+#' @param ... Arguments to pass to functions internal to `breakpoint()`
 #'
-#' @return
+#' @returns A list that contains a data frame with slices of the original data frame at the threshold index. The data frame new columns describing the methods used and if the breakpoint was truly a breakpoint. Depending on the breakpoint algorithm used, `breakpoint()` also returns fitted values, the left and right sides of the piecewise regression, as well as a simple linear regression.
 #' @export
 #' @md
 #'
@@ -100,7 +100,7 @@ breakpoint <- function(.data,
                 warning("VO2 and VCO2 columns are unlikely to both be in the same absolute units\nCheck if VO2 column indicated in arguments is absolute and that units match VCO2")
             }
             .data <- .data %>%
-                mutate(excess_co2 = .data[[vco2]]^2 / .data[[vo2]] - .data[[vco2]])
+                dplyr::mutate(excess_co2 = .data[[vco2]]^2 / .data[[vo2]] - .data[[vco2]])
             y_vt1 <- "excess_co2"
         }
     }
@@ -174,7 +174,7 @@ breakpoint <- function(.data,
         }
     }
 
-    vt_out <- suppressMessages(full_join(vt1_out$breakpoint_data,
+    vt_out <- suppressMessages(dplyr::full_join(vt1_out$breakpoint_data,
                                          vt2_out$breakpoint_data))
     out <- list(bp_dat = vt_out,
                 vt1_dat = vt1_out,

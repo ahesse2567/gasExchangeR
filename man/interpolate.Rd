@@ -15,6 +15,9 @@ interpolate(.data, time_col, method = "linear", every_s = 1)
 
 \item{every_s}{Should the data be interpolated every second? Every 2 seconds?}
 }
+\value{
+A data frame or tibble with numeric values interpolated to the specified time frame and by linear or cubic interpolation.
+}
 \description{
 Interpolate graded exercise test data with linear or cubic spline interpolation
 }

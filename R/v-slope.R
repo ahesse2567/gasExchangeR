@@ -22,7 +22,8 @@
 #' @param left_slope_lim The original paper requires that the left regression line have a slope of > \code{0.6}.
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
-#' @return
+#' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
+#' @importFrom rlang :=
 #' @export
 #'
 #' @references
@@ -52,7 +53,7 @@ v_slope <- function(.data,
     i <- 1
     bp_idx <- order(-dist_MSE_ratio)[i]
     df_left <- .data[1:bp_idx,]
-    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+    lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
 
     # TODO the slope_change < slope_change_lim and left slope > 0.6 only apply
     # specifically when x = VO2 and y = VCO2. How do we check for that?
@@ -61,8 +62,8 @@ v_slope <- function(.data,
         bp_idx <- order(-dist_MSE_ratio)[i]
         df_left <- .data[1:bp_idx,]
         df_right <- .data[(bp_idx+1):nrow(.data),]
-        lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-        lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+        lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+        lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
 
         slope_change <- lm_right$coefficients[2] - lm_left$coefficients[2]
         i <- i + 1
@@ -93,17 +94,17 @@ v_slope <- function(.data,
     df_right <- .data[(bp_idx+1):nrow(.data),] # split data into right half
 
     # make linear models of the two regressions
-    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-    lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+    lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+    lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
     # sinle line regression
-    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
 
     # check for a significant departure from linearity
-    RSS_simple <- sum(resid(lm_simple)^2)
-    RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+    RSS_simple <- sum(stats::resid(lm_simple)^2)
+    RSS_two <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
     MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
+    pf_two <- stats::pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
@@ -112,13 +113,13 @@ v_slope <- function(.data,
                                          (pos_change == (pct_slope_change > 0)),
                                      TRUE, FALSE)
 
-    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+    y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
                          "{.y}" := lm_left$fitted.values,
                          algorithm = "v-slope")
-    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+    y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
                           "{.y}" := lm_right$fitted.values,
                           algorithm = "v-slope")
-    pred <- bind_rows(y_hat_left, y_hat_right)
+    pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
     # find intersection point of left and right regressions
     lr_intersect <- intersection_point(lm_left, lm_right)
@@ -139,7 +140,7 @@ v_slope <- function(.data,
                       f_stat = f_stat,
                       p_val_f = pf_two) %>%
         dplyr::select(-c(dist_x_sq, dist_y_sq, d)) %>%
-        relocate(bp, algorithm, x_var, y_var, determinant_bp,
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
                  pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
@@ -152,7 +153,7 @@ v_slope <- function(.data,
 #' @keywords internal
 loop_v_slope <- function(.data, .x, .y) {
     # browser()
-    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
     # find slope of line perpendicular to slope of lm_simple
     recip_slope <- (-1 / lm_simple$coefficients[2]) # used in for loop
     dist_MSE_ratio <- vector(length = nrow(.data))
@@ -167,8 +168,8 @@ loop_v_slope <- function(.data, .x, .y) {
         df_right <- .data[i:nrow(.data),] # split data into right half
 
         # make linear models of the two regressions
-        lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-        lm_right <- lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+        lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+        lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
 
         # find intersection point of left and right regressions
         lr_intersect <- intersection_point(lm_left, lm_right)
@@ -183,7 +184,7 @@ loop_v_slope <- function(.data, .x, .y) {
         d <- sqrt((x_simple_recip - lr_intersect["x"])^2 +
                       (y_simple_recip - lr_intersect["y"])^2)
 
-        dist_MSE_ratio[i] <- d / anova(lm_simple)['Residuals', 'Mean Sq']
+        dist_MSE_ratio[i] <- d / stats::anova(lm_simple)['Residuals', 'Mean Sq']
     }
 
     dist_MSE_ratio

@@ -47,6 +47,9 @@ v_slope(
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 }
+\value{
+A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
+}
 \description{
 V-slope uses the v-slope \emph{algorithm} to find a breakpoint. Note, the v-slope algorithm is different from the v-slope \emph{method} as a whole because the latter also includes a specific set of data processing steps (see reference). In order to use the v-slope algorithm as originally described by Beaver et al. (1986), pass \code{"v-slope"} to the \code{method} argument in the \code{breakpoint} function. Without indicating the \code{method} as \code{"v-slope"}, the function returns the breakpoint associated with ratio of the highest distance between the single regression line to the intersection point of the two regression lines, to the mean square error of the single regression line. This can sometimes lead to odd behavior and it is therefore generally recommended to specify \code{"v-slope"} in the \code{method} argument of \code{breakpoint} when using this function. See the Warnings and Details sections for details.
 }

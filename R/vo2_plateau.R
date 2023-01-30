@@ -9,7 +9,7 @@
 #' @param delta_vo2 What is the acceptable variation in VO2 at the end of the test to consider if someone demonstrated a VO2 plateau.
 #' @param alpha = The level of significance to use when applying the \code{zero_slope} method.
 #'
-#' @return
+#' @returns A tibble with a `method` column, a `plateau` column denoting if there was a plateau by the chosen method, and two more columns specific to each method.
 #' @export
 #'
 #' @details
@@ -85,7 +85,8 @@ vo2_plateau.slope_eot <- function(.data,
     } else {
         plateau <- FALSE
     }
-    out <- tibble::tibble(plateau = plateau,
+    out <- tibble::tibble(method = method,
+                          plateau = plateau,
                   vo2_time_slope_min = stats::coef(lm)[2]*60,
                   p.value = broom::tidy(lm)[["p.value"]][2])
     out
@@ -119,7 +120,8 @@ vo2_plateau.zero_slope <- function(.data,
     } else {
         plateau <- FALSE
     }
-    out <- tibble::tibble(plateau = plateau,
+    out <- tibble::tibble(method = method,
+                          plateau = plateau,
                   vo2_time_slope_min = stats::coef(lm)[2]*60,
                   p.value = broom::tidy(lm)[["p.value"]][2])
     out
@@ -150,7 +152,9 @@ vo2_plateau.vo2max_neighbor <- function(.data,
         plateau <- FALSE
     }
 
-    out <- tibble::tibble(plateau = plateau,
-                  vo2max_neighbor_diff = vo2max_neighbor_diff)
+    out <- tibble::tibble(method = method,
+                          plateau = plateau,
+                          delta_vo2 = delta_vo2,
+                          vo2max_neighbor_diff = vo2max_neighbor_diff)
     out
 }
