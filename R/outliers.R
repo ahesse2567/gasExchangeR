@@ -17,7 +17,6 @@
 #' @param plot_outliers Plot outliers every iteration of the filter? Default is \code{FALSE}.
 #'
 #'
-#'
 #' @returns A data frame or tibble with the rows containing outliers removed or retained according to the `remove_outliers` parameter. If outliers are removed, then the data frame returns a new column named `outliers`.
 #'
 #' @export
@@ -47,8 +46,6 @@ ventilatory_outliers <- function(.data,
     align <- match.arg(align, choices = c("right", "left", "center"))
     global_sd_mos <- match.arg(global_sd_mos, choices = c("mean", "median"))
 
-    # browser()
-
     # create key column for flagging all outliers later
     .data <- .data %>%
         dplyr::mutate(key = paste0(.data[[outlier_cols]],
@@ -56,7 +53,8 @@ ventilatory_outliers <- function(.data,
                             1:length(.data[[outlier_cols]])))
 
     # set proper func if excluding the value to consider
-    func <- dplyr::if_else(exclude_test_val, "roll_func_exclude_middle", mos)
+    func <- dplyr::if_else(exclude_test_val & align == "center",
+                           "roll_func_exclude_middle", mos)
 
     # create data frame copy
     copy_df <- .data
@@ -70,7 +68,7 @@ ventilatory_outliers <- function(.data,
     while(any_outliers & n_passes < max_passes) {
         rolling_mos <- zoo::rollapply(data = copy_df[[outlier_cols]],
                                  width = width,
-                                 FUN = get(func),
+                                 FUN = get(func), # need get() to avoid error
                                  f = mos,
                                  fill = NA,
                                  align = align)
@@ -87,8 +85,18 @@ ventilatory_outliers <- function(.data,
         lower_lim <- rolling_mos - rolling_sd * sd_lim
         upper_lim <- rolling_mos + rolling_sd * sd_lim
 
-        outlier_idx <- copy_df[[outlier_cols]] < lower_lim |
-            copy_df[[outlier_cols]] > upper_lim
+        # lead or lag if exclude_test_val == TRUE with alignment consideration
+        if (exclude_test_val & align == "right") {
+            # compares current to preceding breaths
+            outlier_idx <- copy_df[[outlier_cols]] < lag(lower_lim) |
+                copy_df[[outlier_cols]] > lag(upper_lim)
+        } else if (exclude_test_val & align == "left") {
+            # compares against subsequent breaths...I can't really think of why but I guess you can
+            outlier_idx <- copy_df[[outlier_cols]] < lead(lower_lim) | copy_df[[outlier_cols]] > upper_lim
+        } else { # no lead or lag necessary.
+            outlier_idx <- copy_df[[outlier_cols]] < lower_lim |
+                copy_df[[outlier_cols]] > upper_lim
+        }
 
         n_reassign <- dplyr::if_else(align == "center", floor(width / 2), width - 1)
 
@@ -97,15 +105,17 @@ ventilatory_outliers <- function(.data,
         # to see if they are outliers? However, we need a way to keep the test
         # values from being used to calculate the mean and sd
 
+        offset <- dplyr::if_else(exclude_test_val & align != "center",
+                                 1, 0)
         if(align == "center") {
             idx <- c(1:n_reassign,
-                     (length(outlier_idx) - n_reassign + 1):length(outlier_idx))
+                     (length(outlier_idx) - n_reassign):length(outlier_idx))
             outlier_idx[idx] <- FALSE
         } else if (align == "left") {
-            idx <- (length(outlier_idx) - n_reassign + 1):length(outlier_idx)
+            idx <- (length(outlier_idx) - n_reassign - offset):length(outlier_idx)
             outlier_idx[idx] <- FALSE
         } else if (align == "right") {
-            idx <- 1:n_reassign
+            idx <- 1:(n_reassign + offset)
             outlier_idx[idx] <- FALSE
         }
 
@@ -152,7 +162,6 @@ ventilatory_outliers <- function(.data,
         dplyr::select(-key)
 
 }
-
 
 #' @keywords internal
 roll_func_exclude_middle <- function(x, f = "mean") {

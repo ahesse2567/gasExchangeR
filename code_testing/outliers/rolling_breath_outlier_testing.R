@@ -28,7 +28,7 @@ df_unavg <- df_raw %>%
     relocate(time, speed, grade)
 
 df_unavg_no_outliers <- df_unavg %>%
-    ventilatory_outliers(exclude_test_val = TRUE)
+    ventilatory_outliers(exclude_test_val = TRUE, align = "center", sd_lim = 3)
 
 # df_unavg_no_outliers <- df_unavg %>%
 #     ventilatory_outliers(outlier_cols = "vo2", time = "time",
@@ -40,11 +40,9 @@ df_unavg_no_outliers <- df_unavg %>%
 ggplot(data = df_unavg, aes(x = time, y = vo2)) +
     geom_point(color = "red", alpha = 0.5) +
     geom_line(color = "red", alpha = 0.5) +
-    geom_point(data = df_unavg_no_outliers, color = "darkred", alpha = 0.5) +
-    geom_line(data = df_unavg_no_outliers, color = "darkred", alpha = 0.5) +
+    geom_point(data = df_unavg_no_outliers, color = "black", alpha = 0.5) +
+    geom_line(data = df_unavg_no_outliers, color = "black", alpha = 0.5) +
     theme_minimal()
-
-
 
 
 
