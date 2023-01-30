@@ -20,9 +20,6 @@ trim_pre_post(
 
 \item{post_ex_intensity}{Intensity that denotes the test has ended or entered the final recovery phase.}
 }
-\value{
-
-}
 \description{
 Delete any 'resting/pre-exercise' and 'recovery/post-exercise' portions from a graded exercise test
 }

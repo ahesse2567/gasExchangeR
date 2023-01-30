@@ -15,11 +15,11 @@ interpolate(.data, time_col, method = "linear", every_s = 1)
 
 \item{every_s}{Should the data be interpolated every second? Every 2 seconds?}
 }
-\value{
-
-}
 \description{
 Interpolate graded exercise test data with linear or cubic spline interpolation
+}
+\details{
+The time column must be in seconds.
 }
 \examples{
 time <- sample.int(100, 20)

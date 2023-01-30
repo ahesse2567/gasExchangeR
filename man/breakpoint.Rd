@@ -59,9 +59,6 @@ breakpoint(
 
 \item{...}{}
 }
-\value{
-
-}
 \description{
 Breakpoint allows the user to specify particular x-y relationships, algorithms, and criteria for determining if a breakpoint was determinant or indeterminate. It is important to understand the order of steps the function takes.
 \enumerate{
