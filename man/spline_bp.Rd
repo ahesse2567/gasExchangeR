@@ -41,6 +41,9 @@ spline_bp(
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 }
+\value{
+A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simiple linear regression.
+}
 \description{
 This function is similar to other piecewise regression formulas in that it iteratively moves the breakpoint along all n-2 inner data points. We recommend using this function for relationships such as VCO2 vs. VO2 (V-slope), VE vs. VCO2 (respiratory compensation point), and excess CO2, provided that the first ~1 minute of data is removed from excess CO2 prior to fitting the curve.
 }

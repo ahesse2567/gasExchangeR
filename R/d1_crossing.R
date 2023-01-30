@@ -6,15 +6,16 @@
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
 #' @param degree The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.
-#' @param vo2
-#' @param vco2
-#' @param ve
-#' @param time
-#' @param alpha_linearity
+#' @param vo2 Name of the \code{vo2} variable
+#' @param vco2 Name of the \code{vco2} variable
+#' @param ve Name of the \code{ve} variable
+#' @param time Name of the \code{time} variable
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint? This method is specifically designed for finding VT1 (GET)
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
-#' @return
+#' @returns
+#'
 #' @export
 #'
 #' @references
@@ -54,11 +55,11 @@ d1_crossing <- function(.data,
                                   alpha_linearity = alpha_linearity)
     # 1st derivative for vo2
     poly_expr_vo2 <- expr_from_coefs(lm_poly_vo2$coefficients)
-    deriv1_vo2 <- Deriv(poly_expr_vo2, x = "x", nderiv = 1) # slope
+    deriv1_vo2 <- Deriv::Deriv(poly_expr_vo2, x = "x", nderiv = 1) # slope
 
     # 1st derivative for vco2
     poly_expr_vco2 <- expr_from_coefs(lm_poly_vco2$coefficients)
-    deriv1_vco2 <- Deriv(poly_expr_vco2, x = "x", nderiv = 1) # slope
+    deriv1_vco2 <- Deriv::Deriv(poly_expr_vco2, x = "x", nderiv = 1) # slope
 
     # turn derivative expressions into functions to use with uniroot.all()
     deriv1_vo2_func <- expr_to_func(deriv1_vo2)
@@ -67,12 +68,12 @@ d1_crossing <- function(.data,
     # calculate derivative of difference in 1st derivative functions
     # this lets us know if vco2 was surpassing vo2 or the other way around
     deriv_diff_deriv1 <- paste0(deriv1_vo2 %>%
-                                    y_fn("Simplify") %>%
-                                    yac_str(),
+                                    Ryacas::y_fn("Simplify") %>%
+                                    Ryacas::yac_str(),
                                 " - (",
                                 deriv1_vco2 %>%
-                                    y_fn("Simplify") %>%
-                                    yac_str(),
+                                    Ryacas::y_fn("Simplify") %>%
+                                    Ryacas::yac_str(),
                                 ")") %>%
         parse(text = .) %>%
         Deriv(x = "x", nderiv = 1)
@@ -93,7 +94,7 @@ d1_crossing <- function(.data,
 
     # get values at threshold
     bp_dat <- .data[threshold_idx,] %>%
-        mutate(bp = bp,
+        dplyr::mutate(bp = bp,
                algorithm = "d1_crossing",
                x_var = .x,
                y_var = .y,
@@ -102,7 +103,7 @@ d1_crossing <- function(.data,
                # f_stat = f_stat,
                # p_val_f = pf_two,
         ) %>%
-        relocate(bp, algorithm, x_var, y_var,
+        dplyr::relocate(bp, algorithm, x_var, y_var,
                  # determinant_bp,
                  # pct_slope_change, f_stat, p_val_f
         )

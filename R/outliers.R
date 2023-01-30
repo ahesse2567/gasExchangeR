@@ -16,11 +16,9 @@
 #' @param max_passes By default, this function repeats itself (\code{max_passes = Inf}) until all values fit inside the rollowing window. However, users may wish to allow only a certain number of passes.
 #' @param plot_outliers Plot outliers every iteration of the filter? Default is \code{FALSE}.
 #'
-#' @details
 #'
 #'
-#' @return
-#' A data frame or tibble.
+#' @returns A data frame or tibble with the rows containing outliers removed or retained according to the `remove_outliers` parameter. If outliers are removed, then the data frame returns a new column named `outliers`.
 #'
 #' @export
 #'
@@ -53,12 +51,12 @@ ventilatory_outliers <- function(.data,
 
     # create key column for flagging all outliers later
     .data <- .data %>%
-        mutate(key = paste0(.data[[outlier_cols]],
+        dplyr::mutate(key = paste0(.data[[outlier_cols]],
                             "-",
                             1:length(.data[[outlier_cols]])))
 
     # set proper func if excluding the value to consider
-    func <- if_else(exclude_test_val, "roll_func_exclude_middle", mos)
+    func <- dplyr::if_else(exclude_test_val, "roll_func_exclude_middle", mos)
 
     # create data frame copy
     copy_df <- .data
@@ -70,15 +68,15 @@ ventilatory_outliers <- function(.data,
     # right and left-aligned rolling averages?
 
     while(any_outliers & n_passes < max_passes) {
-        rolling_mos <- rollapply(data = copy_df[[outlier_cols]],
+        rolling_mos <- zoo::rollapply(data = copy_df[[outlier_cols]],
                                  width = width,
                                  FUN = get(func),
                                  f = mos,
                                  fill = NA,
                                  align = align)
-        rolling_sd <- rollapply(data = copy_df[[outlier_cols]],
+        rolling_sd <- zoo::rollapply(data = copy_df[[outlier_cols]],
                                 width = width,
-                                FUN = sd,
+                                FUN = stats::sd,
                                 fill = NA,
                                 align = align)
         if(use_global_sd) {
@@ -92,7 +90,7 @@ ventilatory_outliers <- function(.data,
         outlier_idx <- copy_df[[outlier_cols]] < lower_lim |
             copy_df[[outlier_cols]] > upper_lim
 
-        n_reassign <- if_else(align == "center", floor(width / 2), width - 1)
+        n_reassign <- dplyr::if_else(align == "center", floor(width / 2), width - 1)
 
         # TODO Should we try to use a method to determine if the head
         # and tail of the values are outliers? E.g., use the nearby values
@@ -112,21 +110,21 @@ ventilatory_outliers <- function(.data,
         }
 
         copy_df <- copy_df %>%
-            mutate(outlier = outlier_idx)
+            dplyr::mutate(outlier = outlier_idx)
 
         if(plot_outliers) {
-            outlier_plot <- ggplot(data = copy_df, aes(x = .data[[time]],
+            outlier_plot <- ggplot2::ggplot(data = copy_df, ggplot2::aes(x = .data[[time]],
                                                        y = .data[[outlier_cols]])) +
-                geom_point(aes(color = outlier)) +
-                geom_line(aes(y = lower_lim), linetype = "dashed") +
-                geom_line(aes(y = upper_lim), linetype = "dashed") +
-                ggtitle(glue::glue("Pass {n_passes + 1}, {length(which(outlier_idx))} outliers removed.")) +
-                theme_minimal()
+                ggplot2::geom_point(ggplot2::aes(color = outlier)) +
+                ggplot2::geom_line(ggplot2::aes(y = lower_lim), linetype = "dashed") +
+                ggplot2::geom_line(ggplot2::aes(y = upper_lim), linetype = "dashed") +
+                ggplot2::ggtitle(glue::glue("Pass {n_passes + 1}, {length(which(outlier_idx))} outliers removed.")) +
+                ggplot2::theme_minimal()
             plot(outlier_plot)
         }
 
         copy_df <- copy_df %>%
-            filter(!outlier)
+            dplyr::filter(!outlier)
 
         n_passes <- n_passes + 1
         if(all(!outlier_idx)) any_outliers <- FALSE
@@ -136,12 +134,12 @@ ventilatory_outliers <- function(.data,
     # check which keys are still in the original .data
     outliers <- if_else(.data$key %in% copy_df$key, FALSE, TRUE)
     .data <- .data %>%
-        mutate(outlier = outliers)
+        dplyr::mutate(outlier = outliers)
 
     if(remove_outliers) {
         .data <- .data %>%
-            filter(!outlier) %>%
-            select(-outlier)
+            dplyr::filter(!outlier) %>%
+            dplyr::select(-outlier)
     }
 
     if(any(outliers)) {
@@ -151,7 +149,7 @@ ventilatory_outliers <- function(.data,
     }
 
     .data %>%
-        select(-key)
+        dplyr::select(-key)
 
 }
 

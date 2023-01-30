@@ -14,7 +14,8 @@
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
-#' @return
+#' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simiple linear regression.
+#' @importFrom rlang :=
 #' @export
 #'
 #' @examples
@@ -37,17 +38,17 @@ spline_bp <- function(.data,
     ss <- loop_spline_bp(.data = .data, .x, .y, degree = degree)
     min_ss_idx <- which.min(ss) # re
     .data <- .data %>%
-        mutate(s1 = if_else(.data[[.x]] <= .data[[.x]][min_ss_idx], 0,
+        dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][min_ss_idx], 0,
                             (.data[[.x]] - .data[[.x]][min_ss_idx])^degree))
-    lm_spline <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree) + s1,
+    lm_spline <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree) + s1,
                 data = .data)
-    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
 
-    RSS_simple <- sum(resid(lm_simple)^2)
-    RSS_two <- sum(resid(lm_spline)^2)
+    RSS_simple <- sum(stats::resid(lm_simple)^2)
+    RSS_two <- sum(stats::resid(lm_spline)^2)
     MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
+    pf_two <- stats::pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
     # slope BEFORE breakpoint = β1
     # slope AFTER breakpoint = β1 + β2
@@ -61,8 +62,8 @@ spline_bp <- function(.data,
                                      TRUE, FALSE)
 
     bp_dat <- .data[min_ss_idx,] %>%
-        select(-s1) %>%
-        mutate(bp = bp,
+        dplyr::select(-s1) %>%
+        dplyr::mutate(bp = bp,
                algorithm = "spline_bp",
                x_var = .x,
                y_var = .y,
@@ -70,10 +71,10 @@ spline_bp <- function(.data,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, algorithm, x_var, y_var, determinant_bp,
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
                  pct_slope_change, f_stat, p_val_f)
 
-    pred <- tibble("{.x}" := .data[[.x]],
+    pred <- tibble::tibble("{.x}" := .data[[.x]],
                    "{.y}" := lm_spline$fitted.values,
                    algorithm = "spline_bp")
 
@@ -94,9 +95,9 @@ loop_spline_bp <- function(.data, .x, .y, degree = 1) {
             next
         }
         temp <- .data %>%
-            mutate(s1 = if_else(.data[[.x]] <= .data[[.x]][i], 0,
+            dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][i], 0,
                                 (.data[[.x]] - .data[[.x]][i])^degree))
-        lm_spline <- lm(temp[[.y]] ~ 1 + poly(temp[[.x]], degree = degree) + s1,
+        lm_spline <- stats::lm(temp[[.y]] ~ 1 + poly(temp[[.x]], degree = degree) + s1,
                     data = temp)
         ss_models[i] <- sum((lm_spline$residuals)^2)
     }

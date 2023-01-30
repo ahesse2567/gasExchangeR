@@ -5,7 +5,7 @@
 #' @param every_s Should the data be interpolated every second? Every 2 seconds?
 #' @param method Use linear or cubic spline interpolation
 #'
-#' @return
+#' @returns A data frame or tibble with numeric values interpolated to the specified time frame and by linear or cubic interpolation.
 #' @export
 #'
 #' @details
@@ -31,7 +31,7 @@ interpolate <- function(.data,
     # UseMethod("interpolate", .data)
 
     data_num <- dplyr::mutate(.data,
-                              dplyr::across(where(purrr::negate(is.character)),
+                              dplyr::across(tidyselect::where(purrr::negate(is.character)),
                                             as.numeric))
     # add removal of NA vals to the numeric coercion above?
 

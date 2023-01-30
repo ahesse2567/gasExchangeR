@@ -57,7 +57,10 @@ breakpoint(
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
-\item{...}{}
+\item{...}{Arguments to pass to functions internal to \code{breakpoint()}}
+}
+\value{
+A list that contains a data frame with slices of the original data frame at the threshold index. The data frame new columns describing the methods used and if the breakpoint was truly a breakpoint. Depending on the breakpoint algorithm used, \code{breakpoint()} also returns fitted values, the left and right sides of the piecewise regression, as well as a simple linear regression.
 }
 \description{
 Breakpoint allows the user to specify particular x-y relationships, algorithms, and criteria for determining if a breakpoint was determinant or indeterminate. It is important to understand the order of steps the function takes.

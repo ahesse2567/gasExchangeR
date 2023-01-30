@@ -11,7 +11,10 @@
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
-#' @return
+#' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
+#'
+#' @importFrom rlang :=
+#'
 #' @export
 #'
 #' @references
@@ -45,31 +48,31 @@ jm <- function(.data,
     x_knot <- .data[[.x]][min_ss_idx]
 
     df_right <- df_right %>%
-        mutate(s1 = df_right[[.x]] - x_knot)
+        dplyr::mutate(s1 = df_right[[.x]] - x_knot)
 
-    lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+    lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
     # according to the JM algorithm, the right regression line will have a constant equal to b0 + b1*x0
     b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][min_ss_idx]
 
     # for some reason, using I() function to try to force the regression to use b0_plus_b1x0 as an intercept doesn't work, while the offset argument does. The slope coefficient (b3) is the same, but the predicted values are not.
-    lm_right <- lm(df_right[[.y]] ~ 0 + s1, data = df_right,
+    lm_right <- stats::lm(df_right[[.y]] ~ 0 + s1, data = df_right,
                    offset = rep(b0_plus_b1x0, nrow(df_right)))
 
-    lm_simple <- lm(.data[[.y]] ~ 1 + .data[[.x]])
+    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]])
 
-    RSS_simple <- sum(resid(lm_simple)^2)
-    RSS_two <- sum(resid(lm_left)^2) + sum(resid(lm_right)^2)
+    RSS_simple <- sum(stats::resid(lm_simple)^2)
+    RSS_two <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
     MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
+    pf_two <- stats::pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
-    y_hat_left <- tibble("{.x}" := df_left[[.x]],
+    y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
                          "{.y}" := lm_left$fitted.values,
                          algorithm = "jm")
-    y_hat_right <- tibble("{.x}" := df_right[[.x]],
+    y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
                           "{.y}" := lm_right$fitted.values,
                           algorithm = "jm")
-    pred <- bind_rows(y_hat_left, y_hat_right)
+    pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
@@ -78,7 +81,7 @@ jm <- function(.data,
                                      TRUE, FALSE)
 
     bp_dat <- .data[min_ss_idx,] %>%
-        mutate(algorithm = "jm",
+        dplyr::mutate(algorithm = "jm",
                bp = bp,
                x_var = .x,
                y_var = .y,
@@ -86,7 +89,7 @@ jm <- function(.data,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        relocate(bp, algorithm, x_var, y_var, determinant_bp,
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
                  pct_slope_change, f_stat, p_val_f)
 
     return(list(breakpoint_data = bp_dat,
@@ -112,17 +115,17 @@ loop_jm <- function(.data, .x, .y) {
 
         # the JM formula is y = b0 + b1*x0 + b3(x-x0). Therefore, we will create a new column in df_right that is equal to x - x0.
         df_right <- df_right %>%
-            mutate(s1 = df_right[[.x]] - .data[[.x]][i])
+            dplyr::mutate(s1 = df_right[[.x]] - .data[[.x]][i])
 
         df_right$s1 = df_right[[.x]] - .data[[.x]][i]
 
-        lm_left <- lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+        lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
 
         # according to the JM algorithm, the right regression line will have a constant equal to b0 + b1*x0
         b0_plus_b1x0 <- lm_left$coefficients[1] + lm_left$coefficients[2] * .data[[.x]][i]
 
         # for some reason, using I() function to try to force the regression to use b0_plus_b1x0 as an intercept doesn't work, while the offset argument does. The slope coefficient (b3) is the same, but the predicted values are not.
-        lm_right <- lm(df_right[[.y]] ~ 0 + s1, data = df_right,
+        lm_right <- stats::lm(df_right[[.y]] ~ 0 + s1, data = df_right,
                        offset = rep(b0_plus_b1x0, nrow(df_right)))
 
         # This should be the same as using the offset argument, but it's not

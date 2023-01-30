@@ -32,6 +32,9 @@ vo2_plateau(
 
 \item{alpha}{= The level of significance to use when applying the \code{zero_slope} method.}
 }
+\value{
+A tibble with a `method` column, a `plateau` column denoting if there was a plateau by the chosen method, and two more columns specific to each method.
+}
 \description{
 Determine if a graded exercise test demonstrated a VO2 plateau. Should there be an "all" method?
 }

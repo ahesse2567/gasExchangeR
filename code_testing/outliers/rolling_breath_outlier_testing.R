@@ -1,5 +1,4 @@
 library(tidyverse)
-library(zoo)
 library(readxl)
 library(devtools)
 library(gasExchangeR)
@@ -28,16 +27,28 @@ df_unavg <- df_raw %>%
     filter(phase == "EXERCISE") %>%
     relocate(time, speed, grade)
 
-
 df_unavg_no_outliers <- df_unavg %>%
     ventilatory_outliers(exclude_test_val = TRUE)
 
-df_unavg_no_outliers <- df_unavg %>%
-    ventilatory_outliers(outlier_cols = "vo2", time = "time",
-                         sd_lim = 3, width = 5, mos = "mean", align = "center",
-                         use_global_sd = TRUE, global_sd_mos = "median",
-                         exclude_test_val = TRUE, remove_outliers = FALSE,
-                         max_passes = Inf, plot_outliers = TRUE)
+# df_unavg_no_outliers <- df_unavg %>%
+#     ventilatory_outliers(outlier_cols = "vo2", time = "time",
+#                          sd_lim = 3, width = 5, mos = "mean", align = "center",
+#                          use_global_sd = TRUE, global_sd_mos = "median",
+#                          exclude_test_val = TRUE, remove_outliers = FALSE,
+#                          max_passes = Inf, plot_outliers = TRUE)
+
+ggplot(data = df_unavg, aes(x = time, y = vo2)) +
+    geom_point(color = "red", alpha = 0.5) +
+    geom_line(color = "red", alpha = 0.5) +
+    geom_point(data = df_unavg_no_outliers, color = "darkred", alpha = 0.5) +
+    geom_line(data = df_unavg_no_outliers, color = "darkred", alpha = 0.5) +
+    theme_minimal()
+
+
+
+
+
+
 
 .data <- df_unavg
 outlier_cols = "vo2"

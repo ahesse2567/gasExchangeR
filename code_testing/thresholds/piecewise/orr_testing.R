@@ -41,7 +41,7 @@ breakpoint(.data = df_avg,
 orr_dat <- orr(.data = df_avg, .x = "vo2_abs", .y = "vco2",
     vo2 = "vo2_abs", vco2 = "vco2", ve = "ve",
     time = "time", alpha_linearity = 0.05, bp = "vt1")
-
+orr_dat
 
 
 plot_data <- tibble(vo2_abs = seq(min(df_avg$vo2_abs), max(df_avg$vo2_abs), by = 1),

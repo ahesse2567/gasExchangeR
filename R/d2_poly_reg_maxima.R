@@ -18,16 +18,18 @@
 #' @param .data Gas exchange data frame or tibble.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
-#' @param degree The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.
-#' @param vo2
-#' @param vco2
-#' @param ve
-#' @param time
-#' @param alpha_linearity
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?
-#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param degree The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.
+#' @param vo2 Name of the \code{vo2} variable
+#' @param vco2 Name of the \code{vco2} variable
+#' @param ve Name of the \code{ve} variable
+#' @param time Name of the \code{time} variable
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #'
-#' @return
+#' @returns A slice of the original data frame at the threshold index with a new `algorithm` column.
+#'
+#' @importFrom Deriv Deriv
+#'
 #' @export
 #'
 #' @references
@@ -43,14 +45,14 @@
 d2_poly_reg_maxima <- function(.data,
                             .x,
                             .y,
+                            bp,
                             degree = NULL,
                             vo2 = "vo2",
                             vco2 = "vco2",
                             ve = "ve",
                             time = "time",
-                            alpha_linearity = 0.05, # change to just alpha?
-                            bp) {
-
+                            alpha_linearity = 0.05 # change to just alpha?
+                            ) {
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
@@ -70,17 +72,17 @@ d2_poly_reg_maxima <- function(.data,
     # lm_poly <- lm_list[[3]] # keep for testing, delete later
     # this definitely breaks if the best-fit polynomial order is too low
     poly_expr <- expr_from_coefs(lm_poly$coefficients)
-    deriv1 <- Deriv(poly_expr, x = "x", nderiv = 1) # slope
-    deriv2 <- Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
-    deriv3 <- Deriv(poly_expr, x = "x", nderiv = 3) # jerk
-    deriv4 <- Deriv(poly_expr, x = "x", nderiv = 4) # snap. This kinda feels hacky and dumb at this point
+    deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
+    deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
+    deriv3 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 3) # jerk
+    deriv4 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 4) # snap. This kinda feels hacky and dumb at this point
 
     # find x-values of roots
     roots_deriv3 <- deriv3 %>%
-        y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
-        yac_str() %>%
-        str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
-        map(as.numeric) %>%
+        Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
+        Ryacas::yac_str() %>%
+        stringr::str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
+        purrr::map(as.numeric) %>%
         unlist() %>%
         rev() %>% # reverse order for polyroot()
         polyroot() %>%
@@ -118,7 +120,7 @@ d2_poly_reg_maxima <- function(.data,
 
     # get values at threshold
     bp_dat <- .data[threshold_idx,] %>%
-        mutate(bp = bp,
+        dplyr::mutate(bp = bp,
                algorithm = "d2_poly_reg_maxima",
                x_var = .x,
                y_var = .y,
@@ -127,7 +129,7 @@ d2_poly_reg_maxima <- function(.data,
                # f_stat = f_stat,
                # p_val_f = pf_two,
         ) %>%
-        relocate(bp, algorithm, x_var, y_var,
+        dplyr::relocate(bp, algorithm, x_var, y_var,
                  # determinant_bp,
                  # pct_slope_change, f_stat, p_val_f
         )
@@ -140,7 +142,7 @@ loop_poly_reg <- function(.data, .x, .y,
     # browser()
     # if the user specifies a degree, find that and be done with it
     if (!is.null(degree)) {
-        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
+        lm_poly <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
                                              raw = TRUE), data = .data)
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
@@ -151,19 +153,19 @@ loop_poly_reg <- function(.data, .x, .y,
         # if the derivative expressions are working
         # starting with degree = 5 b/c that's the minimum I've seen in
         # other papers that seemed to use polynomial fits
-        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
+        lm_poly <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
                                              raw = TRUE), data = .data)
         lm_list <- append(lm_list, list(lm_poly))
 
         cont <- TRUE
         i <- 1 # start at 2 b/c we already made linear (degree = 1) model
         while(cont == TRUE) {
-            lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
+            lm_poly <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
                                                  degree = degree + i,
                                                  raw = TRUE),
                           data = .data)
             lm_list <- append(lm_list, list(lm_poly))
-            lrt <- anova(lm_list[[i]], lm_list[[i+1]])
+            lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
             if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
                 cont = FALSE
                 lm_poly <- lm_list[[i]] # take the previous model
