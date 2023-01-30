@@ -173,7 +173,7 @@ avg_exercise_test.time <- function(.data,
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
         char_cols <- unique(char_cols)
         # delete char col b/c they don't play well with rollapply(). Add back later
-        .data <- .data[,-which(colnames(x) %in% names(char_cols))]
+        .data <- .data[,-which(colnames(.data) %in% names(char_cols))]
     } else {
         char_cols <- NULL
     }
@@ -242,7 +242,7 @@ avg_exercise_test.digital <- function(.data,
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
         char_cols <- unique(char_cols)
         # delete char col b/c they don't play well with rollapply(). Add back later
-        .data <- .data[,-which(colnames(x) %in% names(char_cols))]
+        .data <- .data[,-which(colnames(.data) %in% names(char_cols))]
     } else {
         char_cols <- NULL
     }
