@@ -15,7 +15,7 @@ Description: The tools in this package will help you load your data,
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.3
 Imports: 
     broom,
     dplyr,

@@ -38,9 +38,6 @@ dmax(
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 }
-\value{
-
-}
 \description{
 As decribed by Cheng (1992) with modifications for brevity, a third order curvilinear regressions is first calculated. Pilot work demonstrated that a third order regression produced higher correlations coefficients than first and second order regressions, with the use of greater than a third order regression not significantly increasing the correlation coefficient. Next, a straight line formed by the two end points in each curve was drawn. Then a formula for computing the distance from point to line was used to calculate the distance from each point on the curve to the straight line. The point yielding the maximal distance (Dmax) derived from the computation was taken as the threshold.
 }
