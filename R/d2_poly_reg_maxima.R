@@ -1,4 +1,4 @@
-#' Find a breakpoint using the derivative inflection point.
+#' Find a breakpoint using the maxima in the 2nd derivative
 #'
 #' Use polynomial regression of increasing order to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
 #'
@@ -15,7 +15,6 @@
 #'
 #' To implement a method similar to Leo et al. (2017), this function actually takes four derivatives of the best-fit polynomial. We find the roots of the the third derivative to find the real parts of the local maxima and minima. For each of those real maxima and minima, we use the fourth derivative to determine if they represent maxima (negative sign), or minima (positive sign). The function then finds the highest of any real local maxima. The values associated with the closest data point to highest real local maxima are taken as the threshold.
 #'
-#'
 #' @param .data Gas exchange data frame or tibble.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
@@ -25,7 +24,7 @@
 #' @param ve
 #' @param time
 #' @param alpha_linearity
-#' @param bp
+#' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #'
 #' @return
@@ -41,7 +40,7 @@
 #' @examples
 #' # TODO write an example
 #'
-poly_regression <- function(.data,
+d2_poly_reg_maxima <- function(.data,
                             .x,
                             .y,
                             degree = NULL,
@@ -50,10 +49,7 @@ poly_regression <- function(.data,
                             ve = "ve",
                             time = "time",
                             alpha_linearity = 0.05, # change to just alpha?
-                            bp,
-                            pos_change = TRUE) {
-    # this function fits a polynomial regression to the data by increasing
-    # the degree until the best fit is found
+                            bp) {
 
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -61,9 +57,8 @@ poly_regression <- function(.data,
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 
-
-    lm_poly <- loop_poly_reg(.data = df_avg, .x = .x, .y = .y,
-                             degree = NULL,
+    lm_poly <- loop_poly_reg(.data = .data, .x = .x, .y = .y,
+                             degree = degree,
                              alpha_linearity = alpha_linearity)
 
     # TODO what about if the best model is linear? Then this method probably
@@ -73,32 +68,58 @@ poly_regression <- function(.data,
     # b/c you essentially need to take a third derivative and still have an x term
 
     # lm_poly <- lm_list[[3]] # keep for testing, delete later
+    # this definitely breaks if the best-fit polynomial order is too low
     poly_expr <- expr_from_coefs(lm_poly$coefficients)
     deriv1 <- Deriv(poly_expr, x = "x", nderiv = 1) # slope
     deriv2 <- Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
     deriv3 <- Deriv(poly_expr, x = "x", nderiv = 3) # jerk
     deriv4 <- Deriv(poly_expr, x = "x", nderiv = 4) # snap. This kinda feels hacky and dumb at this point
 
+    # find x-values of roots
     roots_deriv3 <- deriv3 %>%
         y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
         yac_str() %>%
-        str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?\\d?") %>% # extract coefficients
+        str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
         map(as.numeric) %>%
         unlist() %>%
-        rev() %>%
+        rev() %>% # reverse order for polyroot()
         polyroot() %>%
-        find_real_roots()
+        find_real()
 
-    local_maxima <- roots_deriv3[eval(deriv4, envir = list(x = roots_deriv3)) < 0]
+    # filter by roots within range of x values
+    roots_deriv3 <- roots_deriv3[roots_deriv3 >= min(.data[[.x]]) &
+                                     roots_deriv3 <= max(.data[[.x]])]
+
+    # use 4th derivative to find which are maxima (y @ roots < 0)
+    local_maxima_x <- roots_deriv3[eval(deriv4,
+                                        envir = list(x = roots_deriv3)) < 0]
+    local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
+
     # you would generally expect the threshold to be the highest of any possible
-    # local maxima
-    # TODO local maxima need to be within the range of valid x values, too
-    threshold_idx <- which.min(abs(.data[[.x]] - max(local_maxima)))
+    # local maxima (at least for VT2)
+
+    # select higher of the two local maxima b/c we expect just one large change
+    # I feel like this goes against my visual detection
+    # according to Cross et al. (2012), one should select the lower of any two
+    # maxima for VT1 and the higher of any two maxima for VT2
+    if(length(local_maxima_x) > 1) {
+        if(bp == "vt1") {
+            min_local_maxima_x <- local_maxima_x[which.min(local_maxima_y)]
+            threshold_idx <-
+                which.min(abs(.data[[.x]] - min_local_maxima_x))
+        }
+        if(bp == "vt2") {
+            max_local_maxima_x <- local_maxima_x[which.max(local_maxima_y)]
+            threshold_idx <- which.min(abs(.data[[.x]] - max_local_maxima_x))
+        }
+    } else {
+        threshold_idx <- which.min(abs(.data[[.x]] - local_maxima_x))
+    }
 
     # get values at threshold
     bp_dat <- .data[threshold_idx,] %>%
         mutate(bp = bp,
-               algorithm = "poly_reg",
+               algorithm = "d2_poly_reg_maxima",
                x_var = .x,
                y_var = .y,
                # determinant_bp = determinant_bp,
@@ -113,58 +134,43 @@ poly_regression <- function(.data,
     bp_dat
 }
 
+#' @keywords internal
 loop_poly_reg <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
     # browser()
-    # we also need a vector to hold likelihood ratio test results
-
     # if the user specifies a degree, find that and be done with it
     if (!is.null(degree)) {
-        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree),
-                      data = .data)
+        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
+                                             raw = TRUE), data = .data)
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
     } else {
+        degree = 5 # start at degree = 5 so you can take 4 derivatives
         lm_list = vector(mode = "list", length = 0) # hold lm data
         # keep raw = TRUE for now b/c it's way easier for me to test
         # if the derivative expressions are working
-        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
-                                             degree = 1, raw = TRUE),
-                      data = .data)
+        # starting with degree = 5 b/c that's the minimum I've seen in
+        # other papers that seemed to use polynomial fits
+        lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
+                                             raw = TRUE), data = .data)
         lm_list <- append(lm_list, list(lm_poly))
 
         cont <- TRUE
-        i <- 2 # start at 2 b/c we already made linear (degree = 1) model
+        i <- 1 # start at 2 b/c we already made linear (degree = 1) model
         while(cont == TRUE) {
             lm_poly <- lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
-                                                 degree = i,
+                                                 degree = degree + i,
                                                  raw = TRUE),
                           data = .data)
             lm_list <- append(lm_list, list(lm_poly))
-            lrt <- anova(lm_list[[i-1]], lm_list[[i]])
+            lrt <- anova(lm_list[[i]], lm_list[[i+1]])
             if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
                 cont = FALSE
-                lm_poly <- lm_list[[i-1]] # take the previous model
+                lm_poly <- lm_list[[i]] # take the previous model
             }
             i <- i + 1
         }
     }
 
     lm_poly
-}
-
-expr_from_coefs <- function(poly_coefs, expr = TRUE) {
-    string_expr <- paste("x", seq_along(poly_coefs) - 1, sep = "^")
-    string_expr <- paste(string_expr, poly_coefs, sep = " * ")
-    string_expr <- paste(string_expr, collapse = " + ")
-    if (expr) {
-        return(parse(text = string_expr))
-    } else {
-        return(string_expr)
-    }
-}
-
-find_real_roots <- function(v, threshold = 1e-6) {
-    # find real roots by fixing rounding errors
-    Re(v)[abs(Im(v)) < threshold]
 }
