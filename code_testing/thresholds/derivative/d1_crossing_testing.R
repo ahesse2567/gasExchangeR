@@ -15,6 +15,13 @@ library(devtools)
 
 # d1 crossing is most similar to Wisén and Wohlfart (2004)
 # this is a VT1 method ONLY
+# but, could this be applied to VE vs. VCO2? probably not b/c they aren't on the same scale
+# but what if we scaled them?
+# so I ran through this and it almost seemed like it worked, but the very end
+# of the VCO2 vs. time curve saw a rapid drop in it's slope after a sudden rise
+# towards the end. The previous final crossing seemed to come a little to early, however.
+# Also, just getting them to the same units (mL/min), doesn't fix that either
+# because their scales are so different
 
 df_colnames <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
                     n_max = 0) %>%
@@ -41,6 +48,28 @@ ggplot(data = df_avg, aes(x = time, y = vo2)) +
     geom_line(aes(y = vco2), alpha = 0.5) +
     theme_minimal()
 
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = ve_vo2), alpha = 0.5, color = "purple") +
+    geom_point(aes(y = ve_vco2), alpha = 0.5, color = "green") +
+    theme_minimal()
+
+vt1_dat <- d1_crossing(df_avg, .x = "time", .y = "vo2", bp = "vt1")
+vt1_dat
+
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = ve_vo2), alpha = 0.5, color = "purple") +
+    geom_point(aes(y = ve_vco2), alpha = 0.5, color = "green") +
+    geom_vline(xintercept = vt1_dat$time, color = "purple") +
+    theme_minimal()
+
+est_speed_vt1 <- df_avg %>%
+    slice(which.min(abs(df_avg$time - (vt1_dat$time - 30)))) %>%
+    select(speed) %>%
+    pull()
+
+pace_per_mi <- est_speed_vt1^-1*60
+# ~ 6:40 min/mi
+
 # find 1st derivative of vo2 vs. time
 # find 1st derivative of vco2 vs. time
 # find where they cross
@@ -58,7 +87,7 @@ loop_poly_reg <- function(.data, .x, .y,
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
     } else {
-        degree = 1 # with this method, I don't think we have to start at a higher degree
+        degree = 2 # with this method, I don't think we have to start at a higher degree
         lm_list = vector(mode = "list", length = 0) # hold lm data
         # keep raw = TRUE for now b/c it's way easier for me to test
         # if the derivative expressions are working
@@ -135,12 +164,12 @@ d1_crossing <- function(.data,
         dplyr::arrange(.data[[.x]], .data[[time]])
 
     # best-fit polynomial for vo2
-    lm_poly_vo2 <- loop_poly_reg(.data = .data, .x = .x, .y = vo2,
+    lm_poly_vo2 <- loop_poly_reg(.data = .data, .x = time, .y = vo2,
                              degree = degree,
                              alpha_linearity = alpha_linearity)
 
     # best-fit polynomial for vco2
-    lm_poly_vco2 <- loop_poly_reg(.data = .data, .x = .x, .y = vco2,
+    lm_poly_vco2 <- loop_poly_reg(.data = .data, .x = time, .y = vco2,
                                  degree = degree,
                                  alpha_linearity = alpha_linearity)
     # 1st derivative for vo2
@@ -171,6 +200,10 @@ d1_crossing <- function(.data,
     roots <- rootSolve::uniroot.all(function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
                            interval = c(min(.data[[.x]]), max(.data[[.x]])))
 
+    # filter by roots within range of x values
+    roots <- roots[roots >= min(.data[[.x]]) &
+                       roots <= max(.data[[.x]])]
+
     # filter by which roots have a negative derivative. This indicates that
     # co2 is rising above o2. Finding max finds the last time this occurs.
     final_crossing <- roots[eval(deriv_diff_deriv1, envir = list(x = roots)) < 0] %>%
@@ -196,18 +229,22 @@ d1_crossing <- function(.data,
     bp_dat # return breakpoint data
 }
 
-.data <- df_avg
 .x <- "time"
-.y <- "vo2"
-vo2 <- "vo2"
-vco2 <- "vco2"
+.y <- "ve_ml"
+vo2 <- "vco2"
+vco2 <- "ve_ml"
 time <- "time"
 degree <- NULL
 alpha_linearity = 0.05
-bp = "vt1"
+bp = "vt2"
 
-bp_dat <- d1_crossing(.data = df_avg, .x = "time", .y = "vo2", vo2 = "vo2",
-            vco2 = "vco2", time = "time", bp = "vt1")
+.data <- df_avg %>%
+    mutate(ve_ml = ve * 1000)
+
+bp_dat <- d1_crossing(.data = df_avg, .x = "time", .y = "ve",
+                      vo2 = "vco2", vco2 = "ve_ml", time = "time", bp = "vt1")
+
+bp_dat
 
 which.min(abs(.data[["time"]] - bp_dat$time))
 
@@ -230,6 +267,10 @@ plot_data <- .data %>%
                                envir = list(x = .data[[.x]])),
     )
 plot_data
+
+ggplot(data = .data, aes(x = .data[[time]])) +
+    geom_point(aes(y = .data[[vo2]]), color = "blue") +
+    geom_point(aes(y = .data[[vco2]]), color = "orange")
 
 ggplot(data = .data, aes(x = .data[[.x]])) +
     # geom_point(aes(y = .data[[vo2]]), alpha = 0.5, color = "red")+

@@ -5,6 +5,8 @@ library(broom)
 library(splines)
 library(zoo)
 
+# I think I need to use a 5th derivative smoothing spline a la Sherril et al. (1990)
+
 df_raw <- read_csv("inst/extdata/mar22_140_pre.csv",
                    show_col_types = FALSE)
 

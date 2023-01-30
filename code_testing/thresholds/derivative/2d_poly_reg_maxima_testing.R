@@ -54,32 +54,39 @@ ggplot(data = df_avg, aes(x = vo2, y = vco2)) +
     ggtitle("V-Slope") +
     theme_minimal()
 
-bp_dat <- breakpoint(df_avg,
-           algorithm_vt1 = "v-slope",
-           x_vt1 = "vo2",
-           y_vt1 = "vco2",
-           algorithm_vt2 = "jm",
-           x_vt2 = "vco2",
-           y_vt2 = "ve",
-           vo2 = "vo2")
-bp_dat$bp_dat
+vt2_dat <- d2_poly_reg_maxima(.data = df_avg, .x = "time", .y = "ve_vco2",
+                   bp = "vt2")
 
 ggplot(data = df_avg, aes(x = vco2, y = ve)) +
     geom_point(color = "orange", alpha = 0.5) +
     theme_minimal() +
-    geom_vline(xintercept = bp_dat$bp_dat %>%
-                   filter(bp == "vt2") %>%
-                   select(vco2) %>%
-                   pull())
+    geom_vline(xintercept = vt2_dat$vo2)
+
+vt1_dat <- d2_poly_reg_maxima(.data = df_avg %>%
+                                  filter(time <= vt2_dat$time),
+                              .x ="time", .y = "ve_vo2", bp = "vt1")
+vt1_dat$speed^-1*60
+
+ggplot(data = df_avg, aes(x = vo2, y = vco2)) +
+    geom_point(color = "blue", alpha = 0.5) +
+    scale_x_continuous(limits = c(0, max(df_avg$vco2))) +
+    scale_y_continuous(limits = c(0, max(df_avg$vco2))) +
+    ggtitle("V-Slope") +
+    geom_vline(xintercept = vt1_dat$vo2) +
+    theme_minimal()
+
 
 ggplot(data = df_avg, aes(x = time)) +
     geom_point(aes(y = ve_vo2), color = "purple", alpha = 0.5) +
     geom_line(aes(y = ve_vo2), color = "purple", alpha = 0.5) +
     geom_point(aes(y = ve_vco2), color = "green", alpha = 0.5) +
     geom_line(aes(y = ve_vco2), color = "green", alpha = 0.5) +
-    # geom_vline(xintercept = bp_dat$bp_dat$time) +
+    geom_vline(xintercept = vt2_dat$time, color = "green") +
+    geom_vline(xintercept = vt1_dat$time, color = "purple") +
     theme_minimal() +
     ggtitle("Ventilatory Equivalents")
+
+
 
 loop_poly_reg <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
@@ -130,11 +137,6 @@ expr_from_coefs <- function(poly_coefs, expr = TRUE) {
     } else {
         return(string_expr)
     }
-}
-
-find_real_roots <- function(v, threshold = 1e-6) {
-    # find real roots by fixing rounding errors
-    Re(v)[abs(Im(v)) < threshold]
 }
 
 .x <- "time"
@@ -190,7 +192,7 @@ poly_regression <- function(.data,
         unlist() %>%
         rev() %>% # reverse order for polyroot()
         polyroot() %>%
-        find_real_roots()
+        find_real()
 
     # filter by roots within range of x values
     roots_deriv3 <- roots_deriv3[roots_deriv3 >= min(.data[[.x]]) &
