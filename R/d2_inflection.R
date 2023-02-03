@@ -1,87 +1,43 @@
-library(gasExchangeR)
-library(tidyverse)
-library(janitor)
-library(broom)
-library(Deriv)
-library(Ryacas)
-library(readxl)
-library(devtools)
+#' Second derivative inflection
+#'
+#' Find a breakpoint in ventilatory data based on the 2nd derivative inflection point after Santos et al. (2004). In their paper, they use pulmonary ventilation (VE) vs. VO2 to find the first ventilatory (VT1) / gas exchange threshold (GET) and VE vs. VCO2 to find the respiratory compensation point (RCP) / second ventilatory threshold (VT2). It is generally suitable to also use VE vs. time to find VT2. One can truncate the test and rerun VE vs. time to find VT1.
+#'
+#' @param .data Gas exchange data frame or tibble.
+#' @param .x The x-axis variable.
+#' @param .y the y-axis variable.
+#' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?
+#' @param degree The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.
+#' @param vo2 Name of the \code{vo2} variable
+#' @param vco2 Name of the \code{vco2} variable
+#' @param ve Name of the \code{ve} variable
+#' @param time Name of the \code{time} variable
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 
-# This method is closest to Santos et al. (2004)
-# does this inflection point method only apply to VE vs. VO2 or VE vs. VCO2?
-# in my anecdotal experience analyzing Nick's data, VE vs. Time does not work well
-
-# will we need some sort of curve type argument for derivative methods?
-# e.g., poly, reg spline, smoothing spline?
-
-# note to Anton: inflection points seem like (almost?) always different from
-# maxima. Would that introduce a systematic bias between then?
-
-# Does this (and maybe other derivative functions) need to assess if there aren't any
-# inflection points within the interval, and if there aren't, try a different polynomial
-# regression order?
-
-# TBH this doesn't always seem to work if the polynomial order is different than 5
-
-df_colnames <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
-                         n_max = 0) %>%
-    colnames()
-df_raw <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
-                    col_names = FALSE, skip = 3) %>%
-    set_names(df_colnames)
-
-df_unavg <- df_raw %>%
-    clean_names() %>%
-    rename(time = t) %>%
-    mutate(time = lubridate::minute(time) * 60 + lubridate::second(time)) %>%
-    filter(phase == "EXERCISE") %>%
-    relocate(time, speed, grade) %>%
-    ventilatory_outliers()
-
-df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
-                            time_col = "time", roll_window = 15)
-
-# plot raw VO2 vs. time data
-ggplot(data = df_avg, aes(x = time, y = vo2)) +
-    geom_point(alpha = 0.5, color = "red") +
-    geom_line(alpha = 0.5) +
-    geom_point(aes(y = vco2), alpha = 0.5, color = "blue") +
-    geom_line(aes(y = vco2), alpha = 0.5) +
-    theme_minimal()
-
-ggplot(data = df_avg, aes(x = time, y = vo2_kg)) +
-    geom_point(alpha = 0.5, color = "red") +
-    geom_line(alpha = 0.5) +
-    geom_point(aes(y = ve), alpha = 0.5, color = "orange") +
-    theme_minimal() +
-    ggtitle("Raw Data")
-
-bp_ve_vs_vco2 <- d2_inflection(.data = df_avg, .x = "vco2", .y = "ve", bp = "vt2",
-                               degree = 5)
-bp_ve_vs_time <- d2_inflection(.data = df_avg, .x = "time", .y = "ve", bp = "vt2")
-
-ggplot(data = df_avg, aes(x = vco2, y = ve)) +
-    geom_point(color = "orange", alpha = 0.5) +
-    geom_vline(xintercept = bp_ve_vs_vco2$vco2)
-
-ggplot(data = df_avg, aes(x = time, y = ve_vco2)) +
-    geom_point(color = "green", alpha = 0.5) +
-    geom_vline(xintercept = bp_ve_vs_vco2$time)
-
-
-
-# assuming we're using polynomial functions to make the model for the time being
+#'
+#' @returns A data frame at the threshold, with a few columns added to note the algorithm used.
+#' @export
+#'
+#' @details To mimic the Santos et al. (2004) paper, this fits a 5th-order polynomial regression to the VE vs. VO2 or VCO2 data. Users can set `degree = NULL` to iteratively increase the polynomial if the likelihood ratio test is significant. After establishing the polynomial, we find the real roots of the 2nd derivative within the given range of the `.x` variable to find the inflection points. We then filter by concavity changes that go from up to down because this matches the expected shape of the pulmonary ventilation curves.
+#'
+#' We are unsure how to handle multiple inflection points at this time, but this is unlikely to be an issue if the polynomial degree is kept equal to 5.
+#'
+#' @references
+#' Santos, E. L., & Giannella-Neto, A. (2004). Comparison of computerized methods for detecting the ventilatory thresholds. European journal of applied physiology, 93, 315-324.
+#'
+#' @examples
+#' # TODO write an example
+#'
 d2_inflection <- function(.data,
                           .x,
                           .y,
                           bp,
-                          degree = NULL,
+                          degree = 5,
                           vo2 = "vo2",
                           vco2 = "vco2",
                           ve = "ve",
                           time = "time",
                           alpha_linearity = 0.05) # change to just alpha?
-    {
+{
 
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -97,10 +53,6 @@ d2_inflection <- function(.data,
     deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
     deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
 
-    optimize(f = expr_to_func(deriv1),
-             interval = c(min(.data[[.x]]), max(.data[[.x]])),
-             maximum = TRUE)
-
     # find x-values of roots of second derivative (inflection points)
     inflection_points <- deriv2 %>%
         Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
@@ -112,15 +64,12 @@ d2_inflection <- function(.data,
         polyroot() %>%
         find_real()
 
-    # browser()
-
     # filter by roots within range of x values
     inflection_points <- inflection_points[inflection_points >= min(.data[[.x]]) &
                                                inflection_points <= max(.data[[.x]])]
 
     concavity_chgs <- concavity_changes(poly_expr,
-                                        inflection_points = inflection_points,
-                                        tol = 0.1)
+                                        inflection_points = inflection_points)
     # filter by concave up to concave down
     inflection_points <- inflection_points[concavity_chgs == "up to down"]
 
@@ -148,6 +97,7 @@ d2_inflection <- function(.data,
 
 }
 
+#' @keywords internal
 loop_d2_inflection <- function(.data, .x, .y,
                                degree = NULL, alpha_linearity = 0.05) {
     # if the user specifies a degree, find that and be done with it
@@ -195,71 +145,19 @@ loop_d2_inflection <- function(.data, .x, .y,
     lm_poly
 }
 
+#' Find when a function changes from concave up to concave down or vice versa
+#' @keywords internal
+#' @noRd
+#'
 concavity_changes <- function(f, inflection_points, tol = 0.1) {
     # find second derivative
     f_dd <- Deriv::Deriv(f, x = "x", nderiv = 2)
-    if(is.expression(f_dd)) { # expression to function if needed
+    if (is.expression(f_dd)) { # change expression to function if needed
         f_dd <- expr_to_func(f_dd)
     }
     left_sign <- sign(f_dd(inflection_points - tol))
     right_sign <- sign(f_dd(inflection_points + tol))
     conc_changes <- if_else(left_sign > 0 & right_sign < 0,
                             "up to down", "down to up")
+    conc_changes
 }
-
-
-.x <- "time"
-.y <- "ve"
-time <- "time"
-.data <- df_avg
-# .data <- df_avg[1:threshold_idx,]
-degree <- 4
-alpha_linearity = 0.05
-bp = "vt2"
-
-
-bp_dat <- d2_inflection(.data = df_avg, .x = "time", .y = "ve", bp = "vt2")
-bp_dat
-bp_dat$vo2_kg / max(df_avg$vo2_kg)
-
-
-plot_data <- .data %>%
-    select(all_of(.x)) %>%
-    mutate(y_hat = lm_poly$fitted.values,
-           y_hat_deriv1 = eval(deriv1,
-                               envir = list(x = .data[[.x]])),
-           y_hat_deriv2 = eval(deriv2,
-                               envir = list(x = .data[[.x]])),
-    )
-plot_data
-
-.data %>% # rearrange by x variable. Use time var to break ties.
-    dplyr::arrange(.data[[.x]], .data[[time]]) %>%
-    ggplot(aes(x = .data[[.x]], y = .data[[.y]])) +
-    geom_point(alpha = 0.5, color = "orange") +
-    geom_line(aes(y = lm_poly$fitted.values)) +
-    geom_vline(xintercept = inflection_points, linetype = "dotted") +
-    # geom_line(alpha = 0.5) +
-    # ylim(c(0, 175)) +
-    theme_minimal()
-
-ggplot(data = .data, aes(x = .data[[.x]])) +
-    geom_line(data = plot_data, aes(y = y_hat_deriv1),
-              linetype = "dashed") +
-    geom_line(data = plot_data, aes(y = y_hat_deriv2),
-              linetype = "dotted") +
-    geom_vline(xintercept = inflection_points, linetype = "dotted") +
-    geom_hline(yintercept = 0) +
-    # ylim(c(-0.005, 0.0051)) +
-    theme_minimal()
-
-ggplot(data = df_avg, aes(x = time)) +
-    geom_line(aes(y = ve_vo2), color = "purple") +
-    geom_line(aes(y = ve_vco2), color = "green") +
-    geom_vline(xintercept = inflection_points, linetype = "dotted") +
-    theme_minimal()
-
-ggplot(data = df_avg, aes(x = vco2, y = ve)) +
-    geom_point(color = "orange", alpha = 0.5) +
-    geom_vline(xintercept = bp_dat$vco2) +
-    theme_minimal()
