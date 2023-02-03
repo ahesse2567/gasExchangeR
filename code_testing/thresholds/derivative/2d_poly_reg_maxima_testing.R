@@ -32,10 +32,11 @@ df_unavg <- df_raw %>%
     rename(time = t) %>%
     mutate(time = lubridate::minute(time) * 60 + lubridate::second(time)) %>%
     filter(phase == "EXERCISE") %>%
-    relocate(time, speed, grade)
+    relocate(time, speed, grade) %>%
+    ventilatory_outliers()
 
 df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
-                            time_col = "time", roll_window = 9, roll_trim = 4)
+                            time_col = "time", roll_window = 15)
 
 # plot raw VO2 vs. time data
 ggplot(data = df_avg, aes(x = time, y = vo2)) +
@@ -43,8 +44,7 @@ ggplot(data = df_avg, aes(x = time, y = vo2)) +
     geom_line(alpha = 0.5) +
     geom_point(aes(y = vco2), alpha = 0.5, color = "blue") +
     geom_line(aes(y = vco2), alpha = 0.5) +
-    theme_minimal() +
-    ggtitle("Raw Data")
+    theme_minimal()
 
 
 ggplot(data = df_avg, aes(x = vo2, y = vco2)) +
@@ -61,6 +61,7 @@ ggplot(data = df_avg, aes(x = vco2, y = ve)) +
     geom_point(color = "orange", alpha = 0.5) +
     theme_minimal() +
     geom_vline(xintercept = vt2_dat$vo2)
+
 
 vt1_dat <- d2_poly_reg_maxima(.data = df_avg %>%
                                   filter(time <= vt2_dat$time),

@@ -39,7 +39,7 @@ d2_poly_reg_maxima(
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 }
 \value{
-A slice of the original data frame at the threshold index with a new `algorithm` column.
+A slice of the original data frame at the threshold indexwith a new `algorithm` column.
 }
 \description{
 Use polynomial regression of increasing order to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.

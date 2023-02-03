@@ -14,16 +14,46 @@ find_real <- function(v, threshold = 1e-6) {
 
 #' Create an expression from a vector of polynomial coefficients
 #'
-#' @return an expression
+#' @return An expression
 #' @keywords internal
 #' @noRd
 expr_from_coefs <- function(poly_coefs, expr = TRUE) {
-string_expr <- paste("x", seq_along(poly_coefs) - 1, sep = "^")
-string_expr <- paste(string_expr, poly_coefs, sep = " * ")
-string_expr <- paste(string_expr, collapse = " + ")
-if (expr) {
-    return(parse(text = string_expr))
-} else {
-    return(string_expr)
+    string_expr <- paste("x", seq_along(poly_coefs) - 1, sep = "^")
+    string_expr <- paste(string_expr, poly_coefs, sep = " * ")
+    string_expr <- paste(string_expr, collapse = " + ")
+    if (expr) {
+        return(parse(text = string_expr))
+    } else {
+        return(string_expr)
+    }
 }
+
+#' Find when the slope of a vector changes sign
+#'
+#' @returns A vector of sign change indices
+#' @keywords internal
+#' @noRd
+slope_sign_changes <- function(y, change = "both") {
+    # return the index of sign changes in a vector
+    change <- match.arg(change,
+                        choices = c("both", "pos_to_neg", "neg_to_pos"),
+                        several.ok = FALSE)
+    if(change == "both") {
+        return(which(diff(sign(diff(y))) != 0) + 1)
+    } else if (change == "pos_to_neg") {
+        return(which(diff(sign(diff(y))) < 0) + 1)
+    } else {
+        return(which(diff(sign(diff(y))) > 0) + 1)
+    }
+}
+
+#' Turn a function into an expression if that makes your life easier
+#'
+#' @keywords internal
+#' @noRd
+expr_to_func <- function(expr) {
+    if(is.character(expr)) {
+        expr <- parse(text = expr) # parse() turns a character string into an expression
+    }
+    function(x) {eval(expr, envir = list(x = x))} # return a function
 }

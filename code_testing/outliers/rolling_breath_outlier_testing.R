@@ -28,7 +28,8 @@ df_unavg <- df_raw %>%
     relocate(time, speed, grade)
 
 df_unavg_no_outliers <- df_unavg %>%
-    ventilatory_outliers(exclude_test_val = TRUE, align = "center", sd_lim = 3)
+    ventilatory_outliers(exclude_test_val = TRUE, width = 5,
+                         align = "center", sd_lim = 3)
 
 # df_unavg_no_outliers <- df_unavg %>%
 #     ventilatory_outliers(outlier_cols = "vo2", time = "time",

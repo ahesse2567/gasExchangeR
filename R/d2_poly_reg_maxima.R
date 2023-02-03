@@ -26,9 +26,7 @@
 #' @param time Name of the \code{time} variable
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #'
-#' @returns A slice of the original data frame at the threshold index with a new `algorithm` column.
-#'
-#' @importFrom Deriv Deriv
+#' @returns A slice of the original data frame at the threshold indexwith a new `algorithm` column.
 #'
 #' @export
 #'
@@ -59,7 +57,7 @@ d2_poly_reg_maxima <- function(.data,
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 
-    lm_poly <- loop_poly_reg(.data = .data, .x = .x, .y = .y,
+    lm_poly <- loop_d2_poly_reg_maxima(.data = .data, .x = .x, .y = .y,
                              degree = degree,
                              alpha_linearity = alpha_linearity)
 
@@ -137,7 +135,7 @@ d2_poly_reg_maxima <- function(.data,
 }
 
 #' @keywords internal
-loop_poly_reg <- function(.data, .x, .y,
+loop_d2_poly_reg_maxima <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
     # browser()
     # if the user specifies a degree, find that and be done with it

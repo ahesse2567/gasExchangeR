@@ -158,11 +158,3 @@ loop_poly_reg <- function(.data, .x, .y,
 
     lm_poly
 }
-
-#' @keywords internal
-expr_to_func <- function(expr) {
-    if(is.character(expr)) {
-        expr <- parse(text = expr) # parse() turns a character string into an expression
-    }
-    function(x) {eval(expr, envir = list(x = x))} # return a function
-}
