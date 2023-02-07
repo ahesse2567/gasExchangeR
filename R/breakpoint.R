@@ -18,7 +18,7 @@
 #' @param algorithm_vt2 Algorithm to find VT2/RC
 #' @param x_vt2 \code{x} variable to use to fine VT2/RC/anaerobic threshold
 #' @param y_vt2 \code{y} variable to use to fine VT2/RC/anaerobic threshold
-#' @param bps Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
+#' @param bp Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
 #' @param front_trim_vt1 The number of seconds to remove from the *beginning* of the data frame prior to finding vt1. See `Details` below.
 #' @param front_trim_vt2 The number of seconds to remove from the data prior to finding vt2 Default = `60`.
 #' @param vo2 The name of the vo2 column in \code{.data}
@@ -58,7 +58,7 @@ breakpoint <- function(.data,
                        algorithm_vt2 = NULL,
                        x_vt2 = NULL,
                        y_vt2 = NULL,
-                       bps = c("both", "vt1", "vt2"),
+                       bp = c("both", "vt1", "vt2"),
                        vo2 = "vo2",
                        vco2 = "vco2",
                        ve = "ve",
@@ -66,22 +66,14 @@ breakpoint <- function(.data,
                        front_trim_vt1 = NULL,
                        front_trim_vt2 = NULL,
                        alpha_linearity = 0.05,
-                       truncate = TRUE,
+                       truncate = TRUE, # this may be uncessary for deriv models
                        pos_change = TRUE,
                        ...) {
 
-    bps <- match.arg(bps, several.ok = FALSE)
+    bp <- match.arg(bp, several.ok = FALSE)
+    # fill in NULL values, primarily based on "method" argument
     resolved_inputs <- resolve_inputs(inputs = as.list(environment(), all = TRUE))
-    browser()
-    list2env(resolved_inputs, envir = environment())
-
-    # I feel like I need an argument checking and assigner function. See this link for ideas
-    # https://stackoverflow.com/questions/50688113/r-helper-function-that-checks-arguments-within-an-environment
-    # or this
-    # https://stackoverflow.com/questions/18541254/semi-automating-argument-validation-for-r-functions
-    # https://stackoverflow.com/questions/11885207/get-all-parameters-as-list
-    # https://stackoverflow.com/questions/15891459/get-a-list-of-all-function-parameters-from-inside-the-function
-
+    list2env(resolved_inputs, envir = environment()) # add values from resolved_inputs
 
     # do I need to restrict the options for x_vt1 etc. to "time", "vo2", "vco2"
     # "speed", "watts", etc? That could serve as the general language to define
@@ -89,7 +81,6 @@ breakpoint <- function(.data,
     # tell the function what column name specifically refers to "vo2", "vco2", etc.
     # or, do I just check to make sure the x_vt1 type arguments can be found
     # in the column names?
-
 
     # if a specific method was chosen, a function pre-fills algorithms, .x, .y
     # based on the method so long as .x and .y are not already specified
@@ -99,36 +90,28 @@ breakpoint <- function(.data,
     # decision at RC?
     # V-slope
 
-    algorithm_vt2 <- match.arg(algorithm_vt2,
-                  choices = c("dmax", "dmax_mod", "jm",
-                              "orr", "v-slope", "simplified_v-slope",
-                              "splines"))
+    # algorithm_vt2 <- match.arg(algorithm_vt2,
+    #               choices = c("dmax", "dmax_mod", "jm",
+    #                           "orr", "v-slope", "simplified_v-slope",
+    #                           "splines"))
     # there's some lactate breakpoints that may be worth adding
-    # browser()
-    if(bps == "both" | bps == "vt2") {
-        params = list(.data = .data,
-                      .x = x_vt2,
-                      .y = y_vt2,
-                      vo2 = vo2,
-                      vco2 = vco2,
-                      ve = ve,
-                      time = time,
-                      alpha_linearity = alpha_linearity,
-                      bp = "vt2",
-                      pos_change = pos_change)
+
+    if(bp == "both" | bp == "vt2") {
+        resolved_inputs[["bp"]] <- "vt2"
+        params = append(resolved_inputs, list(.x = x_vt2, .y = y_vt2))
         vt2_out <- switch(algorithm_vt2,
                           "jm" = do.call(what = "jm", args = params),
                           "orr" = do.call(what = "orr", args = params),
                           "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params))
+                          "dmax" = do.call(what = "dmax", args = params),
+                          stop("Invalid `algorithm_vt2` value"))
 
-        if(bps == "vt2") {
+        if(bp == "vt2") {
             return(vt2_out)
         }
 
         # truncate if VT2 is found
-        if(vt2_out$breakpoint_data$p_val_f < alpha_linearity &
-           !is.na(vt2_out$breakpoint_data$p_val_f) & truncate == TRUE) {
+        if(vt2_out$breakpoint_data$determinant_bp & truncate == TRUE) {
             trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
             vt1_df <- .data[1:trunc_idx,]
         } else {
@@ -139,23 +122,17 @@ breakpoint <- function(.data,
         vt1_df <- .data
     }
 
-    if(bps == "both" | bps == "vt1") {
-        params = list(.data = vt1_df,
-                      .x = x_vt1,
-                      .y = y_vt1,
-                      vo2 = vo2,
-                      vco2 = vco2,
-                      ve = ve,
-                      time = time,
-                      alpha_linearity = alpha_linearity,
-                      bp = "vt1",
-                      pos_change = TRUE)
+    if(bp == "both" | bp == "vt1") {
+        params[[".data"]] <- vt1_df
+        params[[".x"]] <- x_vt1
+        params[[".y"]] <- y_vt1
         vt1_out <- switch(algorithm_vt1,
                           "jm" = do.call(what = "jm", args = params),
                           "orr" = do.call(what = "orr", args = params),
                           "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params))
-        if(bps == "vt1") {
+                          "dmax" = do.call(what = "dmax", args = params),
+                          stop("Invalid `algorithm_vt1` value"))
+        if(bp == "vt1") {
             return(vt1_out)
         }
     }
@@ -166,149 +143,4 @@ breakpoint <- function(.data,
                 vt1_dat = vt1_out,
                 vt2_dat = vt2_out)
     out
-}
-
-#' Check if user entered valid input, and assign function variables accordingly
-#'
-#' @keywords internal
-#' @noRd
-resolve_inputs <- function(inputs = c(as.list(environment(), all = TRUE))) {
-    # check that the user input enough information to proceed
-
-    # add inputs to local environment so I don't need to type inputs$xxx
-    list2env(inputs, envir = environment())
-    # Users need to input a minimum combination of methods and algorithms to continue
-    stopifnot(!missing(.data),
-              !all(is.null(method),
-                   is.null(algorithm_vt1),
-                   is.null(x_vt1),
-                   is.null(y_vt1)),
-              !all(is.null(method),
-                   is.null(algorithm_vt2),
-                   is.null(x_vt2),
-                   is.null(y_vt2))
-              )
-
-    # set front_trim_vt2 according to algorithm if use did not specify a method?
-
-    if(!is.null(method)) {
-        updated_inputs <- set_vars_by_method(inputs = inputs)
-    }
-
-}
-
-#' Set x-y variables and algorithms according to user-specified methods
-#'
-#' @keywords internal
-#' @noRd
-set_vars_by_method <- function(inputs = c(as.list(environment(), all = TRUE))) {
-    # browser()
-    updated_inputs <- switch(inputs[[ "method"]],
-                             "v-slope" = do.call(set_vars_v_slope,
-                                                 args = list(inputs)),
-                             "excess_co2" = do.call(set_vars_excess_co2,
-                                                    args = list(inputs)),
-                             "vent_eqs" = do.call(set_vars_vent_eqs,
-                                                  args = list(inputs)))
-    # future methods :"orr", "v-slope_simple"
-    updated_inputs
-}
-
-
-#' Set x-y variables and algorithms according to the v-slope method (Beaver et al., 1986)
-#'
-#' @keywords internal
-#' @noRd
-set_vars_v_slope <- function(inputs = c(as.list(environment(), all = TRUE))) {
-    list2env(inputs, envir = environment())
-    if(is.null(algorithm_vt1)) algorithm_vt1 <- "v-slope"
-    if(is.null(x_vt1)) x_vt1 <- vo2
-    if(is.null(y_vt1)) y_vt1 <- vco2
-    if(is.null(algorithm_vt2)) algorithm_vt2 <- "jm" # TODO change this to the original V-slope 15% change method
-    if(is.null(x_vt2)) x_vt2 <- vco2
-    if(is.null(y_vt2)) y_vt2 <- ve
-    if(is.null(front_trim_vt1)) front_trim_vt1 <- 60
-    if(is.null(front_trim_vt2)) front_trim_vt2 <- 60
-
-    # check if values match the original V-slope method
-    if(algorithm_vt1 != "v-slope") warning("method = 'v-slope' but algorithm_vt1 is NOT set to v-slope")
-    if(x_vt1 != vo2) warning("method = 'v-slope' but x variable of V-slope graph (VCO2 vs. VO2) is NOT set to vo2 variable")
-    if(y_vt1 != vco2) warning("method = 'v-slope' but y variable of V-slope graph (VCO2 vs. VO2) is NOT set to vco2 variable")
-    # if(algorithm_vt2 != "v-slope") warning("method = 'v-slope' but algorithm_vt1 is NOT set to v-slope") # TODO eventually change to 15% change method
-    if(x_vt2 != vco2) warning("method = 'v-slope' but x variable of respiratory compensation point graph (VE vs. VCO2) is NOT set to vco2 variable")
-    if(y_vt2 != ve) warning("method = 'v-slope' but y variable of respiratory compensation point graph (VE vs. VCO2) is NOT set to ve variable")
-    if(front_trim_vt1 < 60) warning("method = 'v-slope' but front_trim_vt1 < 60 seconds from the beginning of the test before applying algorithms")
-    if(front_trim_vt2 < 60) warning("method = 'v-slope' but front_trim_vt2 < 60 seconds from the beginning of the test before applying algorithms")
-
-    rm("inputs") # remove old inputs
-    return(c(as.list(environment(), all = TRUE))) # return new inputs
-}
-
-
-#' Set x-y variables and algorithms according to the Excess CO2 method (Gaskill et al. 2001)
-#'
-#' @keywords internal
-#' @noRd
-set_vars_excess_co2 <- function(inputs = c(as.list(environment(),
-                                                   all = TRUE))) {
-    list2env(inputs, envir = environment())
-    if(is.null(algorithm_vt1)) stop("The excess CO2 method must include a user-specified `algorithm_vt1`")
-    if(any(is.null(algorithm_vt2),
-           is.null(x_vt2),
-           is.null(y_vt2)) & bps != "vt1") {
-        stop("The Excess CO2 method only applies to VT1. Therefore, users must supply `algorithm_vt2`, `x_vt1`, and `y_vt2.`")
-    }
-    # assign null variables
-    if(is.null(x_vt1)) x_vt1 <- time
-    if(is.null(y_vt1)) {
-        .data <- .data %>%
-            dplyr::mutate(excess_co2 = .data[[vco2]]^2 /
-                              .data[[vo2]] - .data[[vco2]])
-        y_vt1 <- "excess_co2"
-    }
-    if(is.null(front_trim_vt1)) front_trim_vt1 <- 60
-
-    # check if vco2 and vo2 are both in the same absolute units
-    if(mean(.data[[vco2]] / .data[[vo2]]) > 2) {
-        warning("VO2 and VCO2 columns are unlikely to both be in the same absolute units\nCheck if VO2 column indicated in arguments is absolute and that its units match VCO2")
-    }
-
-    # check for appropriate x_vt1 variables
-    if(x_vt1 != time & x_vt1 != vo2) {
-        warning("`x_vt1` is not set to an appropriate value for the excess co2 method. Appropriate x_vt1 values are time and VO2.")
-    }
-    if(front_trim_vt1 < 60) warning("method = 'excess_co2' but front_trim_vt1 < 60 seconds from the beginning of the test before applying algorithms")
-
-    rm("inputs") # remove old inputs
-    return(c(as.list(environment(), all = TRUE))) # return new inputs
-}
-
-set_vars_excess_co2 <- function(inputs = c(as.list(environment(),
-                                                   all = TRUE))) {
-    browser()
-    list2env(inputs, envir = environment())
-    # check for algorithms
-    if(is.null(algorithm_vt1)) stop("The ventilatory equivalents (`vent_eqs`) method must include a user-specified `algorithm_vt1`")
-    if(is.null(algorithm_vt2)) stop("The ventilatory equivalents (`vent_eqs`) method must include a user-specified `algorithm_vt2`")
-    # fill null values
-    if(is.null(x_vt1)) x_vt1 <- time
-    if(is.null(y_vt1)) {
-        .data <- .data %>%
-            dplyr::mutate(ve_vo2 = .data[[ve]] / .data[[vo2]] * 1000)
-        y_vt1 <- "ve_vo2"
-    }
-    if(is.null(x_vt2)) x_vt2 <- time
-    if(is.null(y_vt2)) {
-        .data <- .data %>%
-            dplyr::mutate(ve_vo2 = .data[[ve]] / .data[[vco2]] * 1000)
-        y_vt2 <- "ve_vco2"
-    }
-
-    if(x_vt1 != time & x_vt1 != vo2) warning("`x_vt1` is not set to an appropriate value for the ventilatory equivalents (`vent_eqs`). Appropriate values are time and VO2.")
-    if(mean(.data[[y_vt1]]) > 250 | mean(.data[[y_vt2]]) > 250) {
-        warning("Abnormally high values in y variables: is minute ventilation in L/min and VO2 and VCO2 both in mL/min?")
-    }
-
-    rm("inputs") # remove old inputs
-    return(c(as.list(environment(), all = TRUE))) # return new inputs
 }

@@ -13,7 +13,7 @@ breakpoint(
   algorithm_vt2 = NULL,
   x_vt2 = NULL,
   y_vt2 = NULL,
-  bps = c("both", "vt1", "vt2"),
+  bp = c("both", "vt1", "vt2"),
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -43,7 +43,7 @@ breakpoint(
 
 \item{y_vt2}{\code{y} variable to use to fine VT2/RC/anaerobic threshold}
 
-\item{bps}{Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.}
+\item{bp}{Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
