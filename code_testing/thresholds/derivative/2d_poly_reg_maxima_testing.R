@@ -1,7 +1,7 @@
 library(gasExchangeR)
 library(devtools)
 library(tidyverse)
-# library(devtools)
+library(devtools)
 library(janitor)
 library(broom)
 library(Deriv)
@@ -45,7 +45,6 @@ ggplot(data = df_avg, aes(x = time, y = vo2)) +
     geom_point(aes(y = vco2), alpha = 0.5, color = "blue") +
     geom_line(aes(y = vco2), alpha = 0.5) +
     theme_minimal()
-
 
 ggplot(data = df_avg, aes(x = vo2, y = vco2)) +
     geom_point(color = "blue", alpha = 0.5) +
@@ -127,17 +126,6 @@ loop_poly_reg <- function(.data, .x, .y,
     }
 
     lm_poly
-}
-
-expr_from_coefs <- function(poly_coefs, expr = TRUE) {
-    string_expr <- paste("x", seq_along(poly_coefs) - 1, sep = "^")
-    string_expr <- paste(string_expr, poly_coefs, sep = " * ")
-    string_expr <- paste(string_expr, collapse = " + ")
-    if (expr) {
-        return(parse(text = string_expr))
-    } else {
-        return(string_expr)
-    }
 }
 
 .x <- "time"
