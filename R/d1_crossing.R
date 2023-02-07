@@ -45,12 +45,12 @@ d1_crossing <- function(.data,
         dplyr::arrange(.data[[.x]], .data[[time]])
 
     # best-fit polynomial for vo2
-    lm_poly_vo2 <- loop_poly_reg(.data = .data, .x = time, .y = vo2,
+    lm_poly_vo2 <- loop_poly_d1_crossing(.data = .data, .x = time, .y = vo2,
                                  degree = degree,
                                  alpha_linearity = alpha_linearity)
 
     # best-fit polynomial for vco2
-    lm_poly_vco2 <- loop_poly_reg(.data = .data, .x = time, .y = vco2,
+    lm_poly_vco2 <- loop_poly_d1_crossing(.data = .data, .x = time, .y = vco2,
                                   degree = degree,
                                   alpha_linearity = alpha_linearity)
     # 1st derivative for vo2
@@ -111,7 +111,7 @@ d1_crossing <- function(.data,
 }
 
 #' @keywords internal
-loop_poly_reg <- function(.data, .x, .y,
+loop_poly_d1_crossing <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
     # browser()
     # if the user specifies a degree, find that and be done with it
