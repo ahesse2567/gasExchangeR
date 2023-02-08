@@ -5,7 +5,7 @@
 #' @param pre_ex_intensity Intensity of 'pre-exercise' data.
 #' @param post_ex_intensity Intensity that denotes the test has ended or entered the final recovery phase.
 #'
-#' @return
+#' @returns A data frame or tibble.
 #' @export
 #'
 #' @examples

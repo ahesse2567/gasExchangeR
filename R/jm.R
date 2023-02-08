@@ -40,7 +40,7 @@ jm <- function(.data,
 
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]]) %>%
-        filter(.data[[time]] >= min(.data[[time]] + front_trim))
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     ss <- loop_jm(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)

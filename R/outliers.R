@@ -88,11 +88,11 @@ ventilatory_outliers <- function(.data,
         # lead or lag if exclude_test_val == TRUE with alignment consideration
         if (exclude_test_val & align == "right") {
             # compares current to preceding breaths
-            outlier_idx <- copy_df[[outlier_cols]] < lag(lower_lim) |
+            outlier_idx <- copy_df[[outlier_cols]] < dplyr::lag(lower_lim) |
                 copy_df[[outlier_cols]] > lag(upper_lim)
         } else if (exclude_test_val & align == "left") {
             # compares against subsequent breaths...I can't really think of why but I guess you can
-            outlier_idx <- copy_df[[outlier_cols]] < lead(lower_lim) | copy_df[[outlier_cols]] > upper_lim
+            outlier_idx <- copy_df[[outlier_cols]] < dplyr::lead(lower_lim) | copy_df[[outlier_cols]] > upper_lim
         } else { # no lead or lag necessary.
             outlier_idx <- copy_df[[outlier_cols]] < lower_lim |
                 copy_df[[outlier_cols]] > upper_lim
@@ -142,7 +142,7 @@ ventilatory_outliers <- function(.data,
     }
 
     # check which keys are still in the original .data
-    outliers <- if_else(.data$key %in% copy_df$key, FALSE, TRUE)
+    outliers <- dplyr::if_else(.data$key %in% copy_df$key, FALSE, TRUE)
     .data <- .data %>%
         dplyr::mutate(outlier = outliers)
 

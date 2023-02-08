@@ -104,7 +104,7 @@ loop_d2_inflection <- function(.data, .x, .y,
     if (!is.null(degree)) {
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            as.formula() %>%
+            stats::as.formula() %>%
             stats::lm(data = .data)
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
@@ -120,7 +120,7 @@ loop_d2_inflection <- function(.data, .x, .y,
 
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            as.formula() %>%
+            stats::as.formula() %>%
             stats::lm(data = .data)
 
         lm_list <- append(lm_list, list(lm_poly))
@@ -129,8 +129,9 @@ loop_d2_inflection <- function(.data, .x, .y,
         i <- 1 # start at 2 b/c we already made linear (degree = 1) model
         while(cont == TRUE) {
             lm_poly <- paste0(.y, " ~ ", "1 + ",
-                              "poly(", .x, ", degree = ", degree + i, ", raw = TRUE)") %>%
-                as.formula() %>%
+                              "poly(", .x, ", degree = ",
+                              degree + i, ", raw = TRUE)") %>%
+                stats::as.formula() %>%
                 stats::lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
             lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
@@ -157,7 +158,7 @@ concavity_changes <- function(f, inflection_points, tol = 0.1) {
     }
     left_sign <- sign(f_dd(inflection_points - tol))
     right_sign <- sign(f_dd(inflection_points + tol))
-    conc_changes <- if_else(left_sign > 0 & right_sign < 0,
+    conc_changes <- dplyr::if_else(left_sign > 0 & right_sign < 0,
                             "up to down", "down to up")
     conc_changes
 }

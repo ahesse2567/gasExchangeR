@@ -54,7 +54,7 @@ v_slope <- function(.data,
 
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]]) %>%
-        filter(.data[[time]] >= min(.data[[time]] + front_trim))
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     dist_MSE_ratio <- loop_v_slope(.data = .data, .x = .x, .y = .y)
     slope_change <- 0
