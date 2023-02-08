@@ -57,3 +57,11 @@ expr_to_func <- function(expr) {
     }
     function(x) {eval(expr, envir = list(x = x))} # return a function
 }
+
+#' Normalize numeric values between 0 and 1
+#'
+#' @keywords internal
+#' @noRd
+normalize01 <- function(x, ...) {
+    return((x- min(x)) /(max(x)-min(x)))
+}
