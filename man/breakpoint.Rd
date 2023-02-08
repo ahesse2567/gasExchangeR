@@ -13,12 +13,14 @@ breakpoint(
   algorithm_vt2 = NULL,
   x_vt2 = NULL,
   y_vt2 = NULL,
-  alpha_linearity = 0.05,
+  bp = c("both", "vt1", "vt2"),
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
-  bps = "both",
+  front_trim_vt1 = NULL,
+  front_trim_vt2 = NULL,
+  alpha_linearity = 0.05,
   truncate = TRUE,
   pos_change = TRUE,
   ...
@@ -27,7 +29,7 @@ breakpoint(
 \arguments{
 \item{.data}{Gas exchange data}
 
-\item{method}{Specify \code{excess_co2}, \code{v-slope}, or \code{v-slope_simple} and this fills in the most common variables used for these methods for those not already specified.}
+\item{method}{Specify \code{excess_co2}, \code{v-slope}, or \code{vent_eqs} and this fills in the most common variables used for these methods for those not already specified. The \code{orr} and \code{v-slope_simple} methods will be added in the future.}
 
 \item{algorithm_vt1}{Algorithm to find VT1/GET}
 
@@ -41,7 +43,7 @@ breakpoint(
 
 \item{y_vt2}{\code{y} variable to use to fine VT2/RC/anaerobic threshold}
 
-\item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+\item{bp}{Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
@@ -51,11 +53,15 @@ breakpoint(
 
 \item{time}{The name of the time column in \code{.data}}
 
-\item{bps}{Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.}
+\item{front_trim_vt1}{The number of seconds to remove from the \emph{beginning} of the data frame prior to finding vt1. See \code{Details} below.}
 
-\item{truncate}{By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.}
+\item{front_trim_vt2}{The number of seconds to remove from the data prior to finding vt2 Default = \code{60}.}
 
-\item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+\item{alpha_linearity}{Cutoff value to determine if a piecewise model significantly reduces the residual sums of squares more than a simple linear regression.}
+
+\item{truncate}{By default, this function truncates the data frame at VT2 prior to finding VT1. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.}
+
+\item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
 \item{...}{Arguments to pass to functions internal to \code{breakpoint()}}
 }
@@ -73,15 +79,17 @@ Breakpoint allows the user to specify particular x-y relationships, algorithms, 
 }
 }
 \details{
-There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for \code{x_vt1}, and 'vco2' for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.
+There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, \code{vo2} for \code{x_vt1}, and \code{vco2} for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.
 
 Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{x}, and \code{y}.
 
 This function uses the excess CO2 formula as described by Gaskill et al. (2001).
+
+For some relationships, previous research (Beaver et al., 1986) and other gas exchange analysis programs (Epistemic Mindworks, 2003) recommend removing time at the beginning of the test due to differences in the time constants of VO2 and VCO2 due to the "capacitive effects of changing tissue CO2 stores..." that "...distorts the VCO2 vs. VO2 curve" (Beaver et al., 1986). This function will automatically set \code{front_trim_vt1} to \code{60} seconds if the VT1 variables are VCO2 vs. VO2 or if the algorithm is a piecewise function. This will similarly set \code{front_trim_vt2} to 60 seconds if the VT2 variables are VE vs. VCO2, or if the algorithm is a piecewise function. The piecewise functions include \code{jm}, \code{orr}, \code{v-slope}, and \code{spline_bp}.
 }
 \section{Warning}{
 
-It is strongly advised the user selects \emph{absolute VO2 of the same units as VCO2 (e.g. mL/min for both variables)} rather than relative VO2. Using relative VO2 will likely lead to incorrect results.
+It is strongly advised the user selects \emph{absolute VO2 of the same units as VCO2 (e.g. mL/min or L/min for both variables)} rather than relative VO2 (mL/kg/min). Using relative VO2 will likely lead to incorrect results.
 }
 
 \examples{
@@ -90,4 +98,5 @@ It is strongly advised the user selects \emph{absolute VO2 of the same units as 
 }
 \references{
 Gaskill, S. E., Ruby, B. C., Walker, A. V. A. J., Sanchez, O. A., Serfass, R. C., & Leon, A. S. (2001). Validity and reliability of combining three methods to determine ventilatory threshold. Medicine & Science in Sports & Exercise, 33(11), 1841–1848.
+Beaver, W. L., Wasserman, K. A. R. L. M. A. N., & Whipp, B. J. (1986). A new method for detecting anaerobic threshold by gas exchange. Journal of applied physiology, 60(6), 2020-2027.
 }

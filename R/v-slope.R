@@ -21,6 +21,8 @@
 #' @param method Pass \code{"v-slope"} to the method argument to exactly reproduce the procedure from the original paper. See the Warnings section for details.
 #' @param left_slope_lim The original paper requires that the left regression line have a slope of > \code{0.6}.
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param front_trim How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #' @importFrom rlang :=
@@ -34,6 +36,7 @@
 v_slope <- function(.data,
                     .x,
                     .y,
+                    bp,
                     vo2 = "vo2",
                     vco2 = "vco2",
                     ve = "ve",
@@ -41,12 +44,17 @@ v_slope <- function(.data,
                     method = NULL,
                     slope_change_lim = 0.1,
                     left_slope_lim = 0.6,
+                    front_trim = 60,
                     alpha_linearity = 0.05,
-                    bp,
-                    pos_change = TRUE) {
+                    pos_change = TRUE,
+                    ...) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+
+    # browser()
+
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+        dplyr::arrange(.data[[.x]], .data[[time]]) %>%
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     dist_MSE_ratio <- loop_v_slope(.data = .data, .x = .x, .y = .y)
     slope_change <- 0
@@ -107,7 +115,7 @@ v_slope <- function(.data,
     pf_two <- stats::pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
-        lm_left$coefficients[2]
+        abs(lm_left$coefficients[2])
 
     determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
                                          (pos_change == (pct_slope_change > 0)),

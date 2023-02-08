@@ -8,24 +8,26 @@
 #' 5. Return results.
 #'
 #' @section Warning:
-#' It is strongly advised the user selects \emph{absolute VO2 of the same units as VCO2 (e.g. mL/min for both variables)} rather than relative VO2. Using relative VO2 will likely lead to incorrect results.
+#' It is strongly advised the user selects \emph{absolute VO2 of the same units as VCO2 (e.g. mL/min or L/min for both variables)} rather than relative VO2 (mL/kg/min). Using relative VO2 will likely lead to incorrect results.
 #'
 #' @param .data Gas exchange data
-#' @param method Specify \code{excess_co2}, \code{v-slope}, or \code{v-slope_simple} and this fills in the most common variables used for these methods for those not already specified.
+#' @param method Specify \code{excess_co2}, \code{v-slope}, or \code{vent_eqs} and this fills in the most common variables used for these methods for those not already specified. The `orr` and `v-slope_simple` methods will be added in the future.
 #' @param algorithm_vt1 Algorithm to find VT1/GET
 #' @param x_vt1 \code{x} variable to use to fine VT1/GET/aerobic threshold
 #' @param y_vt1 \code{y} variable to use to fine VT1/GET/aerobic threshold
 #' @param algorithm_vt2 Algorithm to find VT2/RC
 #' @param x_vt2 \code{x} variable to use to fine VT2/RC/anaerobic threshold
 #' @param y_vt2 \code{y} variable to use to fine VT2/RC/anaerobic threshold
+#' @param bp Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
+#' @param front_trim_vt1 The number of seconds to remove from the *beginning* of the data frame prior to finding vt1. See `Details` below.
+#' @param front_trim_vt2 The number of seconds to remove from the data prior to finding vt2 Default = `60`.
 #' @param vo2 The name of the vo2 column in \code{.data}
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
-#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
-#' @param bps Should the function find the breakpoints for VT1, TVT2, or both. Default is \code{both}.
-#' @param truncate By default this function truncates the data frame at VT2 prior to finding VT2. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.
-#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param truncate By default, this function truncates the data frame at VT2 prior to finding VT1. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.
+#' @param alpha_linearity Cutoff value to determine if a piecewise model significantly reduces the residual sums of squares more than a simple linear regression.
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param ... Arguments to pass to functions internal to `breakpoint()`
 #'
 #' @returns A list that contains a data frame with slices of the original data frame at the threshold index. The data frame new columns describing the methods used and if the breakpoint was truly a breakpoint. Depending on the breakpoint algorithm used, `breakpoint()` also returns fitted values, the left and right sides of the piecewise regression, as well as a simple linear regression.
@@ -33,14 +35,17 @@
 #' @md
 #'
 #' @details
-#' There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, 'vo2' for \code{x_vt1}, and 'vco2' for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.
+#' There are multiple ways to find a breakpoint. The first is by specifying a commonly used \code{method} and the appropriate \code{algorithm} and \code{x}, and \code{y}, variables will be selected for you. For example, entering 'v-slope' for \code{method} will pre-select 'v-slope' for \code{algorithm}, \code{vo2} for \code{x_vt1}, and \code{vco2} for \code{y_vt1}. If you enter a specific \code{method}, you can override the default \code{algorithm}, \code{x}, and \code{y}.
 #'
 #' Since there aren't common names for every way to find a breakpoint, you can also leave \code{method} as \code{NULL} and specify the \code{algorithm}, \code{x}, and \code{y}.
 #'
 #' This function uses the excess CO2 formula as described by Gaskill et al. (2001).
 #'
+#' For some relationships, previous research (Beaver et al., 1986) and other gas exchange analysis programs (Epistemic Mindworks, 2003) recommend removing time at the beginning of the test due to differences in the time constants of VO2 and VCO2 due to the "capacitive effects of changing tissue CO2 stores..." that "...distorts the VCO2 vs. VO2 curve" (Beaver et al., 1986). This function will automatically set `front_trim_vt1` to `60` seconds if the VT1 variables are VCO2 vs. VO2 or if the algorithm is a piecewise function. This will similarly set `front_trim_vt2` to 60 seconds if the VT2 variables are VE vs. VCO2, or if the algorithm is a piecewise function. The piecewise functions include `jm`, `orr`, `v-slope`, and `spline_bp`.
+#'
 #' @references
 #' Gaskill, S. E., Ruby, B. C., Walker, A. V. A. J., Sanchez, O. A., Serfass, R. C., & Leon, A. S. (2001). Validity and reliability of combining three methods to determine ventilatory threshold. Medicine & Science in Sports & Exercise, 33(11), 1841–1848.
+#' Beaver, W. L., Wasserman, K. A. R. L. M. A. N., & Whipp, B. J. (1986). A new method for detecting anaerobic threshold by gas exchange. Journal of applied physiology, 60(6), 2020-2027.
 #'
 #' @examples
 #' # TODO write an an example
@@ -53,23 +58,22 @@ breakpoint <- function(.data,
                        algorithm_vt2 = NULL,
                        x_vt2 = NULL,
                        y_vt2 = NULL,
-                       alpha_linearity = 0.05,
+                       bp = c("both", "vt1", "vt2"),
                        vo2 = "vo2",
                        vco2 = "vco2",
                        ve = "ve",
                        time = "time",
-                       bps = "both",
-                       truncate = TRUE,
+                       front_trim_vt1 = NULL,
+                       front_trim_vt2 = NULL,
+                       alpha_linearity = 0.05,
+                       truncate = TRUE, # this may be uncessary for deriv models
                        pos_change = TRUE,
-                       # should I add a "front trim" argument? Exercise onset seems to cause
-                       # weird issues within fitting lines properly
                        ...) {
-    stopifnot(!missing(.data),
-              !all(is.null(method), is.null(algorithm_vt1),
-                  is.null(x_vt1), is.null(y_vt1)),
-              !all(is.null(method), is.null(algorithm_vt2),
-                  is.null(x_vt2), is.null(y_vt2)))
-    bps <- match.arg(bps, choices = c("vt1", "vt2", "both"), several.ok = FALSE)
+
+    bp <- match.arg(bp, several.ok = FALSE)
+    # fill in NULL values, primarily based on "method" argument
+    resolved_inputs <- resolve_inputs(inputs = as.list(environment(), all = TRUE))
+    list2env(resolved_inputs, envir = environment()) # add values from resolved_inputs
 
     # do I need to restrict the options for x_vt1 etc. to "time", "vo2", "vco2"
     # "speed", "watts", etc? That could serve as the general language to define
@@ -77,33 +81,6 @@ breakpoint <- function(.data,
     # tell the function what column name specifically refers to "vo2", "vco2", etc.
     # or, do I just check to make sure the x_vt1 type arguments can be found
     # in the column names?
-
-    if(!is.null(method)) {
-        method <- match.arg(method,
-                           choices = c("excess_co2",
-                                       "orr",
-                                       "v-slope",
-                                       "v_slope_simple"))
-        if(method == "excess_co2") {
-            if(!is.null(x_vt1)) {
-                if(x_vt1 != time | x_vt1 != vo2) {
-                    warning("x_vt1 is not set to an appropriate value for the excess co2 method. Appropriate x values are time and VO2.")
-                }
-            }
-            if(is.null(x_vt1)) {
-                x_vt1 <- time
-            }
-            if(!is.null(y_vt1)) {
-                warning("Overriding calculation of excess co2 for y_vt1")
-            }
-            if(mean(.data[[vco2]] / .data[[vo2]]) > 2) {
-                warning("VO2 and VCO2 columns are unlikely to both be in the same absolute units\nCheck if VO2 column indicated in arguments is absolute and that units match VCO2")
-            }
-            .data <- .data %>%
-                dplyr::mutate(excess_co2 = .data[[vco2]]^2 / .data[[vo2]] - .data[[vco2]])
-            y_vt1 <- "excess_co2"
-        }
-    }
 
     # if a specific method was chosen, a function pre-fills algorithms, .x, .y
     # based on the method so long as .x and .y are not already specified
@@ -113,36 +90,28 @@ breakpoint <- function(.data,
     # decision at RC?
     # V-slope
 
-    algorithm_vt2 <- match.arg(algorithm_vt2,
-                  choices = c("dmax", "dmax_mod", "jm",
-                              "orr", "v-slope", "simplified_v-slope",
-                              "splines"))
+    # algorithm_vt2 <- match.arg(algorithm_vt2,
+    #               choices = c("dmax", "dmax_mod", "jm",
+    #                           "orr", "v-slope", "simplified_v-slope",
+    #                           "splines"))
     # there's some lactate breakpoints that may be worth adding
-    # browser()
-    if(bps == "both" | bps == "vt2") {
-        params = list(.data = .data,
-                      .x = x_vt2,
-                      .y = y_vt2,
-                      vo2 = vo2,
-                      vco2 = vco2,
-                      ve = ve,
-                      time = time,
-                      alpha_linearity = alpha_linearity,
-                      bp = "vt2",
-                      pos_change = pos_change)
+
+    if(bp == "both" | bp == "vt2") {
+        resolved_inputs[["bp"]] <- "vt2"
+        params = append(resolved_inputs, list(.x = x_vt2, .y = y_vt2))
         vt2_out <- switch(algorithm_vt2,
                           "jm" = do.call(what = "jm", args = params),
                           "orr" = do.call(what = "orr", args = params),
                           "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params))
+                          "dmax" = do.call(what = "dmax", args = params),
+                          stop("Invalid `algorithm_vt2` value"))
 
-        if(bps == "vt2") {
+        if(bp == "vt2") {
             return(vt2_out)
         }
 
         # truncate if VT2 is found
-        if(vt2_out$breakpoint_data$p_val_f < alpha_linearity &
-           !is.na(vt2_out$breakpoint_data$p_val_f) & truncate == TRUE) {
+        if(vt2_out$breakpoint_data$determinant_bp & truncate == TRUE) {
             trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
             vt1_df <- .data[1:trunc_idx,]
         } else {
@@ -153,23 +122,17 @@ breakpoint <- function(.data,
         vt1_df <- .data
     }
 
-    if(bps == "both" | bps == "vt1") {
-        params = list(.data = vt1_df,
-                      .x = x_vt1,
-                      .y = y_vt1,
-                      vo2 = vo2,
-                      vco2 = vco2,
-                      ve = ve,
-                      time = time,
-                      alpha_linearity = alpha_linearity,
-                      bp = "vt1",
-                      pos_change = TRUE)
+    if(bp == "both" | bp == "vt1") {
+        params[[".data"]] <- vt1_df
+        params[[".x"]] <- x_vt1
+        params[[".y"]] <- y_vt1
         vt1_out <- switch(algorithm_vt1,
                           "jm" = do.call(what = "jm", args = params),
                           "orr" = do.call(what = "orr", args = params),
                           "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params))
-        if(bps == "vt1") {
+                          "dmax" = do.call(what = "dmax", args = params),
+                          stop("Invalid `algorithm_vt1` value"))
+        if(bp == "vt1") {
             return(vt1_out)
         }
     }

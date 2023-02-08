@@ -1,13 +1,13 @@
-#' Find a breakpoint using the maxima in the 2nd derivative
+#' Find a breakpoint using the maxima in the 2nd derivative of a polynomial regression
 #'
 #' Use polynomial regression of increasing order to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
 #'
 #' Note, polynomial regressions are usually inferior to regression splines or to smoothing splines because polynomial regressions because polynomial regressions can overfit the data more easily. However, we offer this method in case users want to reproduce previous works and while we develop this package.
 #'
-#' Unlike several published works, this method iteratively finds the best-fit polynomial regression by increasing the polynomial order and using the likelihood ratio test with the \code{anova} function. When the likelihood ratio test does not find a statistically significant different difference between the previous and the newest polynomial, the function uses the previous polynomial. However, uses can specify the polynomial \code{degree} if desired.
+#' Unlike several published works, this method iteratively finds the best-fit polynomial regression by increasing the polynomial order and using the likelihood ratio test with the \code{anova} function. When the likelihood ratio test does *not* find a statistically significant difference between the previous and the newest polynomial, the function uses the previous polynomial. However, users can specify the polynomial \code{degree} if desired.
 #'
 #' #' @details
-#' Our implementation is similar to two studies by Wisén and Wohlfart et al. in that this uses a polynomial regression. However, they only found the \emph{first} derivative of the VO2 and VCO2 vs. time curves and denote the threshold as their crossing point. Using ventilatory equivalents vs. time, they considered the threshold as when the \emph{first} derivative of each ventilatory equivalent increased above zero (for the last time). In contrast, the majority of other literature we are aware of that uses regression splines or smoothing splines finds the \emph{second} derivative. This function finds the second derivative by default to match the majority of other literature.
+#' Our implementation is similar to two studies by Wisén and Wohlfart et al. in that this uses a polynomial regression. However, they only found the \emph{first} derivative of the VO2 and VCO2 vs. time curves and denote the threshold as their crossing point. Using ventilatory equivalents vs. time, they considered the threshold as when the \emph{first} derivative of each ventilatory equivalent increased above zero (for the last time). In contrast, the majority of other literature we are aware of that uses regression splines or smoothing splines finds the \emph{second} derivative. We found that this is a more conservative approach and yields fewer possible second derivative maxima to choose between. This function finds the second derivative by default to match the majority of other literature.
 #'
 #' Taking either the first or the second derivative are both valid approaches, but we prefer the reasoning behind taking the second derivative. After crossing a threshold, ventilation increases out of proportion to VO2 (VT1) or to VCO2 (VT2). After the threshold, the rate of increase is faster. Put another way, the slope after the breakpoint is higher than the slope before the breakpoint. However, since we are more interested in when that \emph{slope changes}, we want to know the slope of the slope, i.e., the acceleration, or the second derivative.
 #'
@@ -25,10 +25,9 @@
 #' @param ve Name of the \code{ve} variable
 #' @param time Name of the \code{time} variable
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
 #' @returns A slice of the original data frame at the threshold index with a new `algorithm` column.
-#'
-#' @importFrom Deriv Deriv
 #'
 #' @export
 #'
@@ -51,15 +50,15 @@ d2_poly_reg_maxima <- function(.data,
                             vco2 = "vco2",
                             ve = "ve",
                             time = "time",
-                            alpha_linearity = 0.05 # change to just alpha?
-                            ) {
+                            alpha_linearity = 0.05, # change to just alpha?
+                            ...) {
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 
-    lm_poly <- loop_poly_reg(.data = .data, .x = .x, .y = .y,
+    lm_poly <- loop_d2_poly_reg_maxima(.data = .data, .x = .x, .y = .y,
                              degree = degree,
                              alpha_linearity = alpha_linearity)
 
@@ -137,7 +136,7 @@ d2_poly_reg_maxima <- function(.data,
 }
 
 #' @keywords internal
-loop_poly_reg <- function(.data, .x, .y,
+loop_d2_poly_reg_maxima <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
     # browser()
     # if the user specifies a degree, find that and be done with it

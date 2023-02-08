@@ -8,6 +8,7 @@ v_slope(
   .data,
   .x,
   .y,
+  bp,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -15,9 +16,10 @@ v_slope(
   method = NULL,
   slope_change_lim = 0.1,
   left_slope_lim = 0.6,
+  front_trim = 60,
   alpha_linearity = 0.05,
-  bp,
-  pos_change = TRUE
+  pos_change = TRUE,
+  ...
 )
 }
 \arguments{
@@ -26,6 +28,8 @@ v_slope(
 \item{.x}{The x-axis variable.}
 
 \item{.y}{the y-axis variable.}
+
+\item{bp}{Is this algorithm being used to find vt1 or vt2?}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
@@ -41,11 +45,13 @@ v_slope(
 
 \item{left_slope_lim}{The original paper requires that the left regression line have a slope of > \code{0.6}.}
 
+\item{front_trim}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
-\item{bp}{Is this algorithm being used to find vt1 or vt2?}
-
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

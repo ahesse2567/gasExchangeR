@@ -2,22 +2,28 @@ library(gasExchangeR)
 library(tidyverse)
 library(devtools)
 
-df_raw <- read_csv("inst/extdata/mar16_101_pre.csv", show_col_types = FALSE)
+df_colnames <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
+                         n_max = 0) %>%
+    colnames()
+df_raw <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
+                    col_names = FALSE, skip = 3) %>%
+    set_names(df_colnames)
 
 df_unavg <- df_raw %>%
-    rename_all(.funs = tolower) %>%
-    rename(vo2_rel = vo2,
-           vo2_abs = vo2.1,
-           ve = ve.btps) %>%
-    trim_pre_post(intensity_col = "speed") %>%
-    trim_pre_post(intensity_col = "speed", pre_ex_intensity = 3) %>%
-    trim_pre_post(intensity_col = "speed", pre_ex_intensity = 5.6) %>%
-    select(time, speed, grade, vo2_rel, vo2_abs, vco2, ve, peto2, petco2) %>%
-    mutate(ve_vo2 = ve*1000 / vo2_abs,
-           ve_vco2 = ve*1000 / vco2)
+    clean_names() %>%
+    rename(time = t) %>%
+    mutate(time = lubridate::minute(time) * 60 + lubridate::second(time)) %>%
+    filter(phase == "EXERCISE") %>%
+    relocate(time, speed, grade) %>%
+    ventilatory_outliers()
 
 df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
-                            time_col = "time", roll_window = 9, roll_trim = 4)
+                            time_col = "time", roll_window = 15)
+ggplot(data = df_avg, aes(x = vo2, y = vco2)) +
+    geom_point(color = "blue", alpha = 0.5) +
+    theme_bw()
+
+v_slope(df_avg, .x = vo2, .y = vco2, vo2, bp = "vt1"
 
 .data = df_avg
 x_vt1 = "vo2_abs"

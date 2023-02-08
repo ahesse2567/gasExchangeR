@@ -10,7 +10,8 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
-#'
+#' @param front_trim How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #'
 #' @importFrom rlang :=
@@ -25,17 +26,21 @@
 jm <- function(.data,
                .x,
                .y,
+               bp,
                vo2 = "vo2",
                vco2 = "vco2",
                ve = "ve",
                time = "time",
                alpha_linearity = 0.05,
-               bp,
-               pos_change = TRUE) {
+               front_trim = 60,
+               pos_change = TRUE,
+               ...) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
+
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+        dplyr::arrange(.data[[.x]], .data[[time]]) %>%
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     ss <- loop_jm(.data = .data, .x = .x, .y = .y)
     min_ss_idx <- which.min(ss)
@@ -74,7 +79,7 @@ jm <- function(.data,
                           algorithm = "jm")
     pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
     pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
-        lm_left$coefficients[2]
+        abs(lm_left$coefficients[2])
 
     determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
                                          (pos_change == (pct_slope_change > 0)),
