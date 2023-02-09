@@ -34,8 +34,12 @@ dmax <- function(.data,
                  pos_change = TRUE){
     # the original paper has something about 50 mL increments in O2
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
+    plot_df <- .data
+    .data <- .data %>%
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     # Get limits of x-axis for plots
     xmin = min(.data[[.x]], na.rm = T)

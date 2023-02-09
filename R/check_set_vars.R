@@ -31,20 +31,20 @@ resolve_inputs <- function(inputs = c(as.list(environment(), all = TRUE))) {
     )
 
     if(!is.null(method)) {
-        updated_inputs <- set_vars_by_method(inputs = inputs)
+        inputs <- set_vars_by_method(inputs = inputs)
     }
     # set front_trim values to default if unspecified and using piecewise methods
     piecewise_methods <- c("jm", "orr", "v-slope", "spline_bp") # TODO add "v-slope_simple"
 
-    if(is.null(updated_inputs[["front_trim_vt1"]]) &
-       updated_inputs[["algorithm_vt1"]] %in% piecewise_methods) {
-        updated_inputs[["front_trim_vt1"]] <- 60
+    if(is.null(inputs[["front_trim_vt1"]]) &
+       inputs[["algorithm_vt1"]] %in% piecewise_methods) {
+        inputs[["front_trim_vt1"]] <- 60
     }
-    if(is.null(updated_inputs[["front_trim_vt2"]]) &
-       updated_inputs[["algorithm_vt2"]] %in% piecewise_methods) {
-        updated_inputs[["front_trim_vt2"]] <- 60
+    if(is.null(inputs[["front_trim_vt2"]]) &
+       inputs[["algorithm_vt2"]] %in% piecewise_methods) {
+        inputs[["front_trim_vt2"]] <- 60
     }
-    updated_inputs
+    inputs
 }
 
 
@@ -62,6 +62,12 @@ set_vars_by_method <- function(inputs = c(as.list(environment(), all = TRUE))) {
                                                   args = list(inputs)),
                              stop("Invalid `method` value"))
     # future methods: "orr", "v-slope_simple"
+
+    # orr: VE vs. VO2. This kinda finds RC first if the three-regression model is
+    # best, but then only returns vt1. Given that, does this change the truncation
+    # decision at RC?
+    # V-slope
+
     updated_inputs
 }
 

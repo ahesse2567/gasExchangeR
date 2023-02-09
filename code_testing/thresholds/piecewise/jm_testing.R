@@ -6,24 +6,25 @@ library(lubridate)
 df_raw <- read_csv("inst/extdata/37818_vo2max_unavg.csv",
                    show_col_types = FALSE)
 df_unavg <- df_raw %>%
-    rename_with(.fn = tolower) %>%
-    rename(vo2_rel = vo2...4,
-           vo2_abs = vo2...5,
-           ve = `ve btps`,
-           vt = `vt btps`) %>%
+    janitor::clean_names() %>%
+    rename(vo2_rel = vo2_4,
+           vo2_abs = vo2_5,
+           ve = `ve_btps`,
+           vt = `vt_btps`) %>%
     select(time, speed, grade, vo2_rel, vo2_abs, vco2, ve) %>%
     trim_pre_post(intensity_col = "grade",
                   pre_ex_intensity = 300.1,
                   post_ex_intensity = 300.1) %>%
+    filter(speed >= 3.6) %>%
     mutate(ve_vo2 = ve / (vo2_abs/1000),
            ve_vco2 = ve / (vco2/1000),
-           time = as.numeric(ms(str_remove(as.character(time), ":00"))))
+           time = as.numeric(ms(str_remove(as.character(time), ":00")))) %>%
+    ventilatory_outliers(outlier_cols = "vo2_abs", plot_outliers = FALSE)
 
 df_avg <- avg_exercise_test(df_unavg,
                             type = "breath",
                             subtype = "rolling",
                             roll_window = 15,
-                            roll_trim = 2,
                             time_col = "time")
 
 ggplot(data = df_unavg, aes(x = vco2, y = ve)) +
@@ -55,7 +56,15 @@ y_vt2 <- "ve"
 #            vo2 = "vo2_abs",
 #            bps = "both")
 
+use_browser <- function(func, ...) {
+    browser()
+    do.call(func, args = list(...))
+}
+use_browser("jm", .data = df_avg, .x = "vco2", .y = "ve", vo2 = "vo2_abs", bp = "vt2")
+
 bp_dat <- jm(.data = df_avg, x_vt2, y_vt2, vo2 = "vo2_abs", bp = "vt2")
+bp_dat$gp
+
 bp_dat$breakpoint_data %>% View
 
 ggplot(data = bp_dat$fitted_vals, aes(x = vco2, y = ve)) +

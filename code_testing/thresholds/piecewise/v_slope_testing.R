@@ -1,6 +1,7 @@
 library(gasExchangeR)
 library(tidyverse)
 library(devtools)
+library(readxl)
 
 df_colnames <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
                          n_max = 0) %>%
@@ -17,13 +18,15 @@ df_unavg <- df_raw %>%
     relocate(time, speed, grade) %>%
     ventilatory_outliers()
 
-df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
-                            time_col = "time", roll_window = 15)
+df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
+                            time_col = "time", roll_window = 10)
+
 ggplot(data = df_avg, aes(x = vo2, y = vco2)) +
     geom_point(color = "blue", alpha = 0.5) +
     theme_bw()
 
-v_slope(df_avg, .x = vo2, .y = vco2, vo2, bp = "vt1"
+dat_v_slope <- v_slope(.data = df_avg, .x = "vo2", .y = "vco2", bp = "vt1")
+dat_v_slope$bp_plot
 
 .data = df_avg
 x_vt1 = "vo2_abs"

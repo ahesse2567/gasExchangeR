@@ -1,4 +1,4 @@
-#' Find other variables at a ventilatory thresholds
+#' Find Other Variables at Ventilatory Thresholds
 #'
 #' Choose between inverse distance weighted k-nearest neighbors interpolation (`inv-dist`, (default), `dist_x-y`, or `dist_x` to obtain the other values at ventilatory thresholds besides those found directly by the algorithm.
 #'
@@ -7,7 +7,7 @@
 #' @param thr_y Y coordinate at the threshold.
 #' @param .x Name of the x variable used to find the threshold
 #' @param .y Name of the y variable used to find the threshold
-#' @param thr_calc_method Name of the threshold calculation method. Default is `inv_dist`. The next recommended method is `dist_x_y`.
+#' @param thr_calc_method Name of the threshold calculation method. Default is `inv_dist`. The next recommended method is `dist_x_y`, but `dist_x` is also an option.
 #' @param k How many of the nearest data points should be used to calculate the inverse distance weights?
 #'
 #' @details
@@ -33,7 +33,8 @@ find_threshold_vals <- function(.data, thr_x, thr_y, .x = .x, .y = .y,
                                 thr_calc_method = c("inv_dist",
                                            "dist_x_y",
                                            "dist_x"),
-                                k = 5) {
+                                k = 5,
+                                ...) {
     thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
     class(.data) <- append(class(.data), thr_calc_method)
     UseMethod("find_threshold_vals", .data)
@@ -48,7 +49,9 @@ find_threshold_vals.inv_dist <- function(.data,
                                          thr_calc_method = c("inv_dist",
                                                              "dist_x-y",
                                                              "dist_x"),
-                                         k = 5) {
+                                         k = 5,
+                                         ...) {
+    thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
     # calculate distance between observed x-y threshold coordinate
     d <- dplyr::bind_rows(tibble("{.x}" := thr_x, "{.y}" := thr_y),
                    .data %>%
@@ -81,8 +84,8 @@ find_threshold_vals.inv_dist <- function(.data,
     }
     threshold_data <- tibble::enframe(threshold_data) %>%
         tidyr::pivot_wider(names_from = name) %>%
-        dplyr::mutate("{.x}" := threshold_x,
-               "{.y}" := threshold_y) %>%
+        dplyr::mutate("{.x}" := thr_x,
+               "{.y}" := thr_y) %>%
         dplyr::relocate(colnames(.data)[colnames(.data) %in%
                                      colnames(.)])
     threshold_data
@@ -97,7 +100,8 @@ find_threshold_vals.dist_x_y <- function(.data,
                                          thr_calc_method = c("inv_dist",
                                                              "dist_x-y",
                                                              "dist_x"),
-                                         k = 5) {
+                                         k = 5,
+                                         ...) {
     # calculate distance between observed x-y threshold coordinate
     d <- dplyr::bind_rows(tibble("{.x}" := thr_x, "{.y}" := thr_y),
                    .data %>%
@@ -115,14 +119,15 @@ find_threshold_vals.dist_x_y <- function(.data,
 
 #' @keywords internal
 find_threshold_vals.dist_x <- function(.data,
-                                         thr_x,
-                                         thr_y,
-                                         .x = .x,
-                                         .y = .y,
-                                         thr_calc_method = c("inv_dist",
-                                                             "dist_x-y",
-                                                             "dist_x"),
-                                         k = 5) {
+                                       thr_x,
+                                       thr_y,
+                                       .x = .x,
+                                       .y = .y,
+                                       thr_calc_method = c("inv_dist",
+                                                           "dist_x-y",
+                                                           "dist_x"),
+                                       k = 5,
+                                       ...) {
 
     threshold_idx <- which.min(abs(.data[[.x]] - thr_x))
     .data[threshold_idx,]

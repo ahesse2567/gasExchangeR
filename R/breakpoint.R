@@ -66,7 +66,7 @@ breakpoint <- function(.data,
                        front_trim_vt1 = NULL,
                        front_trim_vt2 = NULL,
                        alpha_linearity = 0.05,
-                       truncate = TRUE, # this may be uncessary for deriv models
+                       truncate = TRUE, # may be unnecessary for deriv algs
                        pos_change = TRUE,
                        ...) {
 
@@ -75,37 +75,16 @@ breakpoint <- function(.data,
     resolved_inputs <- resolve_inputs(inputs = as.list(environment(), all = TRUE))
     list2env(resolved_inputs, envir = environment()) # add values from resolved_inputs
 
-    # do I need to restrict the options for x_vt1 etc. to "time", "vo2", "vco2"
-    # "speed", "watts", etc? That could serve as the general language to define
-    # the relationship graphically. Then I could use the vo2, vco2 arguments to
-    # tell the function what column name specifically refers to "vo2", "vco2", etc.
-    # or, do I just check to make sure the x_vt1 type arguments can be found
-    # in the column names?
-
-    # if a specific method was chosen, a function pre-fills algorithms, .x, .y
-    # based on the method so long as .x and .y are not already specified
-
-    # orr: VE vs. VO2. This kinda finds RC first if the three-regression model is
-    # best, but then only returns vt1. Given that, does this change the truncation
-    # decision at RC?
-    # V-slope
-
-    # algorithm_vt2 <- match.arg(algorithm_vt2,
-    #               choices = c("dmax", "dmax_mod", "jm",
-    #                           "orr", "v-slope", "simplified_v-slope",
-    #                           "splines"))
-    # there's some lactate breakpoints that may be worth adding
-
     if(bp == "both" | bp == "vt2") {
         resolved_inputs[["bp"]] <- "vt2"
-        params = append(resolved_inputs, list(.x = x_vt2, .y = y_vt2))
+        params = append(resolved_inputs, c(list(.x = x_vt2, .y = y_vt2),
+                                           list(...)))
         vt2_out <- switch(algorithm_vt2,
                           "jm" = do.call(what = "jm", args = params),
-                          "orr" = do.call(what = "orr", args = params),
+                          "orr" = do.call(what = "orr", args = c(params)),
                           "v-slope" = do.call(what = "v_slope", args = params),
                           "dmax" = do.call(what = "dmax", args = params),
                           stop("Invalid `algorithm_vt2` value"))
-
         if(bp == "vt2") {
             return(vt2_out)
         }
