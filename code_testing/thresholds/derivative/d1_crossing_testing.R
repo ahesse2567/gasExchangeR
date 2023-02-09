@@ -6,6 +6,7 @@ library(Deriv)
 library(Ryacas)
 library(readxl)
 library(devtools)
+library(zoo)
 
 # for derivative methods, do users need to choose how they want the function
 # created, and then what derivative method to use? e.g. they say they want
@@ -44,9 +45,13 @@ df_avg <- avg_exercise_test(df_unavg, type = "breath", subtype = "rolling",
 # plot VO2 vs. time data
 ggplot(data = df_avg, aes(x = time, y = vo2)) +
     geom_point(alpha = 0.5, color = "red") +
-    geom_line(alpha = 0.5) +
-    geom_point(aes(y = vco2), alpha = 0.5, color = "blue") +
-    geom_line(aes(y = vco2), alpha = 0.5) +
+    geom_line(alpha = 0.5, color = "red") +
+    # geom_point(aes(y = vco2), alpha = 0.5, color = "blue") +
+    # geom_line(aes(y = vco2), alpha = 0.5) +
+    geom_point(data = df_avg_no_outliers, color = "black", alpha = 0.5) +
+    geom_line(data = df_avg_no_outliers, color = "black", alpha = 0.5) +
+    ggtitle("Mid-5-of-7 data with and without outliers") +
+    # geom_point(data = df_avg_no_outliers, aes(y = vco2), color = "darkblue", alpha = 0.5)
     theme_minimal()
 
 ggplot(data = df_avg, aes(x = time)) +
