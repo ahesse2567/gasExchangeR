@@ -126,7 +126,7 @@ dmax <- function(.data,
     bp_plot <- make_piecewise_bp_plot(.data, .x, .y, lm_left, lm_right, bp_dat)
 
     bp_plot <- bp_plot +
-        geom_line(aes(y = g.model$fitted.values), linetype = "dashed")
+        ggplot::geom_line(ggplot::aes(y = g.model$fitted.values), linetype = "dashed")
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,

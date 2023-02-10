@@ -32,8 +32,7 @@
 #'
 #' # TODO write an example
 #'
-#'
-#' # TODO force people to use this function twice if doing bin-roll or rolling-bin
+#' # TODO force people to use this function twice if doing bin-roll or rolling-bin?
 #'
 avg_exercise_test <- function(.data,
                               type = "breath",
@@ -77,6 +76,8 @@ avg_exercise_test.breath <- function(.data,
                                      order = 3) {
     subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
 
+    # save character cols for later
+    # I'm beginning to think this is less important and may cause issues
     char_cols <- .data[, purrr::map(.data, class) == "character"]
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
         char_cols <- unique(char_cols)
@@ -170,6 +171,8 @@ avg_exercise_test.time <- function(.data,
     # browser()
     subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
 
+    # save character cols for later
+    # I'm beginning to think this is less important and may cause issues
     char_cols <- .data[, purrr::map(.data, class) == "character"]
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
         char_cols <- unique(char_cols)
@@ -239,6 +242,8 @@ avg_exercise_test.digital <- function(.data,
                                       order = 3) {
     # browser()
 
+    # save character cols for later
+    # I'm beginning to think this is less important and may cause issues
     char_cols <- .data[, purrr::map(.data, class) == "character"]
     if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
         char_cols <- unique(char_cols)

@@ -89,7 +89,7 @@ ventilatory_outliers <- function(.data,
         if (exclude_test_val & align == "right") {
             # compares current to preceding breaths
             outlier_idx <- copy_df[[outlier_cols]] < dplyr::lag(lower_lim) |
-                copy_df[[outlier_cols]] > lag(upper_lim)
+                copy_df[[outlier_cols]] > dplyr::lag(upper_lim)
         } else if (exclude_test_val & align == "left") {
             # compares against subsequent breaths...I can't really think of why but I guess you can
             outlier_idx <- copy_df[[outlier_cols]] < dplyr::lead(lower_lim) | copy_df[[outlier_cols]] > upper_lim

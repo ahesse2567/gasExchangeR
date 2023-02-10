@@ -65,7 +65,7 @@ d2_reg_spline_maxima <- function(.data,
     # get new values at equal spacing for a smoother splinefun result
     equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
                          length.out = nrow(.data))
-    pred <- predict(lm_spline, newdata = tibble("{.x}" := equi_spaced_x))
+    pred <- predict(lm_spline, newdata = tibble::tibble("{.x}" := equi_spaced_x))
 
     spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
     # find number of maxima
@@ -145,7 +145,7 @@ loop_d2_reg_spline <- function(.data, .x, .y, df = NULL,
                             ", df = ", df,
                             ", degree = ", degree, ")") %>%
             stats::as.formula() %>%
-            lm(data = .data)
+            stats::lm(data = .data)
     } else {
         spline_mod_list = vector(mode = "list", length = 0)
         cont <- TRUE

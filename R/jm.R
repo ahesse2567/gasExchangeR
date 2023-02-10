@@ -90,7 +90,7 @@ jm <- function(.data,
                                          (pos_change == (pct_slope_change > 0)),
                                      TRUE, FALSE)
 
-    y_hat_threshold <- predict(lm_left, tibble("{.x}" := x_knot))
+    y_hat_threshold <- stats::predict(lm_left, tibble::tibble("{.x}" := x_knot))
 
     bp_dat <- find_threshold_vals(.data = .data, thr_x = x_knot,
                                   thr_y = y_hat_threshold, .x = .x,

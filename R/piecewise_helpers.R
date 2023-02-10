@@ -42,16 +42,18 @@ make_piecewise_bp_plot <- function(.data, .x, .y, lm_left, lm_right,
                                    bp_dat, ...) {
 
     plot_x <- .data[[.x]]
-    plot_df <- tibble("{.x}" := plot_x) %>%
-        mutate(y_hat_left = predict(lm_left, tibble("{.x}" := plot_x)),
-               y_hat_right = predict(lm_right, tibble("{.x}" := plot_x)))
+    plot_df <- tibble::tibble("{.x}" := plot_x) %>%
+        dplyr::mutate(y_hat_left = stats::predict(lm_left,
+                                           tibble::tibble("{.x}" := plot_x)),
+               y_hat_right = stats::predict(lm_right,
+                                            tibble::tibble("{.x}" := plot_x)))
 
     bp_plot <- ggplot2::ggplot(data = .data,
-                    aes(x = .data[[.x]], y = .data[[.y]])) +
-        geom_point(alpha = 0.5) +
-        geom_line(data = plot_df, aes(x = get(.x), y = y_hat_left)) +
-        geom_line(data = plot_df, aes(x = get(.x), y = y_hat_right)) +
-        geom_vline(xintercept = bp_dat[[.x]]) +
-        theme_minimal()
+                               ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
+        ggplot2::geom_point(alpha = 0.5) +
+        ggplot2::geom_line(data = plot_df, ggplot2::aesaes(x = get(.x), y = y_hat_left)) +
+        ggplot2::geom_line(data = plot_df, ggplot2::aesaes(x = get(.x), y = y_hat_right)) +
+        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+        ggplot2::theme_minimal()
     bp_plot
 }

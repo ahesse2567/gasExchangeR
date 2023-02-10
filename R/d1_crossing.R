@@ -76,7 +76,7 @@ d1_crossing <- function(.data,
                                     Ryacas::yac_str(),
                                 ")") %>%
         parse(text = .) %>%
-        Deriv(x = "x", nderiv = 1)
+        Deriv::Deriv(x = "x", nderiv = 1)
 
     roots <- rootSolve::uniroot.all(function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
                                     interval = c(min(.data[[.x]]), max(.data[[.x]])))
@@ -119,7 +119,7 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
             as.formula() %>%
-            lm(data = .data)
+            stats::lm(data = .data)
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
     } else {
@@ -135,7 +135,7 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
             as.formula() %>%
-            lm(data = .data)
+            stats::lm(data = .data)
 
         lm_list <- append(lm_list, list(lm_poly))
 
@@ -147,7 +147,7 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
                 as.formula() %>%
                 lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
-            lrt <- anova(lm_list[[i]], lm_list[[i+1]])
+            lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
             if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
                 cont = FALSE
                 lm_poly <- lm_list[[i]] # take the previous model

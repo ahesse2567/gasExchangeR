@@ -9,6 +9,7 @@
 #' @param .y Name of the y variable used to find the threshold
 #' @param thr_calc_method Name of the threshold calculation method. Default is `inv_dist`. The next recommended method is `dist_x_y`, but `dist_x` is also an option.
 #' @param k How many of the nearest data points should be used to calculate the inverse distance weights?
+#' @param ... Dot dot dot so this function plays nice with other functions that call it.
 #'
 #' @details
 #' #' Most algorithms that identify ventilatory thresholds are NOT constrained to identify the threshold at an existing data point. Instead, most algorithms locate a point in space that *very* rarely coincides exactly with an existing data point. Given that, what are the values at the threshold *besides* the x and y coordinates you just found? The simplest approach is to find the closest observed data point in one dimension, usually x, and extract all the other variables at that observed data point.
@@ -53,10 +54,10 @@ find_threshold_vals.inv_dist <- function(.data,
                                          ...) {
     thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
     # calculate distance between observed x-y threshold coordinate
-    d <- dplyr::bind_rows(tibble("{.x}" := thr_x, "{.y}" := thr_y),
+    d <- dplyr::bind_rows(tibble::tibble("{.x}" := thr_x, "{.y}" := thr_y),
                    .data %>%
                        dplyr::select(as.name(.x), as.name(.y))) %>%
-        dplyr::mutate(across(everything(), normalize01)) %>%
+        dplyr::mutate(dplyr::across(tidyselect::everything(), normalize01)) %>%
         stats::dist()
 
     cols_to_interpolate <- colnames(.data)[!(colnames(.data) %in%
@@ -103,10 +104,10 @@ find_threshold_vals.dist_x_y <- function(.data,
                                          k = 5,
                                          ...) {
     # calculate distance between observed x-y threshold coordinate
-    d <- dplyr::bind_rows(tibble("{.x}" := thr_x, "{.y}" := thr_y),
+    d <- dplyr::bind_rows(tibble::tibble("{.x}" := thr_x, "{.y}" := thr_y),
                    .data %>%
                        dplyr::select(as.name(.x), as.name(.y))) %>%
-        dplyr::mutate(across(everything(), normalize01)) %>%
+        dplyr::mutate(dplyr::across(tidyselect::everything(), normalize01)) %>%
         stats::dist()
     # select row of data closest to the x-y threshold coordiante
     threshold_data <- .data %>%
