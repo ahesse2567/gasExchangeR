@@ -80,10 +80,15 @@ breakpoint <- function(.data,
         params = append(resolved_inputs, c(list(.x = x_vt2, .y = y_vt2),
                                            list(...)))
         vt2_out <- switch(algorithm_vt2,
-                          "jm" = do.call(what = "jm", args = params),
-                          "orr" = do.call(what = "orr", args = c(params)),
-                          "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params),
+                          "jm" = do.call("jm", params),
+                          "orr" = do.call("orr", params),
+                          "v-slope" = do.call("v_slope", params),
+                          "dmax" = do.call("dmax", params),
+                          "spline_bp" = do.call("spline_bp", params),
+                          "d1_crossing" = do.call("d1_crossing", params),
+                          "d2_inflection" = do.call("d2_inflection", params),
+                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxim", params),
+                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima", params),
                           stop("Invalid `algorithm_vt2` value"))
         if(bp == "vt2") {
             return(vt2_out)
@@ -106,11 +111,16 @@ breakpoint <- function(.data,
         params[[".x"]] <- x_vt1
         params[[".y"]] <- y_vt1
         vt1_out <- switch(algorithm_vt1,
-                          "jm" = do.call(what = "jm", args = params),
-                          "orr" = do.call(what = "orr", args = params),
-                          "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params),
-                          stop("Invalid `algorithm_vt1` value"))
+                          "jm" = do.call("jm", params),
+                          "orr" = do.call("orr", params),
+                          "v-slope" = do.call("v_slope", params),
+                          "dmax" = do.call("dmax", params),
+                          "spline_bp" = do.call("spline_bp", params),
+                          "d1_crossing" = do.call("d1_crossing", params),
+                          "d2_inflection" = do.call("d2_inflection", params),
+                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxim", params),
+                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima", params),
+                          stop("Invalid `algorithm_vt2` value"))
         if(bp == "vt1") {
             return(vt1_out)
         }
