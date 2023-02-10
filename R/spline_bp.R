@@ -93,16 +93,20 @@ spline_bp <- function(.data,
         dplyr::relocate(bp, algorithm, determinant_bp,
                         pct_slope_change, f_stat, p_val_f)
 
-    bp_plot <- ggplot2::ggplot(data = .data, aes(x = .data[[.x]], y = .data[[.y]])) +
+    # add indicator variable to plotting data frame
+    plot_df <- plot_df %>%
+        dplyr::mutate(s1 = if_else(get(.x) <= threshold_x, 0,
+                                   (get(.x) - threshold_x)^degree))
+
+    pred <- tibble::tibble("{.x}" := plot_df[[.x]],
+                           "{.y}" := predict(lm_spline, newdata = plot_df),
+                           algorithm = "spline_bp")
+
+    bp_plot <- ggplot2::ggplot(data = plot_df, aes(x = .data[[.x]], y = .data[[.y]])) +
         geom_point(alpha = 0.5) +
-        geom_line(aes(y = lm_spline$fitted.values)) +
+        geom_line(aes(y = pred[[.y]])) +
         geom_vline(xintercept = threshold_x) +
         theme_minimal()
-
-    plot_x <- .data[[.x]]
-    pred <- tibble::tibble("{.x}" := plot_x,
-                   "{.y}" := lm_spline$fitted.values,
-                   algorithm = "spline_bp")
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
