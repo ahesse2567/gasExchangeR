@@ -37,17 +37,24 @@ spline_bp <- function(.data,
                       ...) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]]) %>%
-        filter(.data[[time]] >= min(.data[[time]] + front_trim))
+        dplyr::arrange(.data[[.x]], .data[[time]])
+    plot_df <- .data
+    .data <- .data %>%
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     ss <- loop_spline_bp(.data = .data, .x, .y, degree = degree)
     min_ss_idx <- which.min(ss) # re
     .data <- .data %>%
         dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][min_ss_idx], 0,
                             (.data[[.x]] - .data[[.x]][min_ss_idx])^degree))
-    lm_spline <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree) + s1,
-                data = .data)
-    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+    # create linear model
+    lm_spline <- paste0(.y, " ~ ", "1 + poly(", .x, ", degree = ", degree,
+                        ", raw = TRUE) + s1") %>%
+        stats::as.formula() %>%
+        stats::lm(data = .data)
+    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::as.formula() %>%
+        stats::lm(data = .data)
 
     RSS_simple <- sum(stats::resid(lm_simple)^2)
     RSS_two <- sum(stats::resid(lm_spline)^2)
@@ -66,32 +73,46 @@ spline_bp <- function(.data,
                                          (pos_change == (pct_slope_change > 0)),
                                      TRUE, FALSE)
 
-    bp_dat <- .data[min_ss_idx,] %>%
-        dplyr::select(-s1) %>%
-        dplyr::mutate(bp = bp,
-               algorithm = "spline_bp",
-               x_var = .x,
-               y_var = .y,
-               determinant_bp = determinant_bp,
-               pct_slope_change = pct_slope_change,
-               f_stat = f_stat,
-               p_val_f = pf_two) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
-                 pct_slope_change, f_stat, p_val_f)
+    # find last time the indicator variable == 0
+    threshold_idx <- which(.data[["s1"]] != 0) %>% min() - 1
+    threshold_x <- .data[[.x]][threshold_idx]
+    threshold_y <- lm_spline$fitted.values[threshold_idx]
 
-    pred <- tibble::tibble("{.x}" := .data[[.x]],
+    bp_dat <- find_threshold_vals(.data = .data, thr_x = threshold_x,
+                                  thr_y = threshold_y, .x = .x,
+                                  .y = .y, ...)
+    bp_dat <- bp_dat %>%
+        dplyr::mutate(algorithm = "spline_bp",
+                      x_var = .x,
+                      y_var = .y,
+                      determinant_bp = determinant_bp,
+                      bp = bp,
+                      pct_slope_change = pct_slope_change,
+                      f_stat = f_stat,
+                      p_val_f = pf_two) %>%
+        dplyr::relocate(bp, algorithm, determinant_bp,
+                        pct_slope_change, f_stat, p_val_f)
+
+    bp_plot <- ggplot2::ggplot(data = .data, aes(x = .data[[.x]], y = .data[[.y]])) +
+        geom_point(alpha = 0.5) +
+        geom_line(aes(y = lm_spline$fitted.values)) +
+        geom_vline(xintercept = threshold_x) +
+        theme_minimal()
+
+    plot_x <- .data[[.x]]
+    pred <- tibble::tibble("{.x}" := plot_x,
                    "{.y}" := lm_spline$fitted.values,
                    algorithm = "spline_bp")
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
                 lm_spline = lm_spline,
-                lm_simple = lm_simple))
+                lm_simple = lm_simple,
+                bp_plot = bp_plot))
 }
 
 #' @keywords internal
 loop_spline_bp <- function(.data, .x, .y, degree = 1) {
-    # browser()
     ss_models <- numeric(length = nrow(.data))
 
     for(i in 1:nrow(.data)) {
@@ -99,15 +120,19 @@ loop_spline_bp <- function(.data, .x, .y, degree = 1) {
             ss_models[i] <- NA
             next
         }
-        temp <- .data %>%
+        temp <- .data %>% # Generate data with indicator variable (knot)
             dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][i], 0,
                                 (.data[[.x]] - .data[[.x]][i])^degree))
-        lm_spline <- stats::lm(temp[[.y]] ~ 1 + poly(temp[[.x]], degree = degree) + s1,
-                    data = temp)
+        # create linear model
+        lm_spline <- paste0(.y, " ~ ", "1 + poly(", .x, ", degree = ", degree,
+                            ", raw = TRUE) + s1") %>%
+            stats::as.formula() %>%
+            stats::lm(data = temp)
+        # record residual sums of squares for later comparison
         ss_models[i] <- sum((lm_spline$residuals)^2)
     }
 
-    if(any(ss_models == 0)) {
+    if(any(ss_models == 0, is.na(ss_models))) {
         ss_models[which(ss_models == 0)] <- NA
     }
 
