@@ -21,7 +21,8 @@
 #' @param method Pass \code{"v-slope"} to the method argument to exactly reproduce the procedure from the original paper. See the Warnings section for details.
 #' @param left_slope_lim The original paper requires that the left regression line have a slope of > \code{0.6}.
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
-#' @param front_trim How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt2 See front_trim_vt1. This is here so this this function plays nice with `set_front_trim()`. The v-slope method should be used for finding VT1 only, so leave this alone.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
@@ -44,15 +45,23 @@ v_slope <- function(.data,
                     method = NULL,
                     slope_change_lim = 0.1,
                     left_slope_lim = 0.6,
-                    front_trim = 60,
+                    front_trim_vt1 = 60,
+                    front_trim_vt2 = 60,
                     alpha_linearity = 0.05,
                     pos_change = TRUE,
                     ...) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+    if(.x != vo2 | .y != vco2) {
+        warning("x variable may NOT be (absolute) VO2 or y variable may NOT be VCO2. This method is designed to work with x = absolute VO2 and y = VCO2")
+    }
 
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
     plot_df <- .data
+
+    front_trim <- set_front_trim(bp = bp,
+                                 front_trim_vt1 = front_trim_vt1,
+                                 front_trim_vt2 = front_trim_vt2)
     .data <- .data %>%
         dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
@@ -65,11 +74,11 @@ v_slope <- function(.data,
         stats::as.formula() %>%
         stats::lm(data = df_left)
 
-    # TODO the slope_change < slope_change_lim and left slope > 0.6 only apply
-    # specifically when x = VO2 and y = VCO2. How do we check for that?
-    # I think actually specifically apply when method == "v-slope"
-    while(slope_change < slope_change_lim) {
-        bp_idx <- order(-dist_MSE_ratio)[i]
+    while(slope_change < slope_change_lim |
+          lm_left$coefficients[2] < left_slope_lim ) {
+        # enter this loop if slopes did not change be enough or if the left slope
+        # was too low
+        bp_idx <- order(-dist_MSE_ratio)[i] # find the next-best fit
         df_left <- .data[1:bp_idx,]
         df_right <- .data[(bp_idx+1):nrow(.data),]
         lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
@@ -93,15 +102,15 @@ v_slope <- function(.data,
                 purrr::map_df(num_to_na)
 
             return(list(breakpoint_data = bp_dat,
-                        # fitted_vals = pred, # dTODO how to return fitted values?
+                        # fitted_vals = pred, # TODO how to return fitted values?
                         lm_left = NULL,
                         lm_right = NULL,
                         lm_simple = NULL))
         }
     }
 
-    df_left <- .data[1:bp_idx,] # split data into left half
-    df_right <- .data[(bp_idx+1):nrow(.data),] # split data into right half
+    df_left <- .data[1:bp_idx,] # split data into left portion
+    df_right <- .data[(bp_idx+1):nrow(.data),] # split data into right portion
 
     # make linear models of the two regressions
     lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
@@ -149,7 +158,7 @@ v_slope <- function(.data,
                       pct_slope_change = pct_slope_change,
                       f_stat = f_stat,
                       p_val_f = pf_two) %>%
-        dplyr::relocate(bp, algorithm, determinant_bp,
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
                         pct_slope_change, f_stat, p_val_f)
 
     bp_plot <- make_piecewise_bp_plot(plot_df, .x, .y, lm_left, lm_right, bp_dat)

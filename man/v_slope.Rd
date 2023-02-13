@@ -16,7 +16,8 @@ v_slope(
   method = NULL,
   slope_change_lim = 0.1,
   left_slope_lim = 0.6,
-  front_trim = 60,
+  front_trim_vt1 = 60,
+  front_trim_vt2 = 60,
   alpha_linearity = 0.05,
   pos_change = TRUE,
   ...
@@ -45,7 +46,9 @@ v_slope(
 
 \item{left_slope_lim}{The original paper requires that the left regression line have a slope of > \code{0.6}.}
 
-\item{front_trim}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+\item{front_trim_vt1}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
+\item{front_trim_vt2}{See front_trim_vt1. This is here so this this function plays nice with `set_front_trim()`. The v-slope method should be used for finding VT1 only, so leave this alone.}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 

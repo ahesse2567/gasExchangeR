@@ -14,7 +14,8 @@ dmax(
   time = "time",
   alpha_linearity = 0.05,
   bp,
-  pos_change = TRUE
+  pos_change = TRUE,
+  ...
 )
 }
 \arguments{
@@ -37,6 +38,8 @@ dmax(
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

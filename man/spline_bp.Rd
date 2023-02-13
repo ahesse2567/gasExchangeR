@@ -14,7 +14,8 @@ spline_bp(
   vco2 = "vco2",
   ve = "ve",
   time = "time",
-  front_trim = 60,
+  front_trim_vt1 = 60,
+  front_trim_vt2 = 60,
   alpha_linearity = 0.05,
   pos_change = TRUE,
   ...
@@ -39,7 +40,9 @@ spline_bp(
 
 \item{time}{The name of the time column in \code{.data}}
 
-\item{front_trim}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+\item{front_trim_vt1}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
+\item{front_trim_vt2}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 

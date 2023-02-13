@@ -51,8 +51,8 @@ make_piecewise_bp_plot <- function(.data, .x, .y, lm_left, lm_right,
     bp_plot <- ggplot2::ggplot(data = .data,
                                ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
         ggplot2::geom_point(alpha = 0.5) +
-        ggplot2::geom_line(data = plot_df, ggplot2::aesaes(x = get(.x), y = y_hat_left)) +
-        ggplot2::geom_line(data = plot_df, ggplot2::aesaes(x = get(.x), y = y_hat_right)) +
+        ggplot2::geom_line(data = plot_df, ggplot2::aes(x = get(.x), y = y_hat_left)) +
+        ggplot2::geom_line(data = plot_df, ggplot2::aes(x = get(.x), y = y_hat_right)) +
         ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
         ggplot2::theme_minimal()
     bp_plot

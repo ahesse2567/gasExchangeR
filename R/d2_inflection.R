@@ -12,9 +12,9 @@
 #' @param ve Name of the \code{ve} variable
 #' @param time Name of the \code{time} variable
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
-
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
-#' @returns A data frame at the threshold, with a few columns added to note the algorithm used.
+#' @returns A list containing breakpoint data, best-fit and related functions, and a plot.
 #' @export
 #'
 #' @details To mimic the Santos et al. (2004) paper, this fits a 5th-order polynomial regression to the VE vs. VO2 or VCO2 data. Users can set `degree = NULL` to iteratively increase the polynomial if the likelihood ratio test is significant. After establishing the polynomial, we find the real roots of the 2nd derivative within the given range of the `.x` variable to find the inflection points. We then filter by concavity changes that go from up to down because this matches the expected shape of the pulmonary ventilation curves.
@@ -36,8 +36,8 @@ d2_inflection <- function(.data,
                           vco2 = "vco2",
                           ve = "ve",
                           time = "time",
-                          alpha_linearity = 0.05) # change to just alpha?
-{
+                          alpha_linearity = 0.05,  # change to just alpha?
+                          ...) {
 
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -54,7 +54,7 @@ d2_inflection <- function(.data,
     deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
 
     # find x-values of roots of second derivative (inflection points)
-    inflection_points <- deriv2 %>%
+    inflection_points_x <- deriv2 %>%
         Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
         Ryacas::yac_str() %>%
         stringr::str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
@@ -65,36 +65,60 @@ d2_inflection <- function(.data,
         find_real()
 
     # filter by roots within range of x values
-    inflection_points <- inflection_points[inflection_points >= min(.data[[.x]]) &
-                                               inflection_points <= max(.data[[.x]])]
+    inflection_points_x <- inflection_points_x[inflection_points_x >=
+                                                   min(.data[[.x]]) &
+                                               inflection_points_x <=
+                                                   max(.data[[.x]])]
 
     concavity_chgs <- concavity_changes(poly_expr,
-                                        inflection_points = inflection_points)
+                                        inflection_points = inflection_points_x)
     # filter by concave up to concave down
-    inflection_points <- inflection_points[concavity_chgs == "up to down"]
-
+    inflection_points_x <- inflection_points_x[concavity_chgs == "up to down"]
+    inflection_points_y <- eval(poly_expr, envir = list(x = inflection_points_x))
     # what do we do if there's more than one inflection point?
     # do we take the one with the highest 1st derivative slope? But then,
     # how different is that from just finding the highest slope?
-    threshold_idx <- which.min(abs(.data[[.x]] - inflection_points))
 
-    # get values at threshold
-    bp_dat <- .data[threshold_idx,] %>%
+    if(length(inflection_points_x) > 0 & length(inflection_points_y) > 0) {
+        bp_dat <- find_threshold_vals(.data = .data, thr_x = inflection_points_x,
+                                      thr_y = inflection_points_y, .x = .x,
+                                      .y = .y, ...)
+    } else {
+        bp_dat <- .data[0,]
+    }
+
+    # get values at threshold. Make this a deriv helpers function to prep bp_dat?
+    bp_dat <- bp_dat %>%
         dplyr::mutate(bp = bp,
-                      algorithm = "d2_inflection",
+                      algorithm = "d2_reg_spline_maxima",
                       x_var = .x,
                       y_var = .y,
-                      # determinant_bp = determinant_bp,
-                      # pct_slope_change = pct_slope_change,
-                      # f_stat = f_stat,
-                      # p_val_f = pf_two,
-        ) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var,
-                        # determinant_bp,
-                        # pct_slope_change, f_stat, p_val_f
         )
-    bp_dat
+    if(nrow(bp_dat) == 0) { # no breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::add_row() %>%
+            dplyr::mutate(determinant_bp = FALSE)
+    } else { # breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(determinant_bp = TRUE)
+    }
+    bp_dat <- bp_dat %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
+    # make plot for output
+    bp_plot <- ggplot2::ggplot(data = .data,
+                               ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
+        ggplot2::geom_point(alpha = 0.5) +
+        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr,
+                                        envir = list(x = .data[[.x]])))) +
+        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+        ggplot2::theme_minimal()
+
+    return(list(breakpoint_data = bp_dat,
+                lm_poly_reg = lm_poly,
+                deriv1_expr = deriv1,
+                deriv2_expr = deriv2,
+                bp_plot = bp_plot))
 }
 
 #' @keywords internal

@@ -12,6 +12,7 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #' @importFrom rlang :=
@@ -31,7 +32,8 @@ dmax <- function(.data,
                  time = "time",
                  alpha_linearity = 0.05,
                  bp,
-                 pos_change = TRUE){
+                 pos_change = TRUE,
+                 ...){
     # the original paper has something about 50 mL increments in O2
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
@@ -126,7 +128,7 @@ dmax <- function(.data,
     bp_plot <- make_piecewise_bp_plot(.data, .x, .y, lm_left, lm_right, bp_dat)
 
     bp_plot <- bp_plot +
-        ggplot::geom_line(ggplot::aes(y = g.model$fitted.values), linetype = "dashed")
+        ggplot2::geom_line(ggplot2::aes(y = g.model$fitted.values), linetype = "dashed")
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,

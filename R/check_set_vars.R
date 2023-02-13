@@ -119,8 +119,8 @@ set_vars_excess_co2 <- function(inputs = c(as.list(environment(),
     if(is.null(x_vt1)) x_vt1 <- time
     if(is.null(y_vt1)) {
         .data <- .data %>%
-            dplyr::mutate(excess_co2 = .data[[vco2]]^2 /
-                              .data[[vo2]] - .data[[vco2]])
+            dplyr::mutate(excess_co2 = (.data[[vco2]]^2 /
+                              .data[[vo2]]) - .data[[vco2]])
         y_vt1 <- "excess_co2"
     }
     if(is.null(front_trim_vt1)) front_trim_vt1 <- 60

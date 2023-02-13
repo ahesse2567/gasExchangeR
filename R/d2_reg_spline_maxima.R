@@ -65,7 +65,8 @@ d2_reg_spline_maxima <- function(.data,
     # get new values at equal spacing for a smoother splinefun result
     equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
                          length.out = nrow(.data))
-    pred <- predict(lm_spline, newdata = tibble::tibble("{.x}" := equi_spaced_x))
+    pred <- stats::predict(lm_spline,
+                           newdata = tibble::tibble("{.x}" := equi_spaced_x))
 
     spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
     # find number of maxima
@@ -99,34 +100,41 @@ d2_reg_spline_maxima <- function(.data,
     # use highest maxima as threshold
     threshold_idx <- sign_change_idx[which.max(y_val_sign_changes)]
 
-    # x_threshold <- .data[[.x]][threshold_idx]
-    # y_hat_threshold <- predict(lm_spline,
-    #                                tibble("{.x}" := x_threshold))
+    x_threshold <- .data[[.x]][threshold_idx]
+    y_hat_threshold <- predict(lm_spline,
+                               tibble::tibble("{.x}" := x_threshold))
+
+    bp_dat <- find_threshold_vals(.data = .data, thr_x = x_threshold,
+                                  thr_y = y_hat_threshold, .x = .x,
+                                  .y = .y, ...)
 
     # get values at threshold
-    bp_dat <- .data[threshold_idx,] %>%
+    bp_dat <- bp_dat %>%
         dplyr::mutate(bp = bp,
                       algorithm = "d2_reg_spline_maxima",
                       x_var = .x,
                       y_var = .y,
-                      # determinant_bp = determinant_bp,
-                      # pct_slope_change = pct_slope_change,
-                      # f_stat = f_stat,
-                      # p_val_f = pf_two,
-        ) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var,
-                        # determinant_bp,
-                        # pct_slope_change, f_stat, p_val_f
         )
 
-    bp_plot <- ggplot2::ggplot(data = .data,
-                               aes(x = .data[[.x]], y = .data[[.y]])) +
-        geom_point(alpha = 0.5) +
-        geom_line(aes(x = equi_spaced_x, y = pred)) +
-        geom_vline(xintercept = bp_dat[[.x]]) +
-        theme_minimal()
+    if(nrow(bp_dat) == 0) { # no breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::add_row() %>%
+            dplyr::mutate(determinant_bp = FALSE)
+    } else { # breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(determinant_bp = TRUE)
+    }
+    bp_dat <- bp_dat %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
-    return(list(bp_dat = bp_dat,
+    bp_plot <- ggplot2::ggplot(data = .data,
+                               ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
+        ggplot2::geom_point(alpha = 0.5) +
+        ggplot2::geom_line(ggplot2::aes(x = equi_spaced_x, y = pred)) +
+        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+        ggplot2::theme_minimal()
+
+    return(list(breakpoint_data = bp_dat,
                 lm_reg_spline = lm_spline,
                 spline_deriv_func = spline_func,
                 bp_plot = bp_plot))
@@ -141,7 +149,7 @@ loop_d2_reg_spline <- function(.data, .x, .y, df = NULL,
     # if statement for if users specify the knots or df
     if(!is.null(df)) {
         lm_spline <- paste0(.y, " ~ ", "1 + ",
-                            "bs(", .x,
+                            "splines::bs(", .x,
                             ", df = ", df,
                             ", degree = ", degree, ")") %>%
             stats::as.formula() %>%
@@ -152,7 +160,7 @@ loop_d2_reg_spline <- function(.data, .x, .y, df = NULL,
         i <- 1
         # reference model with one interior knot
         lm_spline <- paste0(.y, " ~ ", "1 + ",
-                            "bs(", .x,
+                            "splines::bs(", .x,
                             ", df = ", i + degree,
                             ", degree = ", degree, ")") %>%
             stats::as.formula() %>%
@@ -164,7 +172,7 @@ loop_d2_reg_spline <- function(.data, .x, .y, df = NULL,
             i <- i + 1
             # TODO add options for user-defined knots and df
             lm_spline <- paste0(.y, " ~ ", "1 + ",
-                                "bs(", .x,
+                                "splines::bs(", .x,
                                 ", df = ", i + degree,
                                 ", degree = ", degree, ")") %>%
                 stats::as.formula() %>%

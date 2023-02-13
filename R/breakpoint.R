@@ -87,8 +87,10 @@ breakpoint <- function(.data,
                           "spline_bp" = do.call("spline_bp", params),
                           "d1_crossing" = do.call("d1_crossing", params),
                           "d2_inflection" = do.call("d2_inflection", params),
-                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxim", params),
-                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima", params),
+                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxima",
+                                                         params),
+                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima",
+                                                           params),
                           stop("Invalid `algorithm_vt2` value"))
         if(bp == "vt2") {
             return(vt2_out)
@@ -96,7 +98,7 @@ breakpoint <- function(.data,
 
         # truncate if VT2 is found
         if(vt2_out$breakpoint_data$determinant_bp & truncate == TRUE) {
-            trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
+            trunc_idx <- which.min(abs(.data[[x_vt2]] - vt2_out$breakpoint_data[[x_vt2]]))
             vt1_df <- .data[1:trunc_idx,]
         } else {
             vt1_df <- .data
@@ -107,9 +109,11 @@ breakpoint <- function(.data,
     }
 
     if(bp == "both" | bp == "vt1") {
+        # should we pass the full df for plotting purposes?
         params[[".data"]] <- vt1_df
         params[[".x"]] <- x_vt1
         params[[".y"]] <- y_vt1
+        params[["bp"]] <- "vt1"
         vt1_out <- switch(algorithm_vt1,
                           "jm" = do.call("jm", params),
                           "orr" = do.call("orr", params),
@@ -118,8 +122,10 @@ breakpoint <- function(.data,
                           "spline_bp" = do.call("spline_bp", params),
                           "d1_crossing" = do.call("d1_crossing", params),
                           "d2_inflection" = do.call("d2_inflection", params),
-                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxim", params),
-                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima", params),
+                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxima",
+                                                         params),
+                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima",
+                                                           params),
                           stop("Invalid `algorithm_vt2` value"))
         if(bp == "vt1") {
             return(vt1_out)
@@ -127,7 +133,8 @@ breakpoint <- function(.data,
     }
 
     vt_out <- suppressMessages(dplyr::full_join(vt1_out$breakpoint_data,
-                                         vt2_out$breakpoint_data))
+                                         vt2_out$breakpoint_data)) %>%
+        relocate(bp, algorithm, x_var, y_var, determinant_bp)
     out <- list(bp_dat = vt_out,
                 vt1_dat = vt1_out,
                 vt2_dat = vt2_out)

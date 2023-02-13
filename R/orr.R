@@ -10,7 +10,8 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
-#' @param front_trim How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt2 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
 #' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
@@ -32,7 +33,8 @@ orr <- function(.data,
                 ve = "ve",
                 time = "time",
                 alpha_linearity = 0.05,
-                front_trim = 60,
+                front_trim_vt1 = 60,
+                front_trim_vt2 = 60,
                 pos_change = TRUE,
                 ...) {
 
@@ -42,6 +44,10 @@ orr <- function(.data,
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
     plot_df <- .data
+
+    front_trim <- set_front_trim(bp = bp,
+                                 front_trim_vt1 = front_trim_vt1,
+                                 front_trim_vt2 = front_trim_vt2)
     .data <- .data %>%
         dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
