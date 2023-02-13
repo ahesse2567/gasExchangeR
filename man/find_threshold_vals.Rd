@@ -2,7 +2,7 @@
 % Please edit documentation in R/find_threshold_values.R
 \name{find_threshold_vals}
 \alias{find_threshold_vals}
-\title{Find other variables at a ventilatory thresholds}
+\title{Find Other Variables at Ventilatory Thresholds}
 \usage{
 find_threshold_vals(
   .data,
@@ -11,7 +11,8 @@ find_threshold_vals(
   .x = .x,
   .y = .y,
   thr_calc_method = c("inv_dist", "dist_x_y", "dist_x"),
-  k = 5
+  k = 5,
+  ...
 )
 }
 \arguments{
@@ -25,9 +26,11 @@ find_threshold_vals(
 
 \item{.y}{Name of the y variable used to find the threshold}
 
-\item{thr_calc_method}{Name of the threshold calculation method. Default is `inv_dist`. The next recommended method is `dist_x_y`.}
+\item{thr_calc_method}{Name of the threshold calculation method. Default is `inv_dist`. The next recommended method is `dist_x_y`, but `dist_x` is also an option.}
 
 \item{k}{How many of the nearest data points should be used to calculate the inverse distance weights?}
+
+\item{...}{Dot dot dot so this function plays nice with other functions that call it.}
 }
 \value{
 A tibble

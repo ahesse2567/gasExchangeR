@@ -105,34 +105,55 @@ d2_poly_reg_maxima <- function(.data,
     # maxima for VT1 and the higher of any two maxima for VT2
     if(length(local_maxima_x) > 1) {
         if(bp == "vt1") {
-            min_local_maxima_x <- local_maxima_x[which.min(local_maxima_y)]
+            local_maxima_x <- local_maxima_x[which.min(local_maxima_y)]
             threshold_idx <-
-                which.min(abs(.data[[.x]] - min_local_maxima_x))
+                which.min(abs(.data[[.x]] - local_maxima_x))
         }
         if(bp == "vt2") {
-            max_local_maxima_x <- local_maxima_x[which.max(local_maxima_y)]
-            threshold_idx <- which.min(abs(.data[[.x]] - max_local_maxima_x))
+            local_maxima_x <- local_maxima_x[which.max(local_maxima_y)]
+            threshold_idx <- which.min(abs(.data[[.x]] - local_maxima_x))
         }
     } else {
         threshold_idx <- which.min(abs(.data[[.x]] - local_maxima_x))
     }
 
+    y_hat_threshold <- eval(poly_expr, envir = list(x = local_maxima_x))
+
+    bp_dat <- find_threshold_vals(.data = .data, thr_x = local_maxima_x,
+                                  thr_y = y_hat_threshold, .x = .x,
+                                  .y = .y, ...)
+
     # get values at threshold
-    bp_dat <- .data[threshold_idx,] %>%
+    bp_dat <- bp_dat %>%
         dplyr::mutate(bp = bp,
-               algorithm = "d2_poly_reg_maxima",
-               x_var = .x,
-               y_var = .y,
-               # determinant_bp = determinant_bp,
-               # pct_slope_change = pct_slope_change,
-               # f_stat = f_stat,
-               # p_val_f = pf_two,
-        ) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var,
-                 # determinant_bp,
-                 # pct_slope_change, f_stat, p_val_f
+                      algorithm = "d2_reg_spline_maxima",
+                      x_var = .x,
+                      y_var = .y,
         )
-    bp_dat
+    if(nrow(bp_dat) == 0) { # no breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::add_row() %>%
+            mutate(determinant_bp = FALSE)
+    } else { # breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(determinant_bp = TRUE)
+    }
+    bp_dat <- bp_dat %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+
+    bp_plot <- ggplot2::ggplot(data = .data,
+                               ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
+        ggplot2::geom_point(alpha = 0.5) +
+        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr,
+                                        envir = list(x = .data[[.x]])))) +
+        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+        ggplot2::theme_minimal()
+
+    return(list(breakpoint_data = bp_dat,
+                lm_poly_reg = lm_poly,
+                deriv1_expr = deriv1,
+                deriv2_expr = deriv2,
+                bp_plot = bp_plot))
 }
 
 #' @keywords internal

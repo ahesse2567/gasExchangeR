@@ -66,7 +66,7 @@ breakpoint <- function(.data,
                        front_trim_vt1 = NULL,
                        front_trim_vt2 = NULL,
                        alpha_linearity = 0.05,
-                       truncate = TRUE, # this may be uncessary for deriv models
+                       truncate = TRUE, # may be unnecessary for deriv algs
                        pos_change = TRUE,
                        ...) {
 
@@ -75,44 +75,30 @@ breakpoint <- function(.data,
     resolved_inputs <- resolve_inputs(inputs = as.list(environment(), all = TRUE))
     list2env(resolved_inputs, envir = environment()) # add values from resolved_inputs
 
-    # do I need to restrict the options for x_vt1 etc. to "time", "vo2", "vco2"
-    # "speed", "watts", etc? That could serve as the general language to define
-    # the relationship graphically. Then I could use the vo2, vco2 arguments to
-    # tell the function what column name specifically refers to "vo2", "vco2", etc.
-    # or, do I just check to make sure the x_vt1 type arguments can be found
-    # in the column names?
-
-    # if a specific method was chosen, a function pre-fills algorithms, .x, .y
-    # based on the method so long as .x and .y are not already specified
-
-    # orr: VE vs. VO2. This kinda finds RC first if the three-regression model is
-    # best, but then only returns vt1. Given that, does this change the truncation
-    # decision at RC?
-    # V-slope
-
-    # algorithm_vt2 <- match.arg(algorithm_vt2,
-    #               choices = c("dmax", "dmax_mod", "jm",
-    #                           "orr", "v-slope", "simplified_v-slope",
-    #                           "splines"))
-    # there's some lactate breakpoints that may be worth adding
-
     if(bp == "both" | bp == "vt2") {
         resolved_inputs[["bp"]] <- "vt2"
-        params = append(resolved_inputs, list(.x = x_vt2, .y = y_vt2))
+        params = append(resolved_inputs, c(list(.x = x_vt2, .y = y_vt2),
+                                           list(...)))
         vt2_out <- switch(algorithm_vt2,
-                          "jm" = do.call(what = "jm", args = params),
-                          "orr" = do.call(what = "orr", args = params),
-                          "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params),
+                          "jm" = do.call("jm", params),
+                          "orr" = do.call("orr", params),
+                          "v-slope" = do.call("v_slope", params),
+                          "dmax" = do.call("dmax", params),
+                          "spline_bp" = do.call("spline_bp", params),
+                          "d1_crossing" = do.call("d1_crossing", params),
+                          "d2_inflection" = do.call("d2_inflection", params),
+                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxima",
+                                                         params),
+                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima",
+                                                           params),
                           stop("Invalid `algorithm_vt2` value"))
-
         if(bp == "vt2") {
             return(vt2_out)
         }
 
         # truncate if VT2 is found
         if(vt2_out$breakpoint_data$determinant_bp & truncate == TRUE) {
-            trunc_idx <- which(.data[[time]] == vt2_out$breakpoint_data$time)
+            trunc_idx <- which.min(abs(.data[[x_vt2]] - vt2_out$breakpoint_data[[x_vt2]]))
             vt1_df <- .data[1:trunc_idx,]
         } else {
             vt1_df <- .data
@@ -123,22 +109,32 @@ breakpoint <- function(.data,
     }
 
     if(bp == "both" | bp == "vt1") {
+        # should we pass the full df for plotting purposes?
         params[[".data"]] <- vt1_df
         params[[".x"]] <- x_vt1
         params[[".y"]] <- y_vt1
+        params[["bp"]] <- "vt1"
         vt1_out <- switch(algorithm_vt1,
-                          "jm" = do.call(what = "jm", args = params),
-                          "orr" = do.call(what = "orr", args = params),
-                          "v-slope" = do.call(what = "v_slope", args = params),
-                          "dmax" = do.call(what = "dmax", args = params),
-                          stop("Invalid `algorithm_vt1` value"))
+                          "jm" = do.call("jm", params),
+                          "orr" = do.call("orr", params),
+                          "v-slope" = do.call("v_slope", params),
+                          "dmax" = do.call("dmax", params),
+                          "spline_bp" = do.call("spline_bp", params),
+                          "d1_crossing" = do.call("d1_crossing", params),
+                          "d2_inflection" = do.call("d2_inflection", params),
+                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxima",
+                                                         params),
+                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima",
+                                                           params),
+                          stop("Invalid `algorithm_vt2` value"))
         if(bp == "vt1") {
             return(vt1_out)
         }
     }
 
     vt_out <- suppressMessages(dplyr::full_join(vt1_out$breakpoint_data,
-                                         vt2_out$breakpoint_data))
+                                         vt2_out$breakpoint_data)) %>%
+        relocate(bp, algorithm, x_var, y_var, determinant_bp)
     out <- list(bp_dat = vt_out,
                 vt1_dat = vt1_out,
                 vt2_dat = vt2_out)

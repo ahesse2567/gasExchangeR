@@ -63,7 +63,6 @@ If you combine rolling and bin averages with \code{subtype = bin_roll} it is imp
 
 # TODO write an example
 
-
-# TODO force people to use this function twice if doing bin-roll or rolling-bin
+# TODO force people to use this function twice if doing bin-roll or rolling-bin?
 
 }

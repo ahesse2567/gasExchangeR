@@ -65,3 +65,21 @@ expr_to_func <- function(expr) {
 normalize01 <- function(x, ...) {
     return((x- min(x)) /(max(x)-min(x)))
 }
+
+#' Set the front_trim according to the ventilatory threshold number and front_trim_vtX arguments
+#'
+#' @keywords internal
+#' @noRd
+set_front_trim <- function(bp, front_trim_vt1, front_trim_vt2) {
+    if (rlang::is_missing("front_trim_vt1")) front_trim_vt1 <- NULL
+    if (rlang::is_missing("front_trim_vt2")) front_trim_vt2 <- NULL
+    if(bp == "vt1" & !is.null(front_trim_vt1)) {
+        front_trim <- front_trim_vt1
+    } else if (bp == "vt2" & !is.null(front_trim_vt2)) {
+        front_trim <- front_trim_vt2
+    } else {
+        front_trim <- 0
+    }
+    front_trim
+}
+

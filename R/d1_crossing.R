@@ -13,8 +13,9 @@
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint? This method is specifically designed for finding VT1 (GET)
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
-#' @returns
+#' @returns A list include breakpoint data, best-fit and related functions, and a plot.
 #'
 #' @export
 #'
@@ -36,7 +37,8 @@ d1_crossing <- function(.data,
                         time = "time",
                         alpha_linearity = 0.05, # change to just alpha?
                         pos_change = TRUE,
-                        bp = "vt1") {
+                        bp = "vt1",
+                        ...) {
 
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -76,7 +78,7 @@ d1_crossing <- function(.data,
                                     Ryacas::yac_str(),
                                 ")") %>%
         parse(text = .) %>%
-        Deriv(x = "x", nderiv = 1)
+        Deriv::Deriv(x = "x", nderiv = 1)
 
     roots <- rootSolve::uniroot.all(function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
                                     interval = c(min(.data[[.x]]), max(.data[[.x]])))
@@ -90,24 +92,53 @@ d1_crossing <- function(.data,
     final_crossing <- roots[eval(deriv_diff_deriv1, envir = list(x = roots)) < 0] %>%
         max()
 
-    threshold_idx <- which.min(abs(.data[[.x]] - final_crossing))
+    # find the fitted VO2 value and use that to find threshold values.
+    # You could use VCO2 or somehow integrate both VO2 & VCO2, but that might be a future update
+    y_hat_threshold <- eval(poly_expr_vo2, envir = list(x = final_crossing))
 
     # get values at threshold
-    bp_dat <- .data[threshold_idx,] %>%
+    bp_dat <- find_threshold_vals(.data = .data, thr_x = final_crossing,
+                                  thr_y = y_hat_threshold, .x = .x,
+                                  .y = .y, ...)
+
+    bp_dat <- bp_dat %>%
         dplyr::mutate(bp = bp,
-               algorithm = "d1_crossing",
-               x_var = .x,
-               y_var = .y,
-               # determinant_bp = determinant_bp,
-               # pct_slope_change = pct_slope_change,
-               # f_stat = f_stat,
-               # p_val_f = pf_two,
-        ) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var,
-                 # determinant_bp,
-                 # pct_slope_change, f_stat, p_val_f
+                      algorithm = "d1_crossing",
+                      x_var = .x,
+                      y_var = .y,
         )
-    bp_dat # return breakpoint data
+    if(nrow(bp_dat) == 0) { # no breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::add_row() %>%
+            dplyr::mutate(determinant_bp = FALSE)
+    } else { # breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(determinant_bp = TRUE)
+    }
+    bp_dat <- bp_dat %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+
+    bp_plot <- ggplot2::ggplot(data = .data,
+                               ggplot2::aes(x = .data[[.x]],
+                                            y = .data[[.y]])) +
+        ggplot2::geom_point(ggplot2::aes(y = vo2, color = "vo2"), alpha = 0.5) +
+        ggplot2::geom_point(ggplot2::aes(y = vco2, color = "vco2"), alpha = 0.5) +
+        ggplot2::geom_line(aes(y = eval(poly_expr_vo2,
+                                        envir = list(x = .data[[.x]])))) +
+        ggplot2::geom_line(aes(y = eval(poly_expr_vco2,
+                                        envir = list(x = .data[[.x]])))) +
+        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+        ggplot2::scale_color_manual(values = c("vo2" = "red", "vco2" = "blue")) +
+        ggplot2::guides(color = ggplot2::guide_legend(title = NULL)) +
+        ggplot2::theme_minimal()
+
+    return(list(breakpoint_data = bp_dat,
+                lm_poly_vo2 = lm_poly_vo2,
+                deriv1_vo2 = deriv1_vo2,
+                lm_poly_vco2 = lm_poly_vco2,
+                deriv1_vco2 = deriv1_vco2,
+                bp_plot = bp_plot))
+
 }
 
 #' @keywords internal
@@ -119,7 +150,7 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
             as.formula() %>%
-            lm(data = .data)
+            stats::lm(data = .data)
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
     } else {
@@ -135,7 +166,7 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
             as.formula() %>%
-            lm(data = .data)
+            stats::lm(data = .data)
 
         lm_list <- append(lm_list, list(lm_poly))
 
@@ -147,7 +178,7 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
                 as.formula() %>%
                 lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
-            lrt <- anova(lm_list[[i]], lm_list[[i+1]])
+            lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
             if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
                 cont = FALSE
                 lm_poly <- lm_list[[i]] # take the previous model
@@ -158,3 +189,32 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
 
     lm_poly
 }
+
+
+
+
+## plotting code to figure out later
+
+# max_diff_deriv1 <- max(eval(deriv_diff_deriv1, envir = list(x = df_avg[["time"]])))
+#
+# sum_range_deriv1 <- eval(deriv_diff_deriv1,
+#                          envir = list(x = df_avg[["time"]])) %>%
+#     range() %>%
+#     abs() %>%
+#     sum()
+#
+# scale_factor <- max(c(.data[[vo2]], .data[[vco2]])) /
+#     sum_range_deriv2
+#
+#
+# bp_plot +
+#     scale_y_continuous(name = paste(vo2, "&", vco2),
+#                        sec.axis = sec_axis(
+#                            ~ . / scale_factor*2 - sum_range_deriv2,
+#                            name = paste("1st Derivative of",
+#                                         vo2, "%", vco2))) +
+#     geom_line(aes(y = eval(deriv_diff_deriv1,
+#                            envir = list(x = df_avg[["time"]]))),
+#               linetype = "dashed")
+
+# this doesn't give the negative values we'll need though

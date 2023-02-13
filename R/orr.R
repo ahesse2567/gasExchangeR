@@ -10,7 +10,8 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
-#' @param front_trim How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt2 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
 #' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
@@ -32,12 +33,22 @@ orr <- function(.data,
                 ve = "ve",
                 time = "time",
                 alpha_linearity = 0.05,
-                front_trim = 60,
+                front_trim_vt1 = 60,
+                front_trim_vt2 = 60,
                 pos_change = TRUE,
                 ...) {
+
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+    bp = match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
+
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]]) %>%
+        dplyr::arrange(.data[[.x]], .data[[time]])
+    plot_df <- .data
+
+    front_trim <- set_front_trim(bp = bp,
+                                 front_trim_vt1 = front_trim_vt1,
+                                 front_trim_vt2 = front_trim_vt2)
+    .data <- .data %>%
         dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     ss <- loop_orr(.data = .data, .x = .x, .y = .y)
@@ -46,15 +57,18 @@ orr <- function(.data,
     df_left <- .data[1:min_ss_idx,]
     df_right <- .data[min_ss_idx:nrow(.data),]
 
-    lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-    lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
-    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::as.formula() %>%
+        stats::lm(data = df_left)
+    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::as.formula() %>%
+        stats::lm(data = df_right)
+    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::as.formula() %>%
+        stats::lm(data = .data)
 
-    RSS_simple <- sum(stats::resid(lm_simple)^2)
-    RSS_two <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
-    MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
-    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- stats::pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
+    pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
+    list2env(pw_stats, envir = environment())
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         abs(lm_left$coefficients[2])
@@ -73,34 +87,31 @@ orr <- function(.data,
 
     int_point <- intersection_point(lm_left, lm_right)
 
-    bp_dat <- .data %>%
-        dplyr::mutate(dist_x_sq = (.data[[.x]] - int_point["x"])^2,
-               dist_y_sq = (.data[[.y]] - int_point["y"])^2,
-               sum_dist_sq = dist_x_sq + dist_y_sq) %>%
-        dplyr::arrange(sum_dist_sq) %>%
-        dplyr::slice(1) %>%
+    bp_dat <- find_threshold_vals(.data = .data, thr_x = int_point["x"],
+                                  thr_y = int_point["y"], .x = .x,
+                                  .y = .y, ...)
+    bp_dat <- bp_dat %>%
         dplyr::mutate(algorithm = "orr",
                       x_var = .x,
                       y_var = .y,
                       determinant_bp = determinant_bp,
-                      bp = bp) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp) %>%
-        dplyr::select(-c(dist_x_sq, dist_y_sq, sum_dist_sq))
+                      bp = bp,
+                      pct_slope_change = pct_slope_change,
+                      f_stat = f_stat,
+                      p_val_f = pf_two) %>%
+        dplyr::relocate(bp, algorithm, determinant_bp,
+                        pct_slope_change, f_stat, p_val_f)
 
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(pct_slope_change = pct_slope_change,
-               f_stat = f_stat,
-               p_val_f = pf_two) %>%
-        dplyr::relocate(bp, algorithm, determinant_bp, pct_slope_change, f_stat, p_val_f)
+    bp_plot <- make_piecewise_bp_plot(plot_df, .x, .y, lm_left, lm_right, bp_dat)
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
                 lm_left = lm_left,
                 lm_right = lm_right,
-                lm_simple = lm_simple))
+                lm_simple = lm_simple,
+                bp_plot = bp_plot))
 
     # Should we add the three line regression code later?
-
 }
 #'
 #' @keywords internal
@@ -121,8 +132,12 @@ loop_orr <- function(.data, .x, .y) {
         df_right <- .data[i:nrow(.data),]
 
         # make linear models of the two halves
-        lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-        lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+        lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+            stats::as.formula() %>%
+            stats::lm(data = df_left)
+        lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
+            stats::as.formula() %>%
+            stats::lm(data = df_right)
 
         ss_left <- sum((lm_left$residuals)^2)
         ss_right <- sum((lm_right$residuals)^2)

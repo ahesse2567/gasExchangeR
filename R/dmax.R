@@ -12,6 +12,7 @@
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #' @importFrom rlang :=
@@ -31,9 +32,11 @@ dmax <- function(.data,
                  time = "time",
                  alpha_linearity = 0.05,
                  bp,
-                 pos_change = TRUE){
+                 pos_change = TRUE,
+                 ...){
     # the original paper has something about 50 mL increments in O2
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+
     .data <- .data %>% # rearrange by x variable. Use time var to break ties.
         dplyr::arrange(.data[[.x]], .data[[time]])
 
@@ -61,6 +64,7 @@ dmax <- function(.data,
     D.max = ComputeDmax(f, g, x1, x2)
     g.D.max = poly.evaluate(g, D.max) #Find y-coord on polynomial g, corresponding to D.max
 
+    # find closest observed data point to Dmax point for plotting left and right regressions?
     dmax_idx <- .data %>%
         dplyr::mutate(dist_x_sq = (.data[[.x]] - D.max)^2,
                dist_y_sq = (.data[[.y]] - g.D.max)^2,
@@ -74,21 +78,25 @@ dmax <- function(.data,
     # also does not currently constrain the right line to go from the
     # dmax point to the last point on the curve
     df_left <- .data[1:dmax_idx,]
-    lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], df_left)
+    # make linear models of the two halves
+    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::as.formula() %>%
+        stats::lm(data = df_left)
 
     df_right <- .data[dmax_idx:nrow(.data),]
-    lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], df_right)
+    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::as.formula() %>%
+        stats::lm(data = df_right)
 
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         lm_left$coefficients[2]
 
-    lm_simple <- stats::lm(.data[[.y]] ~ 1 + .data[[.x]], data = .data)
+    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::as.formula() %>%
+        stats::lm(data = .data)
 
-    RSS_simple <- sum(stats::resid(lm_simple)^2)
-    RSS_two <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
-    MSE_two <- RSS_two / (nrow(.data) - 4) # -4 b/c estimating 4 parameters
-    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- stats::pf(f_stat, df1 = 2, df2 = nrow(.data) - 4, lower.tail = FALSE)
+    pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
+    list2env(pw_stats, envir = environment())
 
     determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
                                          (pos_change == (pct_slope_change > 0)),
@@ -103,13 +111,9 @@ dmax <- function(.data,
     pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
     # find closest actual data point to dmax point and return data
-    bp_dat <- .data %>%
-        dplyr::mutate(dist_x_sq = (.data[[.x]] - D.max)^2,
-               dist_y_sq = (.data[[.y]] - g.D.max)^2,
-               sum_sq = dist_x_sq + dist_y_sq) %>%
-        dplyr::arrange(sum_sq) %>%
-        dplyr::slice(1) %>%
-        dplyr::select(-c(dist_x_sq, dist_y_sq, sum_sq)) %>%
+    bp_dat <- find_threshold_vals(.data = .data, thr_x = D.max, thr_y = g.D.max,
+                                  .x = .x, .y = .y)
+    bp_dat <- bp_dat %>%
         dplyr::mutate(bp = bp,
                algorithm = "dmax",
                x_var = .x,
@@ -121,16 +125,10 @@ dmax <- function(.data,
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
                  pct_slope_change, f_stat, p_val_f)
 
-    # create linear model object so plotting behavior is similar to other algorithms
-    # y_hat <- .data[[.x]]*f[2] + f[1]
-    # dmax_lm <- stats::lm(y_hat ~ .data[[.x]] + 1)
-    #
-    # pred <- bind_rows(tibble(x = .data[[.x]],
-    #                          y_hat = g.model$fitted.values,
-    #                          algorithm = "dmax"),
-    #                   tibble(x = .data[[.x]],
-    #                          y_hat = dmax_lm$fitted.values,
-    #                          algorithm = "dmax_start_end"))
+    bp_plot <- make_piecewise_bp_plot(.data, .x, .y, lm_left, lm_right, bp_dat)
+
+    bp_plot <- bp_plot +
+        ggplot2::geom_line(ggplot2::aes(y = g.model$fitted.values), linetype = "dashed")
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,
@@ -138,7 +136,8 @@ dmax <- function(.data,
                 dmax_point = c("x" = D.max, "y" = g.D.max),
                 lm_left = lm_left,
                 lm_right = lm_right,
-                lm_simple = lm_simple))
+                lm_simple = lm_simple,
+                bp_plot = bp_plot))
 }
 
 

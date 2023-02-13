@@ -1,47 +1,46 @@
 library(gasExchangeR)
 library(tidyverse)
 library(devtools)
+library(readxl)
+library(janitor)
 
-df_raw <- read_csv("inst/extdata/mar16_101_pre.csv", show_col_types = FALSE)
+df_colnames <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
+                         n_max = 0) %>%
+    colnames()
+df_raw <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
+                    col_names = FALSE, skip = 3) %>%
+    set_names(df_colnames)
 
 df_unavg <- df_raw %>%
-    rename_all(.funs = tolower) %>%
-    rename(vo2_rel = vo2,
-           vo2_abs = vo2.1,
-           ve = ve.btps) %>%
-    trim_pre_post(intensity_col = "speed") %>%
-    trim_pre_post(intensity_col = "speed", pre_ex_intensity = 3) %>%
-    trim_pre_post(intensity_col = "speed", pre_ex_intensity = 5.6) %>%
-    select(time, speed, grade, vo2_rel, vo2_abs, vco2, ve, peto2, petco2) %>%
-    mutate(ve_vo2 = ve*1000 / vo2_abs,
-           ve_vco2 = ve*1000 / vco2)
+    clean_names() %>%
+    rename(time = t) %>%
+    mutate(time = lubridate::minute(time) * 60 + lubridate::second(time)) %>%
+    filter(phase == "EXERCISE") %>%
+    relocate(time, speed, grade) %>%
+    ventilatory_outliers()
 
-df_avg <- avg_exercise_test(.data = df_unavg,
-                            type = "breath",
-                            subtype = "rolling",
-                            time_col = "time",
-                            align = "center",
-                            mos = "mean",
-                            roll_window = 9,
-                            roll_trim = 4)
+df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
+                            time_col = "time", bin_w = 10)
 
 breakpoint(.data = df_avg,
-           x_vt1 = "vo2_abs",
+           x_vt1 = "vo2",
            y_vt1 = "vco2",
            algorithm_vt1 = "orr",
            x_vt2 = "vco2",
            y_vt2 = "ve",
            algorithm_vt2 = "orr",
-           vo2 = "vo2_abs",
+           bp = "both",
+           vo2 = "vo2",
            vco2 = "vco2",
            ve = "ve",
            time = "time",
-           bps = "both")
+           k = 7)
 
-orr_dat <- orr(.data = df_avg, .x = "vo2_abs", .y = "vco2",
-    vo2 = "vo2_abs", vco2 = "vco2", ve = "ve",
-    time = "time", alpha_linearity = 0.05, bp = "vt1")
-orr_dat
+orr_dat <- orr(.data = df_avg, .x = "vo2", .y = "vco2",
+               bp = "vt1", vo2 = "vo2", vco2 = "vco2", ve = "ve",
+               time = "time", alpha_linearity = 0.05,
+               thr_calc_method = "inv_dist", k = 5)
+orr_dat$bp_plot
 
 
 plot_data <- tibble(vo2_abs = seq(min(df_avg$vo2_abs), max(df_avg$vo2_abs), by = 1),
