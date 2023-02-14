@@ -188,8 +188,32 @@ avg_exercise_test.time <- function(.data,
     if(subtype == "rolling") {
         align <- match.arg(align, choices = c("left", "right", "center"))
         mos <- match.arg(mos, choices = c("mean", "median"))
-        print("Irregular time series rolling average not yet defined")
-        # return(out)
+
+        if(align == "center") {
+            a <- roll_window / 2
+            b <- roll_window / 2
+        } else if (align == "right") {
+            a <- roll_window
+            b <- 0
+        } else if (align == "left") {
+            a <- 0
+            b <- roll_window
+        }
+        # see https://www.tidyverse.org/blog/2020/02/slider-0-1-0/#index-sliding
+        # for details on irregular time series rolling averages
+
+        out <- data_num %>%
+            dplyr::mutate(
+                dplyr::across(tidyselect::everything(), ~
+                                  slide_index_dbl(., .i = time,
+                                                  .f = mos, na.rm = TRUE,
+                                                  trim = roll_trim / roll_window / 2,
+                                                  .before = b, .after = a,
+                                                  .complete = TRUE))) %>%
+            dplyr::filter(dplyr::if_any(tidyselect::everything(), ~ !is.na(.)))
+
+        return(out)
+
     } else if (subtype == "bin") {
         out <- data_num %>%
             dplyr::group_by_at(.vars = time_col,
@@ -197,7 +221,7 @@ avg_exercise_test.time <- function(.data,
             dplyr::summarise_all(.funs = mos,
                                  na.rm = TRUE,
                                  trim = bin_trim / bin_w / 2)
-        # round(x / roll_window) puts the values into groups. * roll_window
+        # ceiling(x / roll_window) puts the values into groups. * roll_window
         # scales it back to the original time values.
         out <- dplyr::bind_cols(char_cols, out)
         return(out)
