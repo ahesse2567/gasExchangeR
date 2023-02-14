@@ -30,8 +30,22 @@ df_unavg <- df_raw %>%
            excess_co2 = vco2^2 / vo2 - vco2) %>%
     ventilatory_outliers(plot_outliers = FALSE)
 
-df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
-                            time_col = "time", bin_w = 10)
+df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "rolling",
+                            time_col = "time", roll_window = 10)
+
+ggplot(data = df_unavg, aes(x = time)) +
+    geom_point(aes(y = ve_vco2, color = "ve_vco2"), alpha = 0.5) +
+    geom_point(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
+    scale_color_manual(values = c("ve_vco2" = "green", "ve_vo2" = "purple")) +
+    ggtitle("Breath-by-Breath Ventilatory Equivalents") +
+    theme_minimal()
+
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = ve_vco2, color = "ve_vco2"), alpha = 0.5) +
+    geom_point(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
+    scale_color_manual(values = c("ve_vco2" = "green", "ve_vo2" = "purple")) +
+    ggtitle("10-s Rolling Averaged Ventilatory Equivalents") +
+    theme_minimal()
 
 wb_rc <- function(.data,
          .x,
