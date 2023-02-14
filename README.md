@@ -14,16 +14,6 @@ interpolating if desired, and finally averaging the data. Afterwards
 then one can determine ventilatory thresholds, VO2max, and other
 important values.
 
-## Early acknowledgemets
-
-This package borrows heavily from the work by Felipe Mattioni Maturana
-(<https://orcid.org/0000-0002-4221-6104>). Specifically, his work on the
-[whippr](https://github.com/fmmattioni/whippr) and
-[lacater](https://fmmattioni.github.io/lactater/) packages.
-[gasExchangeR](https://github.com/ahesse2567/gasExchangeR) focuses more
-on graded exercise testing than VO2 kinetics; it also emphasizes
-ventilatory breakpoint methods.
-
 ## Installation
 
 You can install the development version of gasExchangeR from
@@ -34,7 +24,25 @@ You can install the development version of gasExchangeR from
 devtools::install_github("ahesse2567/gasExchangeR")
 ```
 
-## Example
+## Development notes
+
+The gasExchangeR package is part of [Anton
+Hesse’s](https://orcid.org/0000-0001-8456-7343) PhD dissertation at the
+University of Minnesota-Twin Cities. Please expect changes and
+improvements if you use this package, and please submit feedback if you
+encounter bugs or have suggestions.
+
+## Early acknowledgemets and other recommended packages
+
+This package expands on the work by Felipe Mattioni Maturana
+(<https://orcid.org/0000-0002-4221-6104>). Specifically, his work on the
+[whippr](https://github.com/fmmattioni/whippr) and
+[lacater](https://fmmattioni.github.io/lactater/) packages.
+[gasExchangeR](https://github.com/ahesse2567/gasExchangeR) focuses more
+on graded exercise testing than VO2 kinetics; it also emphasizes
+ventilatory breakpoint algorithms.
+
+## Using this package to find ventilatory thresholds
 
 Many exercise studies require finding the first and second ventilatory
 thresholds (VT1 & VT2). However, breath-by-breath data is highly
@@ -81,6 +89,8 @@ df_unavg <- df_raw %>%
            excess_co2 = vco2^2 / vo2 - vco2)
 ```
 
+Plotting the raw data
+
 ``` r
 ggplot(data = df_unavg, aes(x = time)) +
   geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
@@ -93,9 +103,10 @@ ggplot(data = df_unavg, aes(x = time)) +
 #> Adding another scale for colour, which will replace the existing scale.
 ```
 
-<img src="man/figures/README-plot_raw_data-1.png" width="100%" /> The
-raw data is obviously noisy. We will first use the absolute VO2 values
-to remove outliers.
+<img src="man/figures/README-plot_raw_data-1.png" width="100%" />
+
+The raw data is obviously noisy. We will first use a rolling-breath
+average with absolute VO2 values to remove outliers.
 
 ``` r
 df_unavg_no_outliers <- df_unavg %>% 
@@ -107,7 +118,7 @@ df_unavg_no_outliers <- df_unavg %>%
 
     #> 4 outliers removed at indicies 62, 170, 193, 225
 
-Removing outliers helps, but some averaging is required,
+Removing outliers helps, but some averaging is also required.
 
 ``` r
 df_avg <- df_unavg_no_outliers %>% 
@@ -124,7 +135,7 @@ ggplot(data = df_avg, aes(x = time)) +
 #> Adding another scale for colour, which will replace the existing scale.
 ```
 
-<img src="man/figures/README-unnamed-chunk-3-1.png" width="100%" /> \##
+<img src="man/figures/README-unnamed-chunk-3-1.png" width="100%" /> \###
 Finding Ventilatory Thresholds
 
 ``` r
@@ -158,16 +169,3 @@ bp_dat$vt2_dat$bp_plot
 ```
 
 <img src="man/figures/README-unnamed-chunk-4-2.png" width="100%" />
-
-You’ll still need to render `README.Rmd` regularly, to keep `README.md`
-up-to-date. `devtools::build_readme()` is handy for this. You could also
-use GitHub Actions to re-render `README.Rmd` every time you push. An
-example workflow can be found here:
-<https://github.com/r-lib/actions/tree/v1/examples>.
-
-You can also embed plots, for example:
-
-<img src="man/figures/README-pressure-1.png" width="100%" />
-
-In that case, don’t forget to commit and push the resulting figure
-files, so they display on GitHub and CRAN.
