@@ -44,6 +44,9 @@ d1_crossing(
 
 \item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
+\value{
+A list include breakpoint data, best-fit and related functions, and a plot.
+}
 \description{
 Use polynomial regression to find the gas exchange threshold (GET) (practically equivalent to the first ventilatory threshold (VT1)). This method by Wisén and Wohlfart (2004) is similar to the V-slope method by Beaver et al. (1986) in that it finds when the rate of CO2 production outpaces the rate of O2 production. In contrast to piecewise regression in the original V-slope method, this uses the first derivative of VO2 and VCO2 vs. time. The threshold is when dVCO2/dt surpasses dVO2/dt for the final time.
 }

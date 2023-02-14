@@ -134,7 +134,7 @@ breakpoint <- function(.data,
 
     vt_out <- suppressMessages(dplyr::full_join(vt1_out$breakpoint_data,
                                          vt2_out$breakpoint_data)) %>%
-        relocate(bp, algorithm, x_var, y_var, determinant_bp)
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
     out <- list(bp_dat = vt_out,
                 vt1_dat = vt1_out,
                 vt2_dat = vt2_out)

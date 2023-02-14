@@ -153,7 +153,7 @@ ventilatory_outliers <- function(.data,
     }
 
     if(any(outliers)) {
-        event <- if_else(remove_outliers, "removed", "detected")
+        event <- dplyr::if_else(remove_outliers, "removed", "detected")
         outs <- paste(which(outliers), collapse = ", ")
         print(glue::glue("{length(which(outliers))} outliers {event} at indicies {outs}"))
     }
