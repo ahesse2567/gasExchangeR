@@ -91,7 +91,7 @@ jm <- function(.data,
                           "{.y}" := lm_right$fitted.values + b0_plus_b1x0,
                           algorithm = "jm")
     pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
-    pct_slope_change <- 100*(lm_right$coefficients[1] - lm_left$coefficients[2]) /
+    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         abs(lm_left$coefficients[2])
 
     determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &

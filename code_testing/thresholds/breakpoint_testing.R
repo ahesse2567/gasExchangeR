@@ -1,7 +1,6 @@
 library(gasExchangeR)
 library(devtools)
 library(tidyverse)
-library(devtools)
 library(janitor)
 
 file_lines <- readLines("inst/extdata/Anton_vo2max.txt")

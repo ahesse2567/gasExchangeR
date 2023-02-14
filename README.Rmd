@@ -20,10 +20,6 @@ knitr::opts_chunk$set(
 
 The goal of gasExchangeR is to help exercise physiologist more easily analyze gas exchange data and to provide more directly control when doing so. The overview of the process of analyzing gas exchange data involves importing the data, identifying and removing outliers, interpolating if desired, and finally averaging the data. Afterwards then one can determine ventilatory thresholds, VO2max, and other important values.
 
-## Early acknowledgemets
-
-This package borrows heavily from the work by Felipe Mattioni Maturana (https://orcid.org/0000-0002-4221-6104). Specifically, his work on the [whippr](https://github.com/fmmattioni/whippr) and [lacater](https://fmmattioni.github.io/lactater/) packages. [gasExchangeR](https://github.com/ahesse2567/gasExchangeR) focuses more on graded exercise testing than VO2 kinetics; it also emphasizes ventilatory breakpoint methods.
-
 ## Installation
 
 You can install the development version of gasExchangeR from [GitHub](https://github.com/) with:
@@ -33,7 +29,15 @@ You can install the development version of gasExchangeR from [GitHub](https://gi
 devtools::install_github("ahesse2567/gasExchangeR")
 ```
 
-## Example
+## Development notes
+
+The gasExchangeR package is part of [Anton Hesse's](https://orcid.org/0000-0001-8456-7343) PhD dissertation at the University of Minnesota-Twin Cities. Please expect changes and improvements if you use this package, and please submit feedback if you encounter bugs or have suggestions.
+
+## Early acknowledgemets and other recommended packages
+
+This package expands on the work by Felipe Mattioni Maturana (https://orcid.org/0000-0002-4221-6104). Specifically, his work on the [whippr](https://github.com/fmmattioni/whippr) and [lacater](https://fmmattioni.github.io/lactater/) packages. [gasExchangeR](https://github.com/ahesse2567/gasExchangeR) focuses more on graded exercise testing than VO2 kinetics; it also emphasizes ventilatory breakpoint algorithms.
+
+## Using this package to find ventilatory thresholds
 
 Many exercise studies require finding the first and second ventilatory thresholds (VT1 & VT2). However, breath-by-breath data is highly variable and requires some cleaning prior to finding these thresholds.
 
@@ -78,6 +82,7 @@ df_unavg <- df_raw %>%
            excess_co2 = vco2^2 / vo2 - vco2)
 ```
 
+Plotting the raw data
 
 ```{r plot_raw_data}
 ggplot(data = df_unavg, aes(x = time)) +
@@ -89,7 +94,8 @@ ggplot(data = df_unavg, aes(x = time)) +
   scale_color_discrete(name = "", labels = c("vo2" = "vo2", "vco2" = "vco2"))
 
 ```
-The raw data is obviously noisy. We will first use the absolute VO2 values to remove outliers.
+
+The raw data is obviously noisy. We will first use a rolling-breath average with absolute VO2 values to remove outliers.
 
 ```{r warning=FALSE}
 df_unavg_no_outliers <- df_unavg %>% 
@@ -97,7 +103,7 @@ df_unavg_no_outliers <- df_unavg %>%
                          plot_outliers = TRUE)
 ```
 
-Removing outliers helps, but some averaging is required,
+Removing outliers helps, but some averaging is also required.
 
 ```{r}
 df_avg <- df_unavg_no_outliers %>% 
@@ -112,7 +118,7 @@ ggplot(data = df_avg, aes(x = time)) +
   scale_color_discrete(name = "", labels = c("vo2" = "vo2", "vco2" = "vco2"))
 
 ```
-## Finding Ventilatory Thresholds
+### Finding Ventilatory Thresholds
 
 ```{r warning=FALSE}
 bp_dat <- breakpoint(.data = df_avg, method = "v-slope",
@@ -127,12 +133,3 @@ bp_dat$vt2_dat$bp_plot
 ```
 
 
-You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this. You could also use GitHub Actions to re-render `README.Rmd` every time you push. An example workflow can be found here: <https://github.com/r-lib/actions/tree/v1/examples>.
-
-You can also embed plots, for example:
-
-```{r pressure, echo = FALSE}
-plot(pressure)
-```
-
-In that case, don't forget to commit and push the resulting figure files, so they display on GitHub and CRAN.
