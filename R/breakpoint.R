@@ -31,6 +31,7 @@
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #' @param pos_change_vt1 Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param pos_change_vt2 Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate. *The only time you should set this to `FALSE` is when your y-axis variable is end-tidal carbon dioxide (PetCO2)*.
+#' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
 #'
 #' @returns A list that contains a data frame with slices of the original data frame at the threshold index. The data frame new columns describing the methods used and if the breakpoint was truly a breakpoint. Depending on the breakpoint algorithm used, `breakpoint()` also returns fitted values, the left and right sides of the piecewise regression, as well as a simple linear regression.
 #' @export
@@ -71,6 +72,7 @@ breakpoint <- function(.data,
                        truncate = TRUE, # may be unnecessary for deriv algs
                        pos_change_vt1 = TRUE,
                        pos_change_vt2 = TRUE,
+                       pos_slope_after_bp = TRUE,
                        ordering = c("by_x", "time"),
                        ...) {
 

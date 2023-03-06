@@ -69,7 +69,7 @@ ggplot(data = df_avg, aes(x = time)) +
 # algorithms <- c("jm", "orr", "dmax", "spline_bp",
 #                 "d2_inflection", "d1_poly_reg_maxima",
 #                 "d2_reg_spline_maxima")
-debug(d2_reg_spline_maxima)
+debug(breakpoint)
 
 breakpoint(df_avg,
            algorithm_vt1 = "v-slope",
@@ -79,7 +79,8 @@ breakpoint(df_avg,
            x_vt2 = "vco2",
            y_vt2 = "ve",
            bp = "both",
-           truncate = TRUE
+           truncate = TRUE,
+           pos_slope_after_bp = FALSE,
 )
 
 undebug(d2_reg_spline_maxima)
