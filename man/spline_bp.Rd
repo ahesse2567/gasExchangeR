@@ -18,6 +18,8 @@ spline_bp(
   front_trim_vt2 = 60,
   alpha_linearity = 0.05,
   pos_change = TRUE,
+  pos_slope_after_bp = TRUE,
+  ordering = c("by_x", "time"),
   ...
 )
 }
@@ -47,6 +49,10 @@ spline_bp(
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+
+\item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.}
+
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
 \item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }

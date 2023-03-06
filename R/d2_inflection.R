@@ -13,6 +13,7 @@
 #' @param time Name of the \code{time} variable
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #'
 #' @returns A list containing breakpoint data, best-fit and related functions, and a plot.
 #' @export
@@ -31,13 +32,15 @@ d2_inflection <- function(.data,
                           .x,
                           .y,
                           bp,
-                          degree = 5,
+                          ...,
+                          degree = NULL,
                           vo2 = "vo2",
                           vco2 = "vco2",
                           ve = "ve",
                           time = "time",
-                          alpha_linearity = 0.05,  # change to just alpha?
-                          ...) {
+                          alpha_linearity = 0.05,
+                          ordering = c("by_x", "time")
+                          ) {
 
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -74,35 +77,42 @@ d2_inflection <- function(.data,
                                         inflection_points = inflection_points_x)
     # filter by concave up to concave down
     inflection_points_x <- inflection_points_x[concavity_chgs == "up to down"]
+    # if there's more than one up to down inflection point, choose whichever
+    # point has the higher slope
+    inflection_points_x <- inflection_points_x[which.max(
+        eval(deriv1, envir = list(x = inflection_points_x)))]
+
     inflection_points_y <- eval(poly_expr, envir = list(x = inflection_points_x))
-    # what do we do if there's more than one inflection point?
-    # do we take the one with the highest 1st derivative slope? But then,
-    # how different is that from just finding the highest slope?
 
     if(length(inflection_points_x) > 0 & length(inflection_points_y) > 0) {
         bp_dat <- find_threshold_vals(.data = .data, thr_x = inflection_points_x,
                                       thr_y = inflection_points_y, .x = .x,
                                       .y = .y, ...)
     } else {
-        bp_dat <- .data[0,]
+        bp_dat <- tibble::tibble()
     }
 
     # get values at threshold. Make this a deriv helpers function to prep bp_dat?
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(bp = bp,
-                      algorithm = "d2_reg_spline_maxima",
-                      x_var = .x,
-                      y_var = .y,
-        )
+
     if(nrow(bp_dat) == 0) { # no breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::add_row() %>%
             dplyr::mutate(determinant_bp = FALSE)
+        # add character or factor columns that are all the same value (e.g. ids)
+        non_numeric_df <- .data %>%
+            select(where(function(x) is.character(x) | is.factor(x) &
+                             all(x == x[1]))) %>%
+            slice(1)
+        bp_dat <- bind_cols(bp_dat, non_numeric_df)
     } else { # breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::mutate(determinant_bp = TRUE)
     }
     bp_dat <- bp_dat %>%
+        dplyr::mutate(bp = bp,
+                      algorithm = "d2_inflection",
+                      x_var = .x,
+                      y_var = .y) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
     # make plot for output

@@ -204,13 +204,20 @@ avg_exercise_test.time <- function(.data,
 
         out <- data_num %>%
             dplyr::mutate(
-                dplyr::across(tidyselect::everything(), ~
-                                  slide_index_dbl(., .i = time,
-                                                  .f = mos, na.rm = TRUE,
-                                                  trim = roll_trim / roll_window / 2,
-                                                  .before = b, .after = a,
-                                                  .complete = TRUE))) %>%
-            dplyr::filter(dplyr::if_any(tidyselect::everything(), ~ !is.na(.)))
+                dplyr::across(
+                    tidyselect::everything(),
+                    ~ slider::slide_index_dbl(
+                            .,
+                            .i = time,
+                            .f = mos,
+                            na.rm = TRUE,
+                            trim = roll_trim / roll_window / 2,
+                            .before = b,
+                            .after = a,
+                            .complete = FALSE
+                        ))) %>%
+            dplyr::filter(dplyr::if_any(tidyselect::everything(),
+                                        ~ !is.na(.)))
 
         return(out)
 
@@ -283,13 +290,13 @@ avg_exercise_test.digital <- function(.data,
 
     bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)
 
+    # should this exclude the time column?
     out <- purrr::map(.x = data_num,
                       .f = function(.x, bf) signal::filter(bf, .x),
                       bf = bf)
 
     out <- dplyr::bind_cols(char_cols, out)
     return(out)
-
 }
 
 #' @keywords internal

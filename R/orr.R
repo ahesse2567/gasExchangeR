@@ -13,6 +13,8 @@
 #' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param front_trim_vt2 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
 #'
 #' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #'
@@ -28,21 +30,25 @@ orr <- function(.data,
                 .x,
                 .y,
                 bp,
+                ...,
                 vo2 = "vo2",
                 vco2 = "vco2",
                 ve = "ve",
                 time = "time",
+                ordering = c("by_x", "time"),
                 alpha_linearity = 0.05,
                 front_trim_vt1 = 60,
                 front_trim_vt2 = 60,
                 pos_change = TRUE,
-                ...) {
+                pos_slope_after_bp = TRUE
+                ) {
 
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
-    bp = match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
+    bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
+    ordering <- match.arg(ordering, several.ok = FALSE)
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
     plot_df <- .data
 
     front_trim <- set_front_trim(bp = bp,
@@ -81,9 +87,13 @@ orr <- function(.data,
                           algorithm = "orr")
     pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
-    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
-                                         (pos_change == (pct_slope_change > 0)),
-                                     TRUE, FALSE)
+    determinant_bp <- check_if_determinant_bp(p = pf_two,
+                                              pct_slope_change = pct_slope_change,
+                                              pos_change = pos_change,
+                                              pos_slope_after_bp =
+                                                  pos_slope_after_bp,
+                                              slope_after_bp = coef(lm_right)[2],
+                                              alpha = alpha_linearity)
 
     int_point <- intersection_point(lm_left, lm_right)
 
@@ -130,6 +140,7 @@ loop_orr <- function(.data, .x, .y) {
         # I wonder exactly what the word 'contiguous' means in this context
         df_left <- .data[1:i,]
         df_right <- .data[i:nrow(.data),]
+        # NOTE: WB'S implementation of Orr does NOT share a point at i
 
         # make linear models of the two halves
         lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%

@@ -26,6 +26,8 @@
 #' @param time Name of the \code{time} variable
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param pos_change Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.
 #'
 #' @returns A slice of the original data frame at the threshold index with a new `algorithm` column.
 #'
@@ -50,13 +52,18 @@ d2_poly_reg_maxima <- function(.data,
                             vco2 = "vco2",
                             ve = "ve",
                             time = "time",
-                            alpha_linearity = 0.05, # change to just alpha?
-                            ...) {
+                            alpha_linearity = 0.05,
+                            pos_change = TRUE,
+                            ordering = c("by_x", "time"),
+                            ...
+                            ) {
+
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    ordering <- match.arg(ordering, several.ok = FALSE)
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
 
     lm_poly <- loop_d2_poly_reg_maxima(.data = .data, .x = .x, .y = .y,
                              degree = degree,
@@ -68,13 +75,12 @@ d2_poly_reg_maxima <- function(.data,
     # find the maxima in the acceleration (2nd derivative) of the relationship
     # b/c you essentially need to take a third derivative and still have an x term
 
-    # lm_poly <- lm_list[[3]] # keep for testing, delete later
-    # this definitely breaks if the best-fit polynomial order is too low
     poly_expr <- expr_from_coefs(lm_poly$coefficients)
     deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
     deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
-    deriv3 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 3) # jerk
+    deriv3 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 3) # jerk. Use to find maxima in 2nd deriv
     deriv4 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 4) # snap. This kinda feels hacky and dumb at this point
+    # 4th deriv used to find maxima vs. minima given multiple extrema
 
     # find x-values of roots
     roots_deriv3 <- deriv3 %>%
@@ -91,13 +97,23 @@ d2_poly_reg_maxima <- function(.data,
     roots_deriv3 <- roots_deriv3[roots_deriv3 >= min(.data[[.x]]) &
                                      roots_deriv3 <= max(.data[[.x]])]
 
-    # use 4th derivative to find which are maxima (y @ roots < 0)
-    local_maxima_x <- roots_deriv3[eval(deriv4,
-                                        envir = list(x = roots_deriv3)) < 0]
-    local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
+    # use pos_change to search for values above or below 0
+    if(pos_change) {
+        # use 4th derivative to find which are maxima (y @ roots < 0)
+        local_maxima_x <- roots_deriv3[eval(deriv4,
+                                            envir = list(x = roots_deriv3)) < 0]
+        # uncomment if we need local_maxima_y ever later
+        # local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
+    } else {
+        # use 4th derivative to find which are minima (y @ roots > 0)
+        local_maxima_x <- roots_deriv3[eval(deriv4,
+                                            envir = list(x = roots_deriv3)) > 0]
+        # local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
+    }
 
     # you would generally expect the threshold to be the highest of any possible
-    # local maxima (at least for VT2)
+    # local maxima (at least for VT2). In this case, highest means highest x-val
+    # (and usually highest y-val, too)
 
     # select higher of the two local maxima b/c we expect just one large change
     # I feel like this goes against my visual detection
@@ -105,23 +121,23 @@ d2_poly_reg_maxima <- function(.data,
     # maxima for VT1 and the higher of any two maxima for VT2
     if(length(local_maxima_x) > 1) {
         if(bp == "vt1") {
-            local_maxima_x <- local_maxima_x[which.min(local_maxima_y)]
-            threshold_idx <-
-                which.min(abs(.data[[.x]] - local_maxima_x))
+            local_maxima_x <- local_maxima_x[which.min(local_maxima_x)]
         }
         if(bp == "vt2") {
-            local_maxima_x <- local_maxima_x[which.max(local_maxima_y)]
-            threshold_idx <- which.min(abs(.data[[.x]] - local_maxima_x))
+            # techincally, this is a local minima
+            local_maxima_x <- local_maxima_x[which.max(local_maxima_x)]
         }
-    } else {
-        threshold_idx <- which.min(abs(.data[[.x]] - local_maxima_x))
     }
 
     y_hat_threshold <- eval(poly_expr, envir = list(x = local_maxima_x))
 
-    bp_dat <- find_threshold_vals(.data = .data, thr_x = local_maxima_x,
-                                  thr_y = y_hat_threshold, .x = .x,
-                                  .y = .y, ...)
+    if(length(local_maxima_x) > 0) {
+        bp_dat <- find_threshold_vals(.data = .data, thr_x = local_maxima_x,
+                                      thr_y = y_hat_threshold, .x = .x,
+                                      .y = .y, ...)
+    } else {
+        bp_dat <- tibble::tibble()
+    }
 
     # get values at threshold
     bp_dat <- bp_dat %>%
@@ -139,13 +155,28 @@ d2_poly_reg_maxima <- function(.data,
             dplyr::mutate(determinant_bp = TRUE)
     }
     bp_dat <- bp_dat %>%
+        dplyr::mutate(algorithm = "d2_poly_reg_maxima",
+                      x_var = .x,
+                      y_var = .y,
+                      bp = bp) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+
+    # make better plotting data by making more, evenly spaced points
+    equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
+                         length.out = range(.data[[vo2]]) %>%
+                             diff() %>%
+                             round())
+
+    pred <- stats::predict(lm_poly,
+                           newdata = tibble::tibble("{.x}" := equi_spaced_x))
 
     bp_plot <- ggplot2::ggplot(data = .data,
                                ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
         ggplot2::geom_point(alpha = 0.5) +
-        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr,
-                                        envir = list(x = .data[[.x]])))) +
+        ggplot2::geom_line(
+            data = tibble::tibble(x = equi_spaced_x,
+                                  y = pred),
+            ggplot2::aes(x = equi_spaced_x, y = pred)) +
         ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
         ggplot2::theme_minimal()
 
@@ -159,31 +190,32 @@ d2_poly_reg_maxima <- function(.data,
 #' @keywords internal
 loop_d2_poly_reg_maxima <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
-    # browser()
-    # if the user specifies a degree, find that and be done with it
+
     if (!is.null(degree)) {
-        lm_poly <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
-                                             raw = TRUE), data = .data)
-        # if the user does NOT specify a degree, find the best degree using
-        # likelihood ratio test
+        # if the user specifies a degree, find that and be done with it
+        lm_poly <- paste0(.y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
+                          degree, ", raw = TRUE)") %>%
+            stats::lm(data = .data)
     } else {
+        # if the user does NOT specify a degree (default),
+        # find the best degree using likelihood ratio test
         degree = 5 # start at degree = 5 so you can take 4 derivatives
         lm_list = vector(mode = "list", length = 0) # hold lm data
         # keep raw = TRUE for now b/c it's way easier for me to test
         # if the derivative expressions are working
         # starting with degree = 5 b/c that's the minimum I've seen in
         # other papers that seemed to use polynomial fits
-        lm_poly <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]], degree = degree,
-                                             raw = TRUE), data = .data)
+        lm_poly <- paste0(.y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
+                          degree, ", raw = TRUE)") %>%
+            stats::lm(data = .data)
         lm_list <- append(lm_list, list(lm_poly))
 
         cont <- TRUE
         i <- 1 # start at 2 b/c we already made linear (degree = 1) model
         while(cont == TRUE) {
-            lm_poly <- stats::lm(.data[[.y]] ~ 1 + poly(.data[[.x]],
-                                                 degree = degree + i,
-                                                 raw = TRUE),
-                          data = .data)
+            lm_poly <- paste0(.y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
+                              degree + i, ", raw = TRUE)") %>%
+                stats::lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
             lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
             if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {

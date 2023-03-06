@@ -9,6 +9,7 @@ jm(
   .x,
   .y,
   bp,
+  ...,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -17,7 +18,8 @@ jm(
   front_trim_vt1 = 60,
   front_trim_vt2 = 60,
   pos_change = TRUE,
-  ...
+  pos_slope_after_bp = TRUE,
+  ordering = c("by_x", "time")
 )
 }
 \arguments{
@@ -28,6 +30,8 @@ jm(
 \item{.y}{the y-axis variable.}
 
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
@@ -45,7 +49,9 @@ jm(
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+\item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.}
+
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

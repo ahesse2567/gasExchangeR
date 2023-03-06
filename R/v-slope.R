@@ -1,6 +1,6 @@
 #' Finding a breakpoint using Beaver's V-slope algorithm
 #'
-#' V-slope uses the v-slope \emph{algorithm} to find a breakpoint. Note, the v-slope algorithm is different from the v-slope \emph{method} as a whole because the latter also includes a specific set of data processing steps (see reference). In order to use the v-slope algorithm as originally described by Beaver et al. (1986), pass \code{"v-slope"} to the \code{method} argument in the \code{breakpoint} function. Without indicating the \code{method} as \code{"v-slope"}, the function returns the breakpoint associated with ratio of the highest distance between the single regression line to the intersection point of the two regression lines, to the mean square error of the single regression line. This can sometimes lead to odd behavior and it is therefore generally recommended to specify \code{"v-slope"} in the \code{method} argument of \code{breakpoint} when using this function. See the Warnings and Details sections for details.
+#' V-slope uses the v-slope \emph{algorithm} to find a breakpoint. Note, the v-slope algorithm is different from the v-slope \emph{method} as a whole because the latter also includes a specific set of data processing steps (Beaver et al., 1986). In order to use the v-slope algorithm as originally described by Beaver et al. (1986), pass \code{"v-slope"} to the \code{method} argument in the \code{breakpoint} function. Without indicating the \code{method} as \code{"v-slope"}, the function returns the breakpoint associated with ratio of the highest distance between the single regression line to the intersection point of the two regression lines, to the mean square error of the piecewise regression lines. This can sometimes lead to odd behavior and it is therefore generally recommended to specify \code{"v-slope"} in the \code{method} argument of \code{breakpoint} when using this function. See the Warnings and Details sections for details.
 #'
 #' @section Warning:
 #' Using the v-slope algorithm as originally described by Beaver et al. (1986) is only intended to be used with the VCO2 vs. VO2 relationship when both are absolute measures of the same units (e.g. mL/min). The quality control criteria for this algorithm are an the increase in slope from the left to right regression line of > 0.1 and the slope of the left regression > 0.6. Using other x-y relationship leads to odd behavior that may not satisfy those criteria.
@@ -24,6 +24,8 @@
 #' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param front_trim_vt2 See front_trim_vt1. This is here so this this function plays nice with `set_front_trim()`. The v-slope method should be used for finding VT1 only, so leave this alone.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #' @importFrom rlang :=
@@ -38,6 +40,7 @@ v_slope <- function(.data,
                     .x,
                     .y,
                     bp,
+                    ...,
                     vo2 = "vo2",
                     vco2 = "vco2",
                     ve = "ve",
@@ -49,14 +52,17 @@ v_slope <- function(.data,
                     front_trim_vt2 = 60,
                     alpha_linearity = 0.05,
                     pos_change = TRUE,
-                    ...) {
+                    pos_slope_after_bp = TRUE,
+                    ordering = c("by_x", "time")
+                    ) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     if(.x != vo2 | .y != vco2) {
         warning("x variable may NOT be (absolute) VO2 or y variable may NOT be VCO2. This method is designed to work with x = absolute VO2 and y = VCO2")
     }
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    ordering <- match.arg(ordering, several.ok = FALSE)
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
     plot_df <- .data
 
     front_trim <- set_front_trim(bp = bp,
@@ -73,21 +79,22 @@ v_slope <- function(.data,
     lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
         stats::as.formula() %>%
         stats::lm(data = df_left)
-
-    while(slope_change < slope_change_lim |
-          lm_left$coefficients[2] < left_slope_lim ) {
+    # browser()
+    while((slope_change < slope_change_lim) |
+          (lm_left$coefficients[2] < left_slope_lim)) {
         # enter this loop if slopes did not change be enough or if the left slope
         # was too low
         bp_idx <- order(-dist_MSE_ratio)[i] # find the next-best fit
         df_left <- .data[1:bp_idx,]
-        df_right <- .data[(bp_idx+1):nrow(.data),]
+        df_right <- .data[bp_idx:nrow(.data),]
         lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
         lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
 
         slope_change <- lm_right$coefficients[2] - lm_left$coefficients[2]
-        i <- i + 1
-        if (i > length(dist_MSE_ratio)) {
-            message("No breakpoint found. Change between slopes was never >= 0.1.")
+
+        if (i > length(dist_MSE_ratio[!is.na(dist_MSE_ratio)])) {
+            message(paste0("No VT1 breakpoint found with v-slope method because the change between slopes was never >= ",
+                           slope_change_lim, "."))
             bp_dat <- .data %>%
                 dplyr::slice(1) %>%
                 dplyr::mutate(bp = bp,
@@ -107,6 +114,7 @@ v_slope <- function(.data,
                         lm_right = NULL,
                         lm_simple = NULL))
         }
+        i <- i + 1
     }
 
     df_left <- .data[1:bp_idx,] # split data into left portion
@@ -131,9 +139,13 @@ v_slope <- function(.data,
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         abs(lm_left$coefficients[2])
 
-    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
-                                         (pos_change == (pct_slope_change > 0)),
-                                     TRUE, FALSE)
+    determinant_bp <- check_if_determinant_bp(p = pf_two,
+                                              pct_slope_change = pct_slope_change,
+                                              pos_change = pos_change,
+                                              pos_slope_after_bp =
+                                                  pos_slope_after_bp,
+                                              slope_after_bp = coef(lm_right)[2],
+                                              alpha = alpha_linearity)
 
     y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
                          "{.y}" := lm_left$fitted.values,
@@ -178,6 +190,12 @@ loop_v_slope <- function(.data, .x, .y) {
         stats::as.formula() %>%
         stats::lm(data = .data)
     # find slope of line perpendicular to slope of lm_simple
+    # There's an easier way to find the distance between a point and a line
+    # by putting the equation of the simple regression into the standard form
+    # of Ax + By + C = 0
+    # https://www.mathportal.org/calculators/analytic-geometry/line-point-distance.php
+    # https://brilliant.org/wiki/dot-product-distance-between-point-and-a-line/
+
     recip_slope <- (-1 / lm_simple$coefficients[2]) # used in for loop
     dist_MSE_ratio <- vector(length = nrow(.data))
 
@@ -198,6 +216,14 @@ loop_v_slope <- function(.data, .x, .y) {
             stats::as.formula() %>%
             stats::lm(data = df_right)
 
+        ss_left <- sum(stats::residuals(lm_left)^2)
+        ss_right <- sum(stats::residuals(lm_right)^2)
+        ss_both <- ss_left + ss_right
+        # Calculate MSE according to the JM algorithm: MSE = ss_both / (n - 4)
+        # we're subtracting for because we're estimating 4 parameters: two slopes
+        # and two intercepts
+        MSE <- ss_both / (nrow(.data) - 4)
+
         # find intersection point of left and right regressions
         lr_intersect <- intersection_point(lm_left, lm_right)
 
@@ -211,7 +237,7 @@ loop_v_slope <- function(.data, .x, .y) {
         d <- sqrt((x_simple_recip - lr_intersect["x"])^2 +
                       (y_simple_recip - lr_intersect["y"])^2)
 
-        dist_MSE_ratio[i] <- d / stats::anova(lm_simple)['Residuals', 'Mean Sq']
+        dist_MSE_ratio[i] <- d / MSE
     }
 
     dist_MSE_ratio

@@ -25,6 +25,7 @@
 #' Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
 #' Sherrill, D. L., Anderson, S. J., & Swanson, G. E. O. R. G. E. (1990). Using smoothing splines for detecting ventilatory thresholds. Medicine and Science in Sports and Exercise, 22(5), 684-689.
 #' Wade, T. D., Anderson, S. J., Bondy, J., Ramadevi, V. A., Jones, R. H., & Swanson, G. D. (1988). Using smoothing splines to make inferences about the shape of gas-exchange curves. Computers and biomedical research, 21(1), 16-26.
+#' @param ordering
 #'
 #' @returns A slice of the original data frame at the threshold index with a new `algorithm` column.
 #' @export
@@ -36,21 +37,24 @@ d2_reg_spline_maxima <- function(.data,
                                  .x,
                                  .y,
                                  bp,
+                                 ...,
                                  degree = 5,
                                  df = NULL,
                                  vo2 = "vo2",
                                  vco2 = "vco2",
                                  ve = "ve",
                                  time = "time",
-                                 alpha_linearity = 0.05, # change to just alpha?
+                                 alpha_linearity = 0.05,
                                  pos_change = TRUE,
-                                 ...) {
+                                 ordering = c("by_x", "time")
+                                 ) {
 
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    ordering <- match.arg(ordering, several.ok = FALSE)
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
 
     # find best number of knots
     lm_spline <- loop_d2_reg_spline(.data = .data, .x = .x, .y = .y,
@@ -64,73 +68,105 @@ d2_reg_spline_maxima <- function(.data,
 
     # get new values at equal spacing for a smoother splinefun result
     equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
-                         length.out = nrow(.data))
+                         length.out = range(.data[[vo2]]) %>%
+                             diff() %>%
+                             round())
     pred <- stats::predict(lm_spline,
                            newdata = tibble::tibble("{.x}" := equi_spaced_x))
 
     spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
+
     # find number of maxima
-    sign_change_idx <- slope_sign_changes(y = spline_func(x = .data[[.x]],
-                                                          deriv = 2),
-                                          change = "pos_to_neg")
-    # filter by expected slope (usually positive)
-    # there can be a spike in accel. during the initial drop in vent eqs
-    # pos_change &
     if(pos_change) {
+        sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
+                                                              deriv = 2),
+                                              change = "pos_to_neg")
+        # filter by expected slope (usually positive)
+        # there can be a spike in accel during the initial drop in vent eqs
         sign_change_idx <- sign_change_idx[spline_func(
-            x = .data[[.x]][sign_change_idx],
-            deriv = 1) > 0]
-    } else {
+            x = equi_spaced_x[sign_change_idx],
+            deriv = 1) > 0] # deriv 1 gives slope
+    } else { # this only applies when y var = petco2
+        sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
+                                                              deriv = 2),
+                                              change = "neg_to_pos")
+        # filter by expected slope (in this case negative)
         sign_change_idx <- sign_change_idx[spline_func(
-            x = .data[[.x]][sign_change_idx],
+            x = equi_spaced_x[sign_change_idx],
             deriv = 1) < 0]
     }
 
-    y_val_sign_changes <- numeric(length = length(sign_change_idx))
-    for(i in seq_along(sign_change_idx)) {
-        interval <- c(.data[[.x]][sign_change_idx[i]-1],
-                      .data[[.x]][sign_change_idx[i]+1])
-
-        extrema_deriv2 <- stats::optimize(f = spline_func,
-                                   interval = interval,
-                                   deriv = 2, maximum = TRUE)
-        y_val_sign_changes[i] <- extrema_deriv2$objective
+    # there are often two local maxima. Choose the higher x-axis value
+    # for VT2/RC, and the lower for VT1. This is similar to
+    # Sherril et al. (1990) and Cross et al. (2012)
+    if(length(sign_change_idx) > 1) {
+        if(bp == "vt1") {
+            sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
+        }
+        if(bp == "vt2") {
+            sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
+        }
     }
 
-    # use highest maxima as threshold
-    threshold_idx <- sign_change_idx[which.max(y_val_sign_changes)]
+    # calculate y-value at the threshold
+    # get value on either side of index
+    # interval <- c(equi_spaced_x[sign_change_idx[i] - 1],
+    #               equi_spaced_x[sign_change_idx[i] + 1])
+    #
+    # extrema_deriv2 <- stats::optimize(f = spline_func, interval = interval,
+    #                                   deriv = 2, maximum = TRUE)
+    #
+    # y_val_sign_changes <- extrema_deriv2$objective
 
-    x_threshold <- .data[[.x]][threshold_idx]
-    y_hat_threshold <- predict(lm_spline,
-                               tibble::tibble("{.x}" := x_threshold))
+    if(length(sign_change_idx) > 0) {
+        x_threshold <- equi_spaced_x[sign_change_idx]
+        y_hat_threshold <- predict(lm_spline,
+                                   tibble::tibble("{.x}" := x_threshold))
 
-    bp_dat <- find_threshold_vals(.data = .data, thr_x = x_threshold,
-                                  thr_y = y_hat_threshold, .x = .x,
-                                  .y = .y, ...)
+        bp_dat <- find_threshold_vals(.data = .data, thr_x = x_threshold,
+                                      thr_y = y_hat_threshold, .x = .x,
+                                      .y = .y, ...)
 
-    # get values at threshold
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(bp = bp,
-                      algorithm = "d2_reg_spline_maxima",
-                      x_var = .x,
-                      y_var = .y,
-        )
+        # get values at threshold
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(bp = bp,
+                          algorithm = "d2_reg_spline_maxima",
+                          x_var = .x,
+                          y_var = .y,
+            )
+    } else {
+        bp_dat <- tibble::tibble()
+    }
 
     if(nrow(bp_dat) == 0) { # no breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::add_row() %>%
             dplyr::mutate(determinant_bp = FALSE)
+        # add character or factor columns that are all the same value (e.g. ids)
+        non_numeric_df <- .data %>%
+            select(where(function(x) is.character(x) | is.factor(x) &
+                             all(x == x[1]))) %>%
+            slice(1)
+        bp_dat <- bind_cols(bp_dat, non_numeric_df)
     } else { # breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::mutate(determinant_bp = TRUE)
     }
+
     bp_dat <- bp_dat %>%
+        dplyr::mutate(algorithm = "d2_reg_spline_maxima",
+                      x_var = .x,
+                      y_var = .y,
+                      bp = bp) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
     bp_plot <- ggplot2::ggplot(data = .data,
                                ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
         ggplot2::geom_point(alpha = 0.5) +
-        ggplot2::geom_line(ggplot2::aes(x = equi_spaced_x, y = pred)) +
+        ggplot2::geom_line(
+            data = tibble::tibble(x = equi_spaced_x,
+                                  y = pred),
+                                  ggplot2::aes(x = equi_spaced_x, y = pred)) +
         ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
         ggplot2::theme_minimal()
 

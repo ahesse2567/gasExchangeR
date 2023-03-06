@@ -30,6 +30,8 @@
 d1_crossing <- function(.data,
                         .x,
                         .y,
+                        bp = "vt1",
+                        ...,
                         degree = NULL,
                         vo2 = "vo2",
                         vco2 = "vco2",
@@ -37,14 +39,14 @@ d1_crossing <- function(.data,
                         time = "time",
                         alpha_linearity = 0.05, # change to just alpha?
                         pos_change = TRUE,
-                        bp = "vt1",
-                        ...) {
-
+                        ordering = c("by_x", "time")
+                        ) {
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    ordering <- match.arg(ordering, several.ok = FALSE)
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
 
     # best-fit polynomial for vo2
     lm_poly_vo2 <- loop_poly_d1_crossing(.data = .data, .x = time, .y = vo2,
@@ -80,8 +82,9 @@ d1_crossing <- function(.data,
         parse(text = .) %>%
         Deriv::Deriv(x = "x", nderiv = 1)
 
-    roots <- rootSolve::uniroot.all(function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
-                                    interval = c(min(.data[[.x]]), max(.data[[.x]])))
+    roots <- rootSolve::uniroot.all(
+        function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
+        interval = c(min(.data[[.x]]), max(.data[[.x]])))
 
     # filter by roots within range of x values
     roots <- roots[roots >= min(.data[[.x]]) &
@@ -89,24 +92,31 @@ d1_crossing <- function(.data,
 
     # filter by which roots have a negative derivative. This indicates that
     # co2 is rising above o2. Finding max finds the last time this occurs.
-    final_crossing <- roots[eval(deriv_diff_deriv1, envir = list(x = roots)) < 0] %>%
+    final_crossing <- roots[eval(deriv_diff_deriv1,
+                                 envir = list(x = roots)) < 0] %>%
         max()
 
     # find the fitted VO2 value and use that to find threshold values.
     # You could use VCO2 or somehow integrate both VO2 & VCO2, but that might be a future update
-    y_hat_threshold <- eval(poly_expr_vo2, envir = list(x = final_crossing))
 
-    # get values at threshold
-    bp_dat <- find_threshold_vals(.data = .data, thr_x = final_crossing,
-                                  thr_y = y_hat_threshold, .x = .x,
-                                  .y = .y, ...)
+    if(length(final_crossing) > 0) {
+        y_hat_threshold <- eval(poly_expr_vo2,
+                                envir = list(x = final_crossing))
+        # get values at threshold
+        bp_dat <- find_threshold_vals(.data = .data, thr_x = final_crossing,
+                                      thr_y = y_hat_threshold, .x = .x,
+                                      .y = .y, ...)
 
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(bp = bp,
-                      algorithm = "d1_crossing",
-                      x_var = .x,
-                      y_var = .y,
-        )
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(bp = bp,
+                          algorithm = "d1_crossing",
+                          x_var = .x,
+                          y_var = .y,
+            )
+    } else {
+        bp_dat <- tibble::tibble()
+    }
+
     if(nrow(bp_dat) == 0) { # no breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::add_row() %>%
@@ -116,6 +126,10 @@ d1_crossing <- function(.data,
             dplyr::mutate(determinant_bp = TRUE)
     }
     bp_dat <- bp_dat %>%
+        dplyr::mutate(algorithm = "d1_crossing",
+                      x_var = .x,
+                      y_var = .y,
+                      bp = bp) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
     bp_plot <- ggplot2::ggplot(data = .data,

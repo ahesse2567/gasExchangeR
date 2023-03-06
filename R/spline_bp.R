@@ -16,6 +16,9 @@
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param front_trim_vt2 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
+#'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simiple linear regression.
 #' @importFrom rlang :=
 #' @export
@@ -35,11 +38,15 @@ spline_bp <- function(.data,
                       front_trim_vt2 = 60,
                       alpha_linearity = 0.05,
                       pos_change = TRUE,
+                      pos_slope_after_bp = TRUE,
+                      ordering = c("by_x", "time"),
                       ...) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    ordering <- match.arg(ordering, several.ok = FALSE)
+
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
     plot_df <- .data
 
     front_trim <- set_front_trim(bp = bp,
@@ -71,13 +78,18 @@ spline_bp <- function(.data,
     # slope BEFORE breakpoint = β1
     # slope AFTER breakpoint = β1 + β2
     # this is wrong if degree > 1
-    ref <- lm_spline$coefficients[2]
-    new <- lm_spline$coefficients[2]+lm_spline$coefficients[3]
-    pct_slope_change <- (new - ref)/abs(ref) * 100
+    slope_left <- lm_spline$coefficients[2]
+    slope_right <- lm_spline$coefficients[2]+lm_spline$coefficients[3]
+    pct_slope_change <- (slope_right - slope_left)/abs(slope_left) * 100
 
-    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
-                                         (pos_change == (pct_slope_change > 0)),
-                                     TRUE, FALSE)
+    determinant_bp <- check_if_determinant_bp(
+        p = pf_two,
+        pct_slope_change = pct_slope_change,
+        pos_change = pos_change,
+        pos_slope_after_bp =
+            pos_slope_after_bp,
+        slope_after_bp = slope_right,
+        alpha = alpha_linearity)
 
     # find last time the indicator variable == 0
     threshold_idx <- which(.data[["s1"]] != 0) %>% min() - 1

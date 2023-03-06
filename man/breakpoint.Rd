@@ -22,7 +22,10 @@ breakpoint(
   front_trim_vt2 = NULL,
   alpha_linearity = 0.05,
   truncate = TRUE,
-  pos_change = TRUE,
+  pos_change_vt1 = TRUE,
+  pos_change_vt2 = TRUE,
+  pos_slope_after_bp = TRUE,
+  ordering = c("by_x", "time"),
   ...
 )
 }
@@ -61,7 +64,13 @@ breakpoint(
 
 \item{truncate}{By default, this function truncates the data frame at VT2 prior to finding VT1. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.}
 
-\item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+\item{pos_change_vt1}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+
+\item{pos_change_vt2}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate. \emph{The only time you should set this to \code{FALSE} is when your y-axis variable is end-tidal carbon dioxide (PetCO2)}.}
+
+\item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is \code{TRUE}. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to \code{FALSE} when PetCO2 is the y-axis variable.}
+
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
 \item{...}{Arguments to pass to functions internal to \code{breakpoint()}}
 }

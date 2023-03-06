@@ -5,14 +5,16 @@
 #' @param .data Gas exchange data.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
-#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param bp Is this algorithm being used to find vt1 or vt2?
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param vo2 The name of the vo2 column in \code{.data}
 #' @param vco2 The name of the vco2 column in \code{.data}
 #' @param ve The name of the ve column in \code{.data}
 #' @param time The name of the time column in \code{.data}
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
-#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #' @importFrom rlang :=
@@ -26,19 +28,23 @@
 dmax <- function(.data,
                  .x,
                  .y,
+                 bp,
+                 ...,
                  vo2 = "vo2",
                  vco2 = "vco2",
                  ve = "ve",
                  time = "time",
+                 ordering = c("by_x", "time"),
                  alpha_linearity = 0.05,
-                 bp,
                  pos_change = TRUE,
-                 ...){
+                 pos_slope_after_bp = TRUE
+                 ){
     # the original paper has something about 50 mL increments in O2
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    ordering <- match.arg(ordering, several.ok = FALSE)
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
 
     # Get limits of x-axis for plots
     xmin = min(.data[[.x]], na.rm = T)
@@ -98,9 +104,13 @@ dmax <- function(.data,
     pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
     list2env(pw_stats, envir = environment())
 
-    determinant_bp <- dplyr::if_else(pf_two < alpha_linearity &
-                                         (pos_change == (pct_slope_change > 0)),
-                                     TRUE, FALSE)
+    determinant_bp <- check_if_determinant_bp(p = pf_two,
+                                              pct_slope_change = pct_slope_change,
+                                              pos_change = pos_change,
+                                              pos_slope_after_bp =
+                                                  pos_slope_after_bp,
+                                              slope_after_bp = coef(lm_right)[2],
+                                              alpha = alpha_linearity)
 
     y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
                          "{.y}" := lm_left$fitted.values,

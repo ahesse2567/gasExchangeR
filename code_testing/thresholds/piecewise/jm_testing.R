@@ -22,18 +22,18 @@ df_unavg <- df_raw %>%
     ventilatory_outliers(outlier_cols = "vo2_abs", plot_outliers = FALSE)
 
 df_avg <- avg_exercise_test(df_unavg,
-                            type = "breath",
-                            subtype = "rolling",
-                            roll_window = 15,
+                            type = "time",
+                            subtype = "bin",
+                            bin_w = 10,
                             time_col = "time")
 
 ggplot(data = df_unavg, aes(x = vco2, y = ve)) +
     geom_point() +
-    geom_point(data = df_avg, aes(x = vco2, y = ve), color = "red")
+    geom_point(data = df_avg, aes(x = vco2, y = ve), color = "orange")
 
 ggplot(data = df_unavg, aes(x = as.numeric(time), y = ve)) +
     geom_point() +
-    geom_point(data = df_avg, aes(x = time, y = ve), color = "red")
+    geom_point(data = df_avg, aes(x = time, y = ve), color = "orange")
 
 ggplot(data = df_unavg, aes(x = as.numeric(time), y = vo2_abs)) +
     geom_point() +
@@ -62,7 +62,8 @@ use_browser <- function(func, ...) {
 }
 use_browser("jm", .data = df_avg, .x = "vco2", .y = "ve", vo2 = "vo2_abs", bp = "vt2")
 
-bp_dat <- jm(.data = df_avg, x_vt2, y_vt2, vo2 = "vo2_abs", bp = "vt2")
+bp_dat <- jm(.data = df_avg, .x = "vco2", .y = "ve",
+             vo2 = "vo2_abs", bp = "vt2")
 bp_dat$gp
 
 bp_dat$breakpoint_data %>% View

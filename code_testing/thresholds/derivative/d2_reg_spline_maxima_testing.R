@@ -6,7 +6,6 @@ library(splines)
 library(zoo)
 library(devtools)
 library(readxl)
-library(mice)
 
 # big thanks to this stack overflow post
 # https://stackoverflow.com/questions/44739192/export-fitted-regression-splines-constructed-by-bs-or-ns-as-piecewise-poly
@@ -18,33 +17,38 @@ library(mice)
 # This forces a minimum of one knot, uses a b-spline basis, uses splinefun
 # to generate derivatives of best-fit spline
 
-file_lines <- readLines("inst/extdata/Anton_vo2max.txt")
-df_raw <- read.table(textConnection(file_lines[-2]), header = TRUE, sep="\t")
+df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_exercisethresholds/mar22_139_pre_gxt.xlsx") %>%
+    rename(vo2 = vo2_abs,
+           vo2_kg = vo2)
 
-df_unavg <- df_raw %>%
-    as_tibble() %>%
-    clean_names() %>%
-    separate(`time`, into = c("m1", "s1"), sep = ":") %>%
-    separate(ex_time, into = c("m2", "s2"), sep = ":") %>%
-    separate(time_clock,
-             into = c("h3", "m3", "s3"),
-             sep = ":") %>%
-    mutate(across(where(is.character), as.numeric)) %>%
-    mutate(time = (m1*60 + s1), .keep = "unused") %>%
-    mutate(ex_time = (m2*60 + s2 ), .keep = "unused") %>%
-    mutate(clock_time = hms::hms(s3, m3, h3), .keep = "unused") %>%
-    relocate(contains("time")) %>%
-    filter(!is.na(ex_time)) %>%
-    filter(speed >= 4.5 & ex_time >= 750) %>%
-    select(-time) %>%
-    rename(time = ex_time,
-           vo2_kg = vo2,
-           vo2 = vo2_1,
-           ve = ve_btps) %>%
-    mutate(ve_vo2 = ve / vo2 * 1000,
-           ve_vco2 = ve/vco2*1000,
-           excess_co2 = vco2^2 / vo2 - vco2) %>%
-    ventilatory_outliers(plot_outliers = FALSE)
+
+# file_lines <- readLines("inst/extdata/Anton_vo2max.txt")
+# df_raw <- read.table(textConnection(file_lines[-2]), header = TRUE, sep="\t")
+#
+# df_unavg <- df_raw %>%
+#     as_tibble() %>%
+#     clean_names() %>%
+#     separate(`time`, into = c("m1", "s1"), sep = ":") %>%
+#     separate(ex_time, into = c("m2", "s2"), sep = ":") %>%
+#     separate(time_clock,
+#              into = c("h3", "m3", "s3"),
+#              sep = ":") %>%
+#     mutate(across(where(is.character), as.numeric)) %>%
+#     mutate(time = (m1*60 + s1), .keep = "unused") %>%
+#     mutate(ex_time = (m2*60 + s2 ), .keep = "unused") %>%
+#     mutate(clock_time = hms::hms(s3, m3, h3), .keep = "unused") %>%
+#     relocate(contains("time")) %>%
+#     filter(!is.na(ex_time)) %>%
+#     filter(speed >= 4.5 & ex_time >= 750) %>%
+#     select(-time) %>%
+#     rename(time = ex_time,
+#            vo2_kg = vo2,
+#            vo2 = vo2_1,
+#            ve = ve_btps) %>%
+#     mutate(ve_vo2 = ve / vo2 * 1000,
+#            ve_vco2 = ve/vco2*1000,
+#            excess_co2 = vco2^2 / vo2 - vco2) %>%
+#     ventilatory_outliers(plot_outliers = FALSE)
 
 # df_colnames <- read_xlsx("inst/extdata/Foreman_Ramp_10_18_2022.xlsx",
 #                          n_max = 0) %>%
@@ -62,7 +66,7 @@ df_unavg <- df_raw %>%
 #     ventilatory_outliers()
 #
 df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
-                            time_col = "time", bin_w = 10)
+                            time_col = "time", bin_w = 15)
 
 ggplot(data = df_avg, aes(x = time, y = vo2)) +
     geom_point(alpha = 0.5, color = "red") +

@@ -61,12 +61,23 @@ find_threshold_vals.inv_dist <- function(.data,
         stats::dist()
 
     cols_to_interpolate <- colnames(.data)[!(colnames(.data) %in%
-                                                 c(.x, .y))]
+                                                 c(.x, .y)) & map_lgl(
+                                                     .data, function(x) {
+                                                         !(is.character(x) |
+                                                             is.factor(x))
+                                                     })]
+    # save columns with entirely unique character or factor variables for later
+    non_numeric_df <- .data %>%
+        select(where(function(x) is.character(x) | is.factor(x) &
+                   all(x == x[1]))) %>%
+        slice(1)
+
     threshold_data <- numeric(length = length(cols_to_interpolate)) %>%
         rlang::set_names(cols_to_interpolate)
     for(i in seq_along(threshold_data)) {
-        if(!is.numeric(.data[[i]])) threshold_data[i] <- NA
-        else {
+        if(!is.numeric(.data[names(threshold_data)][[i]])) {
+            threshold_data[i] <- NA
+        } else {
             var_name <- names(threshold_data[i])
             val <- .data %>%
                 dplyr::select(as.name(var_name)) %>%
@@ -88,7 +99,8 @@ find_threshold_vals.inv_dist <- function(.data,
         dplyr::mutate("{.x}" := thr_x,
                "{.y}" := thr_y) %>%
         dplyr::relocate(colnames(.data)[colnames(.data) %in%
-                                     colnames(.)])
+                                     colnames(.)]) %>%
+        dplyr::bind_cols(non_numeric_df) # add back unique, non-numeric columns
     threshold_data
 }
 

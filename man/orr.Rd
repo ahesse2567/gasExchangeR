@@ -9,15 +9,17 @@ orr(
   .x,
   .y,
   bp,
+  ...,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
+  ordering = c("by_x", "time"),
   alpha_linearity = 0.05,
   front_trim_vt1 = 60,
   front_trim_vt2 = 60,
   pos_change = TRUE,
-  ...
+  pos_slope_after_bp = TRUE
 )
 }
 \arguments{
@@ -29,6 +31,8 @@ orr(
 
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
 
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
 \item{vco2}{The name of the vco2 column in \code{.data}}
@@ -36,6 +40,8 @@ orr(
 \item{ve}{The name of the ve column in \code{.data}}
 
 \item{time}{The name of the time column in \code{.data}}
+
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
@@ -45,7 +51,7 @@ orr(
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+\item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

@@ -38,6 +38,7 @@ wb_rc <- function(.data,
                   .x,
                   .y,
                   bp,
+                  ...,
                   vo2 = "vo2",
                   vco2 = "vco2",
                   ve = "ve",
@@ -46,8 +47,8 @@ wb_rc <- function(.data,
                   front_trim_vt1 = 60,
                   front_trim_vt2 = 60,
                   pos_change = TRUE,
-                  min_pct_change = 0.15,
-                  ...) {
+                  min_pct_change = 0.15
+                  ) {
 
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     bp = match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
@@ -55,8 +56,10 @@ wb_rc <- function(.data,
         warning("The `x` variable may NOT be VCO2 or y variable may NOT be VE. This method is designed to work with x = VO2 and y = VE")
     }
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+    ordering <- match.arg(ordering, several.ok = FALSE)
+
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
     plot_df <- .data # save full data frame for plotting later
 
     front_trim <- set_front_trim(bp = bp,
