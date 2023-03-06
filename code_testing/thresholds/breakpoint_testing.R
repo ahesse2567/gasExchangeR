@@ -4,37 +4,37 @@ library(tidyverse)
 library(janitor)
 library(readxl)
 
-df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_exercisethresholds/mar22_196_post_retest_gxt.xlsx") %>%
-    rename(vo2 = vo2_abs,
-           vo2_kg = vo2)
+# df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_exercisethresholds/mar22_196_post_retest_gxt.xlsx") %>%
+#     rename(vo2 = vo2_abs,
+#            vo2_kg = vo2)
 
-# file_lines <- readLines("inst/extdata/Anton_vo2max.txt")
-# df_raw <- read.table(textConnection(file_lines[-2]), header = TRUE, sep="\t")
-#
-# df_unavg <- df_raw %>%
-#     as_tibble() %>%
-#     clean_names() %>%
-#     separate(`time`, into = c("m1", "s1"), sep = ":") %>%
-#     separate(ex_time, into = c("m2", "s2"), sep = ":") %>%
-#     separate(time_clock,
-#              into = c("h3", "m3", "s3"),
-#              sep = ":") %>%
-#     mutate(across(where(is.character), as.numeric)) %>%
-#     mutate(time = (m1*60 + s1), .keep = "unused") %>%
-#     mutate(ex_time = (m2*60 + s2 ), .keep = "unused") %>%
-#     mutate(clock_time = hms::hms(s3, m3, h3), .keep = "unused") %>%
-#     relocate(contains("time")) %>%
-#     filter(!is.na(ex_time)) %>%
-#     filter(speed >= 4.5 & ex_time >= 750) %>%
-#     select(-time) %>%
-#     rename(time = ex_time,
-#            vo2_kg = vo2,
-#            vo2 = vo2_1,
-#            ve = ve_btps) %>%
-#     mutate(ve_vo2 = ve / vo2 * 1000,
-#            ve_vco2 = ve/vco2*1000,
-#            excess_co2 = vco2^2 / vo2 - vco2) %>%
-#     ventilatory_outliers(plot_outliers = FALSE)
+file_lines <- readLines("inst/extdata/Anton_vo2max.txt")
+df_raw <- read.table(textConnection(file_lines[-2]), header = TRUE, sep="\t")
+
+df_unavg <- df_raw %>%
+    as_tibble() %>%
+    clean_names() %>%
+    separate(`time`, into = c("m1", "s1"), sep = ":") %>%
+    separate(ex_time, into = c("m2", "s2"), sep = ":") %>%
+    separate(time_clock,
+             into = c("h3", "m3", "s3"),
+             sep = ":") %>%
+    mutate(across(where(is.character), as.numeric)) %>%
+    mutate(time = (m1*60 + s1), .keep = "unused") %>%
+    mutate(ex_time = (m2*60 + s2 ), .keep = "unused") %>%
+    mutate(clock_time = hms::hms(s3, m3, h3), .keep = "unused") %>%
+    relocate(contains("time")) %>%
+    filter(!is.na(ex_time)) %>%
+    filter(speed >= 4.5 & ex_time >= 750) %>%
+    select(-time) %>%
+    rename(time = ex_time,
+           vo2_kg = vo2,
+           vo2 = vo2_1,
+           ve = ve_btps) %>%
+    mutate(ve_vo2 = ve / vo2 * 1000,
+           ve_vco2 = ve/vco2*1000,
+           excess_co2 = vco2^2 / vo2 - vco2) %>%
+    ventilatory_outliers(plot_outliers = FALSE)
 
 df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
                             time_col = "time", bin_w = 15)
@@ -88,7 +88,7 @@ undebug(d2_reg_spline_maxima)
 
 bp_dat <- breakpoint(.data = df_avg, method = "excess_co2",
                      x_vt1 = "vo2",
-                     algorithm_vt1 = "spline_bp",
+                     algorithm_vt1 = "d2_poly_reg_maxima",
                      algorithm_vt2 = "d2_poly_reg_maxima",
                      x_vt2 = "vo2", y_vt2 = "ve_vco2", truncate = TRUE,
                      front_trim_vt1 = 90)
@@ -101,10 +101,66 @@ bp_dat <- breakpoint(.data = df_avg,
                      algorithm_vt2 = "d2_reg_spline_maxima",
                      x_vt2 = "vo2", y_vt2 = "ve_vco2",
                      bp = "both", truncate = FALSE)
+bp_dat$bp_dat
+
 bp_dat$vt1_dat$bp_plot
 bp_dat$vt2_dat$bp_plot
 
-debug(d2_reg_spline_maxima)
+
+make_v_slope_hr_plot <- function(.data,
+                                 vt1_dat,
+                                 vt2_dat,
+                                 vo2 = "vo2",
+                                 vco2 = "vco2",
+                                 hr = "hr") {
+
+    out_plot <- ggplot2::ggplot(data = .data, ggplot2::aes(x = .data[[vo2]])) +
+        ggplot2::geom_point(ggplot2::aes(y = .data[[vco2]], color = "vco2")) +
+        ggplot2::xlab("VO2") +
+        ggplot2::ylab("VCO2") +
+        ggplot2::geom_vline(xintercept = vt1_dat[["breakpoint_data"]][[vo2]]) +
+        ggplot2::geom_vline(xintercept = vt2_dat[["breakpoint_data"]][[vo2]]) +
+        scale_color_manual(values = c("vco2" = "blue")) +
+        theme_bw()
+
+    # conditional second axis??
+    # check if heart rate column exists
+    if (!hr %in% colnames(.data)) {
+
+        scale_factor <-
+            (max(.data[[vco2]]) / max(.data[[hr]]))
+
+        out_plot +
+            ggplot2::geom_point(ggplot2::aes(y = .data[[hr]] * scale_factor,
+                                             color = "hr")) +
+            ggplot2::scale_y_continuous(
+                name = "VCO2",
+                sec.axis = ggplot2::sec_axis(trans = ~ . / scale_factor,
+                                             name = "HR (BPM)")) +
+            scale_color_manual(values = c("vco2" = "blue", "hr" = "black"))
+        # add other symbols
+    }
+
+
+    out_plot
+}
+
+make_hr_o2pulse_vs_time_plot(.data = df_avg,
+                             vt1_dat = bp_dat$vt1_dat,
+                             vt2_dat = bp_dat$vt2_dat)
+
+nine_panel_plot(.data = df_avg,
+                vt1_dat = bp_dat$vt1_dat,
+                vt2_dat = bp_dat$vt2_dat,
+                vo2 = "vo2",
+                vco2 = "vco2",
+                ve = "ve",
+                hr = "hr",
+                time = "time")
+
+
+
+# debug(d2_reg_spline_maxima)
 bp_dat <- breakpoint(.data = df_avg, x_vt1 = "vo2", y_vt1 = "vco2",
                      algorithm_vt1 = "d2_reg_spline_maxima",
                      algorithm_vt2 = "d2_reg_spline_maxima",
