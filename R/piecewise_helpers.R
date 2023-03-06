@@ -57,3 +57,20 @@ make_piecewise_bp_plot <- function(.data, .x, .y, lm_left, lm_right,
         ggplot2::theme_minimal()
     bp_plot
 }
+
+#' Check if the breakpoint is a "true" breakpoint
+#'
+#' There must be a better fit than a single regression line p < alpha the slope must change in the direction indicated (usually positive) the direction of the second slope must match the expected direction  (we usually expect the second slope to be positive). This is necessary because you can have a positive percent change but still have a negative second slope.
+#' @keywords internal
+#' @noRd
+#'
+check_if_determinant_bp <- function(p, pct_slope_change,
+                                    pos_change, pos_slope_after_bp,
+                                    slope_after_bp, alpha = 0.05) {
+
+    determinant_bp <- dplyr::if_else(all(p < alpha,
+                                         pos_change == (pct_slope_change > 0),
+                                         pos_slope_after_bp == (slope_after_bp > 0)),
+                                     TRUE, FALSE)
+    determinant_bp
+}

@@ -9,6 +9,7 @@ wb_rc(
   .x,
   .y,
   bp,
+  ...,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -17,8 +18,7 @@ wb_rc(
   front_trim_vt1 = 60,
   front_trim_vt2 = 60,
   pos_change = TRUE,
-  min_pct_change = 0.15,
-  ...
+  min_pct_change = 0.15
 )
 }
 \arguments{
@@ -29,6 +29,8 @@ wb_rc(
 \item{.y}{the y-axis variable.}
 
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
@@ -47,8 +49,6 @@ wb_rc(
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
 \item{min_pct_change}{The original V-slope method (Beaver et al., 1986) considers the respiratory compensation point as determinant "if the change in slope"...between the left and right regressions..."is greater than a preselected amount (15\% of the initial slope)." See details for the specific WinBreak implementation.}
-
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

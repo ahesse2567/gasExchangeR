@@ -9,13 +9,14 @@ d2_inflection(
   .x,
   .y,
   bp,
-  degree = 5,
+  ...,
+  degree = NULL,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
   alpha_linearity = 0.05,
-  ...
+  ordering = c("by_x", "time")
 )
 }
 \arguments{
@@ -26,6 +27,8 @@ d2_inflection(
 \item{.y}{the y-axis variable.}
 
 \item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
 \item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
 
@@ -39,7 +42,7 @@ d2_inflection(
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 }
 \value{
 A list containing breakpoint data, best-fit and related functions, and a plot.

@@ -15,6 +15,8 @@ d2_poly_reg_maxima(
   ve = "ve",
   time = "time",
   alpha_linearity = 0.05,
+  pos_change = TRUE,
+  ordering = c("by_x", "time"),
   ...
 )
 }
@@ -38,6 +40,10 @@ d2_poly_reg_maxima(
 \item{time}{Name of the \code{time} variable}
 
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+
+\item{pos_change}{Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.}
+
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
 \item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }

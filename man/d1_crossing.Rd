@@ -8,6 +8,8 @@ d1_crossing(
   .data,
   .x,
   .y,
+  bp = "vt1",
+  ...,
   degree = NULL,
   vo2 = "vo2",
   vco2 = "vco2",
@@ -15,8 +17,7 @@ d1_crossing(
   time = "time",
   alpha_linearity = 0.05,
   pos_change = TRUE,
-  bp = "vt1",
-  ...
+  ordering = c("by_x", "time")
 )
 }
 \arguments{
@@ -25,6 +26,10 @@ d1_crossing(
 \item{.x}{The x-axis variable.}
 
 \item{.y}{the y-axis variable.}
+
+\item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint? This method is specifically designed for finding VT1 (GET)}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
 \item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
 
@@ -39,10 +44,6 @@ d1_crossing(
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
-
-\item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint? This method is specifically designed for finding VT1 (GET)}
-
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
 \value{
 A list include breakpoint data, best-fit and related functions, and a plot.

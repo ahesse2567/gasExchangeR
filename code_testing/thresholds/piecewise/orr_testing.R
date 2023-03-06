@@ -22,6 +22,10 @@ df_unavg <- df_raw %>%
 df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
                             time_col = "time", bin_w = 10)
 
+ggplot(data = df_avg, aes(x = time, y = vo2)) +
+    geom_point(alpha = 0.5) +
+    theme_bw()
+
 breakpoint(.data = df_avg,
            x_vt1 = "vo2",
            y_vt1 = "vco2",

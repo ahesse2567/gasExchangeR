@@ -27,8 +27,10 @@
 #' @param time The name of the time column in \code{.data}
 #' @param truncate By default, this function truncates the data frame at VT2 prior to finding VT1. Change truncate to \code{FALSE} to use the entire data frame when searching for VT1.
 #' @param alpha_linearity Cutoff value to determine if a piecewise model significantly reduces the residual sums of squares more than a simple linear regression.
-#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param ... Arguments to pass to functions internal to `breakpoint()`
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param pos_change_vt1 Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param pos_change_vt2 Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate. *The only time you should set this to `FALSE` is when your y-axis variable is end-tidal carbon dioxide (PetCO2)*.
 #'
 #' @returns A list that contains a data frame with slices of the original data frame at the threshold index. The data frame new columns describing the methods used and if the breakpoint was truly a breakpoint. Depending on the breakpoint algorithm used, `breakpoint()` also returns fitted values, the left and right sides of the piecewise regression, as well as a simple linear regression.
 #' @export
@@ -67,17 +69,22 @@ breakpoint <- function(.data,
                        front_trim_vt2 = NULL,
                        alpha_linearity = 0.05,
                        truncate = TRUE, # may be unnecessary for deriv algs
-                       pos_change = TRUE,
+                       pos_change_vt1 = TRUE,
+                       pos_change_vt2 = TRUE,
+                       ordering = c("by_x", "time"),
                        ...) {
 
     bp <- match.arg(bp, several.ok = FALSE)
+    ordering <- match.arg(ordering, several.ok = FALSE)
     # fill in NULL values, primarily based on "method" argument
-    resolved_inputs <- resolve_inputs(inputs = as.list(environment(), all = TRUE))
+    resolved_inputs <- resolve_inputs(inputs = as.list(environment(),
+                                                       all = TRUE))
     list2env(resolved_inputs, envir = environment()) # add values from resolved_inputs
 
     if(bp == "both" | bp == "vt2") {
         resolved_inputs[["bp"]] <- "vt2"
-        params = append(resolved_inputs, c(list(.x = x_vt2, .y = y_vt2),
+        params = append(resolved_inputs, c(list(.x = x_vt2, .y = y_vt2,
+                                                pos_change = pos_change_vt2),
                                            list(...)))
         vt2_out <- switch(algorithm_vt2,
                           "jm" = do.call("jm", params),
@@ -87,10 +94,10 @@ breakpoint <- function(.data,
                           "spline_bp" = do.call("spline_bp", params),
                           "d1_crossing" = do.call("d1_crossing", params),
                           "d2_inflection" = do.call("d2_inflection", params),
-                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxima",
-                                                         params),
-                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima",
-                                                           params),
+                          "d2_poly_reg_maxima" = do.call(
+                              "d2_poly_reg_maxima", params),
+                          "d2_reg_spline_maxima" = do.call(
+                              "d2_reg_spline_maxima", params),
                           stop("Invalid `algorithm_vt2` value"))
         if(bp == "vt2") {
             return(vt2_out)
@@ -114,6 +121,7 @@ breakpoint <- function(.data,
         params[[".x"]] <- x_vt1
         params[[".y"]] <- y_vt1
         params[["bp"]] <- "vt1"
+        params[["pos_change"]] <- pos_change_vt1
         vt1_out <- switch(algorithm_vt1,
                           "jm" = do.call("jm", params),
                           "orr" = do.call("orr", params),

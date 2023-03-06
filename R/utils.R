@@ -83,3 +83,18 @@ set_front_trim <- function(bp, front_trim_vt1, front_trim_vt2) {
     front_trim
 }
 
+#' Order data by x-variable and time, or by exclusively the time variable
+#'
+#' @keywords internal
+#' @noRd
+order_cpet_df <- function(.data, .x, time, ordering = c("by_x", "time")) {
+    ordering <- match.arg(ordering, several.ok = FALSE)
+    if(ordering == "by_x") {
+        .data <- .data %>%
+            dplyr::arrange(get(.x), time)
+    } else {
+        .data <- .data %>%
+            dplyr::arrange(time)
+    }
+    .data
+}
