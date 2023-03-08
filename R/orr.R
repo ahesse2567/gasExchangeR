@@ -18,6 +18,11 @@
 #'
 #' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #'
+#' @details
+#' According to the Orr et al. (1982, p. 1350) paper, the "anaerobic threshold is then reported as the first intersection point [of the lines] of the more appropriate model." In an email to Dr. Hughson, a weakness of this method is that the intersection point hardley ever lands on an existing data point. In some cases, the intersection of the best-fit model lies beyond the range of the x-axis. Instead of returning that value, we report the solution with the lowest pooled sums of squares that satisfies the following criteria: 1) the change in slope from the left to the right regression matches the anticipated change, usually positive; 2) the slope of the right regression matches the anticipated slope, usually positive; 3) the p-value of the F-test based on the extra sums of squares principle is statistically significant; and 4) the x-coordinate of the intersection point is within the range of the observed x-values. This differs slightly from the original method, but provides potentially plausible answers when the alternative is a negative VO2 or a VO2 well beyond VO2max.
+#'
+#' The text of the original paper states that "Regression lines are calculated for all possible divisions of the data into two \emph{contiguous} groups." We interpret contiguous to mean "shares a boundary". That is, the left and right portions of the data each contain one identical data point at the division.
+#'
 #' @importFrom rlang :=
 #' @export
 #'
@@ -64,13 +69,10 @@ orr <- function(.data,
     df_right <- .data[min_ss_idx:nrow(.data),]
 
     lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::as.formula() %>%
         stats::lm(data = df_left)
     lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::as.formula() %>%
         stats::lm(data = df_right)
     lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::as.formula() %>%
         stats::lm(data = .data)
 
     pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
@@ -92,7 +94,7 @@ orr <- function(.data,
                                               pos_change = pos_change,
                                               pos_slope_after_bp =
                                                   pos_slope_after_bp,
-                                              slope_after_bp = coef(lm_right)[2],
+                                              slope_after_bp = stats::coef(lm_right)[2],
                                               alpha = alpha_linearity)
 
     int_point <- intersection_point(lm_left, lm_right)
@@ -125,13 +127,33 @@ orr <- function(.data,
 }
 #'
 #' @keywords internal
-loop_orr <- function(.data, .x, .y) {
-    # browser()
-    ss_both <- vector(length = nrow(.data))
+loop_orr <- function(.data, .x, .y) { # add_pos_change and pos_slope_after_bp args?
 
-    for(i in 1:nrow(.data)) {
-        if(i == 1 | i == nrow(.data)) {
+    n_rows <- nrow(.data)
+
+    # initialize empty vectors
+    ss_left <- ss_right <- ss_both <- RSS_two <- MSE_two <- f_stat <- pf_two <-
+        pct_slope_change <- int_point_x <- numeric(n_rows)
+    pos_change <- pos_slope_after_bp <- logical(n_rows)
+
+    # create simple linear model and calculate its RSS
+    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::lm(data = .data)
+    RSS_simple <- sum(stats::resid(lm_simple)^2)
+    # F95 <- qf(0.05, 1, n_rows - 4, lower.tail = FALSE)
+
+    for(i in 1:n_rows) {
+        if(i == 1 | i == n_rows) {
+            ss_left[i] <- NA
+            ss_right[i] <- NA
             ss_both[i] <- NA
+            RSS_two[i] <- NA
+            MSE_two[i] <- NA
+            f_stat[i] <- NA
+            pf_two[i] <- NA
+            pos_change[i] <- NA
+            pos_slope_after_bp[i] <- NA
+            int_point_x[i] <- NA
             next
         }
         # split data into left and right halves
@@ -139,21 +161,62 @@ loop_orr <- function(.data, .x, .y) {
         # Ekkekakis said WB makes them differ by 1 pt
         # I wonder exactly what the word 'contiguous' means in this context
         df_left <- .data[1:i,]
-        df_right <- .data[i:nrow(.data),]
+        df_right <- .data[i:n_rows,]
         # NOTE: WB'S implementation of Orr does NOT share a point at i
 
         # make linear models of the two halves
         lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-            stats::as.formula() %>%
             stats::lm(data = df_left)
         lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
-            stats::as.formula() %>%
             stats::lm(data = df_right)
 
-        ss_left <- sum((lm_left$residuals)^2)
-        ss_right <- sum((lm_right$residuals)^2)
-        #ss_both <- c(ss_both, ss_left + ss_right)
-        ss_both[i] <- (ss_left + ss_right)
+        ss_left[i] <- sum((lm_left$residuals)^2)
+        ss_right[i] <- sum((lm_right$residuals)^2)
+        ss_both[i] <- ss_left[i] + ss_right[i]
+
+        RSS_two[i] <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
+        MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
+        f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
+        pf_two[i] <- stats::pf(f_stat[i], df1 = 2, df2 = nrow(lm_simple$model) - 4,
+                            lower.tail = FALSE)
+
+        pct_slope_change[i] <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+            abs(lm_left$coefficients[2])
+        pos_change[i] <- if_else(pct_slope_change[i] > 0, TRUE, FALSE)
+        pos_slope_after_bp[i] <- if_else(lm_right$coefficients[2] > 0, TRUE, FALSE)
+
+        int_point_x[i] <- intersection_point(lm_left, lm_right)["x"]
     }
-    return(ss_both)
+
+    # inside_F95 <- if_else(((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two) < F95,
+    #                       TRUE, FALSE)
+
+    orr_stats <- tibble::tibble(p = pf_two,
+                        pos_change = pos_change,
+                        pos_slope_after_bp = pos_slope_after_bp,
+                        int_point_x = int_point_x,
+                        # inside_F95 = inside_F95
+                        ) %>%
+        dplyr::mutate(idx = dplyr::row_number())
+
+    range_x <- range(.data[[.x]])
+
+    best_idx <- orr_stats %>%
+        dplyr::filter(p < 0.05 &
+                   pos_change == TRUE &
+                   pos_slope_after_bp == TRUE &
+                   dplyr::between(int_point_x,
+                           range_x[1],
+                           range_x[2])) %>%
+        dplyr::filter(p == min(p)) %>% # filter by smallest p-value (lowest RSS)
+        dplyr::select(idx) %>%
+        dplyr::pull()
+
+    if(length(best_idx) > 0) {
+        # a little hacky while I test out this version of the orr method
+        ss_both[best_idx] <- -1
+        return(ss_both)
+    } else {
+        return(ss_both)
+    }
 }
