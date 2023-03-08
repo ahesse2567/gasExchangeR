@@ -44,6 +44,8 @@ d1_crossing(
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
+
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 }
 \value{
 A list include breakpoint data, best-fit and related functions, and a plot.

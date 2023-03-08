@@ -66,7 +66,6 @@ jm <- function(.data,
     x0 <- .data[[.x]][min_ss_idx]
 
     lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::as.formula() %>%
         stats::lm(data = df_left)
 
     # get y value we will force lm_right to pass through
@@ -76,11 +75,9 @@ jm <- function(.data,
     # use I() function to force model through (x0, b0_plus_b1x0)
     lm_right <- paste0("I(", .y, "-b0_plus_b1x0)",
                        " ~ 0 + I(", .x, " - ", x0, ")") %>%
-        stats::as.formula() %>%
         stats::lm(data = df_right)
 
     lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::as.formula() %>%
         stats::lm(data = .data)
 
     # check for a significant departure from linearity
@@ -104,7 +101,7 @@ jm <- function(.data,
                                               pos_change = pos_change,
                                               pos_slope_after_bp =
                                                   pos_slope_after_bp,
-                                              slope_after_bp = coef(lm_right)[1],
+                                              slope_after_bp = stats::coef(lm_right)[1],
                                               alpha = alpha_linearity)
 
     bp_dat <- find_threshold_vals(.data = .data, thr_x = x0,
@@ -164,7 +161,6 @@ loop_jm <- function(.data, .x, .y) {
         # does this mean x0 is actually i+1?
 
         lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-            stats::as.formula() %>%
             stats::lm(data = df_left)
         if(is.na(lm_left$coefficients[2])) {
             # avoids a strange corner case when there are only a few
@@ -188,7 +184,6 @@ loop_jm <- function(.data, .x, .y) {
         # This workaround requires forcing the intercept through zero, or at least using that notation
         lm_right <- paste0("I(", .y, "-b0_plus_b1x0)",
                            " ~ 0 + I(", .x, " - ", x0, ")") %>%
-            stats::as.formula() %>%
             stats::lm(data = df_right)
 
         ss_left <- sum((lm_left$residuals)^2)

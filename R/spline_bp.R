@@ -63,10 +63,8 @@ spline_bp <- function(.data,
     # create linear model
     lm_spline <- paste0(.y, " ~ ", "1 + poly(", .x, ", degree = ", degree,
                         ", raw = TRUE) + s1") %>%
-        stats::as.formula() %>%
         stats::lm(data = .data)
     lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::as.formula() %>%
         stats::lm(data = .data)
 
     RSS_simple <- sum(stats::resid(lm_simple)^2)
@@ -148,7 +146,6 @@ loop_spline_bp <- function(.data, .x, .y, degree = 1) {
         # create linear model
         lm_spline <- paste0(.y, " ~ ", "1 + poly(", .x, ", degree = ", degree,
                             ", raw = TRUE) + s1") %>%
-            stats::as.formula() %>%
             stats::lm(data = temp)
         # record residual sums of squares for later comparison
         ss_models[i] <- sum((lm_spline$residuals)^2)

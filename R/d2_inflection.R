@@ -100,10 +100,10 @@ d2_inflection <- function(.data,
             dplyr::mutate(determinant_bp = FALSE)
         # add character or factor columns that are all the same value (e.g. ids)
         non_numeric_df <- .data %>%
-            select(where(function(x) is.character(x) | is.factor(x) &
+            dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
                              all(x == x[1]))) %>%
-            slice(1)
-        bp_dat <- bind_cols(bp_dat, non_numeric_df)
+            dplyr::slice(1)
+        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
     } else { # breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::mutate(determinant_bp = TRUE)
@@ -138,7 +138,6 @@ loop_d2_inflection <- function(.data, .x, .y,
     if (!is.null(degree)) {
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            stats::as.formula() %>%
             stats::lm(data = .data)
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
@@ -154,7 +153,6 @@ loop_d2_inflection <- function(.data, .x, .y,
 
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            stats::as.formula() %>%
             stats::lm(data = .data)
 
         lm_list <- append(lm_list, list(lm_poly))
@@ -165,7 +163,6 @@ loop_d2_inflection <- function(.data, .x, .y,
             lm_poly <- paste0(.y, " ~ ", "1 + ",
                               "poly(", .x, ", degree = ",
                               degree + i, ", raw = TRUE)") %>%
-                stats::as.formula() %>%
                 stats::lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
             lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])

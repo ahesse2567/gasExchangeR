@@ -61,16 +61,16 @@ find_threshold_vals.inv_dist <- function(.data,
         stats::dist()
 
     cols_to_interpolate <- colnames(.data)[!(colnames(.data) %in%
-                                                 c(.x, .y)) & map_lgl(
+                                                 c(.x, .y)) & purrr::map_lgl(
                                                      .data, function(x) {
                                                          !(is.character(x) |
                                                              is.factor(x))
                                                      })]
     # save columns with entirely unique character or factor variables for later
     non_numeric_df <- .data %>%
-        select(where(function(x) is.character(x) | is.factor(x) &
+        dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
                    all(x == x[1]))) %>%
-        slice(1)
+        dplyr::slice(1)
 
     threshold_data <- numeric(length = length(cols_to_interpolate)) %>%
         rlang::set_names(cols_to_interpolate)

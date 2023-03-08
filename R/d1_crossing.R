@@ -14,6 +14,7 @@
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint? This method is specifically designed for finding VT1 (GET)
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #'
 #' @returns A list include breakpoint data, best-fit and related functions, and a plot.
 #'
@@ -137,9 +138,9 @@ d1_crossing <- function(.data,
                                             y = .data[[.y]])) +
         ggplot2::geom_point(ggplot2::aes(y = vo2, color = "vo2"), alpha = 0.5) +
         ggplot2::geom_point(ggplot2::aes(y = vco2, color = "vco2"), alpha = 0.5) +
-        ggplot2::geom_line(aes(y = eval(poly_expr_vo2,
+        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr_vo2,
                                         envir = list(x = .data[[.x]])))) +
-        ggplot2::geom_line(aes(y = eval(poly_expr_vco2,
+        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr_vco2,
                                         envir = list(x = .data[[.x]])))) +
         ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
         ggplot2::scale_color_manual(values = c("vo2" = "red", "vco2" = "blue")) +
@@ -163,7 +164,6 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
     if (!is.null(degree)) {
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            as.formula() %>%
             stats::lm(data = .data)
         # if the user does NOT specify a degree, find the best degree using
         # likelihood ratio test
@@ -179,7 +179,6 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
 
         lm_poly <- paste0(.y, " ~ ", "1 + ",
                           "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            as.formula() %>%
             stats::lm(data = .data)
 
         lm_list <- append(lm_list, list(lm_poly))
@@ -189,7 +188,6 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
         while(cont == TRUE) {
             lm_poly <- paste0(.y, " ~ ", "1 + ",
                               "poly(", .x, ", degree = ", degree + i, ", raw = TRUE)") %>%
-                as.formula() %>%
                 lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
             lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
@@ -227,7 +225,7 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
 #                            ~ . / scale_factor*2 - sum_range_deriv2,
 #                            name = paste("1st Derivative of",
 #                                         vo2, "%", vco2))) +
-#     geom_line(aes(y = eval(deriv_diff_deriv1,
+#     geom_line(ggplot2::aes(y = eval(deriv_diff_deriv1,
 #                            envir = list(x = df_avg[["time"]]))),
 #               linetype = "dashed")
 

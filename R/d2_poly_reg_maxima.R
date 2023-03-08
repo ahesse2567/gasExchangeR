@@ -149,7 +149,7 @@ d2_poly_reg_maxima <- function(.data,
     if(nrow(bp_dat) == 0) { # no breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::add_row() %>%
-            mutate(determinant_bp = FALSE)
+            dplyr::mutate(determinant_bp = FALSE)
     } else { # breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::mutate(determinant_bp = TRUE)
