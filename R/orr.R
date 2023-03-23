@@ -78,7 +78,8 @@ orr <- function(.data,
     pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
     list2env(pw_stats, envir = environment())
 
-    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+    pct_slope_change <- 100*(lm_right$coefficients[2] -
+                                 lm_left$coefficients[2]) /
         abs(lm_left$coefficients[2])
 
     y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
@@ -89,13 +90,14 @@ orr <- function(.data,
                           algorithm = "orr")
     pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
-    determinant_bp <- check_if_determinant_bp(p = pf_two,
-                                              pct_slope_change = pct_slope_change,
-                                              pos_change = pos_change,
-                                              pos_slope_after_bp =
-                                                  pos_slope_after_bp,
-                                              slope_after_bp = stats::coef(lm_right)[2],
-                                              alpha = alpha_linearity)
+    determinant_bp <- check_if_determinant_bp(
+        p = pf_two,
+        pct_slope_change = pct_slope_change,
+        pos_change = pos_change,
+        pos_slope_after_bp =
+            pos_slope_after_bp,
+        slope_after_bp = stats::coef(lm_right)[2],
+        alpha = alpha_linearity)
 
     int_point <- intersection_point(lm_left, lm_right)
 
@@ -177,10 +179,12 @@ loop_orr <- function(.data, .x, .y) { # add_pos_change and pos_slope_after_bp ar
         RSS_two[i] <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
         MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
         f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
-        pf_two[i] <- stats::pf(f_stat[i], df1 = 2, df2 = nrow(lm_simple$model) - 4,
+        pf_two[i] <- stats::pf(f_stat[i], df1 = 2,
+                               df2 = nrow(lm_simple$model) - 4,
                             lower.tail = FALSE)
 
-        pct_slope_change[i] <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+        pct_slope_change[i] <- 100*(lm_right$coefficients[2] -
+                                        lm_left$coefficients[2]) /
             abs(lm_left$coefficients[2])
         pos_change[i] <- if_else(pct_slope_change[i] > 0, TRUE, FALSE)
         pos_slope_after_bp[i] <- if_else(lm_right$coefficients[2] > 0, TRUE, FALSE)

@@ -139,11 +139,13 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
         {. * 0.015} # use 1% of x range
 
     # calculate height of threshold labels
-    max_y <- numeric(length = length(plt_data[["data"]]))
-    for(i in seq_along(plt_data[["data"]])) {
-        max_y[i] <- plt_data[["data"]][[i]]$y %>% max()
-    }
-    max_y <- max(max_y)
+    max_y <- map_dbl(plt_data[["data"]], ~ max(.[["y"]], na.rm = TRUE)) %>%
+        max()
+    # max_y <- numeric(length = length(plt_data[["data"]]))
+    # for(i in seq_along(plt_data[["data"]])) {
+    #     max_y[i] <- plt_data[["data"]][[i]]$y %>% max()
+    # }
+    # max_y <- max(max_y)
 
     # conditionally add VT1 line
     if(!is.null(vt1_dat) &&

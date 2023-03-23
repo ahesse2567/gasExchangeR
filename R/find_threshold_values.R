@@ -53,6 +53,13 @@ find_threshold_vals.inv_dist <- function(.data,
                                          k = 5,
                                          ...) {
     thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
+
+    # save columns with entirely unique character or factor variables for later
+    non_numeric_df <- .data %>%
+        dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
+                                            all(x == x[1]))) %>%
+        dplyr::slice(1)
+
     # calculate distance between observed x-y threshold coordinate
     d <- dplyr::bind_rows(tibble::tibble("{.x}" := thr_x, "{.y}" := thr_y),
                    .data %>%
@@ -60,47 +67,27 @@ find_threshold_vals.inv_dist <- function(.data,
         dplyr::mutate(dplyr::across(tidyselect::everything(), normalize01)) %>%
         stats::dist()
 
-    cols_to_interpolate <- colnames(.data)[!(colnames(.data) %in%
-                                                 c(.x, .y)) & purrr::map_lgl(
-                                                     .data, function(x) {
-                                                         !(is.character(x) |
-                                                             is.factor(x))
-                                                     })]
-    # save columns with entirely unique character or factor variables for later
-    non_numeric_df <- .data %>%
-        dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
-                   all(x == x[1]))) %>%
-        dplyr::slice(1)
-
-    threshold_data <- numeric(length = length(cols_to_interpolate)) %>%
-        rlang::set_names(cols_to_interpolate)
-    for(i in seq_along(threshold_data)) {
-        if(!is.numeric(.data[names(threshold_data)][[i]])) {
-            threshold_data[i] <- NA
-        } else {
-            var_name <- names(threshold_data[i])
-            val <- .data %>%
-                dplyr::select(as.name(var_name)) %>%
-                dplyr::mutate(normalized_dist =
-                        d[dist_idx_conv(2:attr(d, "Size"), 1, d)]) %>%
-                dplyr::slice_min(normalized_dist, n = k) %>%
-                dplyr::mutate(inv_weight = (normalized_dist /
-                                      max(normalized_dist))^-1,
-                    pct_tot_weight = inv_weight / sum(inv_weight),
-                    weighted_contrib = pct_tot_weight *
-                        get(var_name)) %>%
-                dplyr::summarize("{var_name}" := sum(weighted_contrib)) %>%
-                dplyr::pull()
-            threshold_data[i] <- val
-        }
-    }
-    threshold_data <- tibble::enframe(threshold_data) %>%
-        tidyr::pivot_wider(names_from = name) %>%
+    threshold_data <- .data %>%
+        select(-c(.x, .y)) %>%
+        # add distances between threshold and corresponding variables
+        dplyr::mutate(
+            normalized_dist = d[dist_idx_conv(2:attr(d, "Size"), 1, d)]) %>%
+        # subset by k nearest neighbors
+        dplyr::slice_min(normalized_dist, n = k) %>%
+        # calculate contribution of each variable to the final value
+        dplyr::mutate(inv_weight = (normalized_dist/max(normalized_dist))^-1,
+                      pct_tot_weight = inv_weight/sum(inv_weight)) %>%
+        # calculate threshold values
+        summarize(across(!c(normalized_dist, inv_weight, pct_tot_weight),
+                         ~ sum(. * pct_tot_weight))) %>%
+        # add back variables used to calculate the threshold
         dplyr::mutate("{.x}" := thr_x,
-               "{.y}" := thr_y) %>%
+                      "{.y}" := thr_y) %>%
+        # reorder by original column ordering
         dplyr::relocate(colnames(.data)[colnames(.data) %in%
-                                     colnames(.)]) %>%
+                                            colnames(.)]) %>%
         dplyr::bind_cols(non_numeric_df) # add back unique, non-numeric columns
+
     threshold_data
 }
 

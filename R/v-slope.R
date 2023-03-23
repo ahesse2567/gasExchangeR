@@ -195,9 +195,11 @@ loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp) {
         pct_slope_change <- int_point_x <- dist_MSE_ratio <-  numeric(n_rows)
     pos_change_vec <- pos_slope_after_bp_vec <- logical(n_rows)
 
-    # browser()
     lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
         stats::lm(data = .data)
+
+    # y = 0.6953093x + 388.0221420
+
     RSS_simple <- sum(stats::resid(lm_simple)^2)
     recip_slope <- (-1 / lm_simple$coefficients[2]) # used in for loop
     # find slope of line perpendicular to slope of lm_simple
@@ -236,16 +238,20 @@ loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp) {
         ss_right[i] <- sum((lm_right$residuals)^2)
         ss_both[i] <- ss_left[i] + ss_right[i]
 
-        RSS_two[i] <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
+        RSS_two[i] <- sum(stats::resid(lm_left)^2) +
+            sum(stats::resid(lm_right)^2)
         MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
         f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
-        pf_two[i] <- stats::pf(f_stat[i], df1 = 2, df2 = nrow(lm_simple$model) - 4,
+        pf_two[i] <- stats::pf(
+            f_stat[i], df1 = 2, df2 = nrow(lm_simple$model) - 4,
                                lower.tail = FALSE)
 
-        pct_slope_change[i] <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+        pct_slope_change[i] <- 100*(lm_right$coefficients[2] -
+                                        lm_left$coefficients[2]) /
             abs(lm_left$coefficients[2])
         pos_change_vec[i] <- if_else(pct_slope_change[i] > 0, TRUE, FALSE)
-        pos_slope_after_bp_vec[i] <- if_else(lm_right$coefficients[2] > 0, TRUE, FALSE)
+        pos_slope_after_bp_vec[i] <- if_else(
+            lm_right$coefficients[2] > 0, TRUE, FALSE)
 
         # Calculate MSE according to the JM algorithm: MSE = ss_both / (n - 4)
         # we're subtracting for because we're estimating 4 parameters: two slopes
@@ -256,15 +262,10 @@ loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp) {
         lr_intersect <- intersection_point(lm_left, lm_right)
         int_point_x[i] <- lr_intersect["x"]
 
-        b_recip <- recip_slope * (-1) * lr_intersect["x"] + lr_intersect["y"]
-
-        x_simple_recip <- (b_recip - lm_simple$coefficients[1]) /
-            (lm_simple$coefficients[2] - (-1 / lm_simple$coefficients[2]))
-        y_simple_recip <- lm_simple$coefficients[1] +
-            lm_simple$coefficients[2]*x_simple_recip
-
-        d <- sqrt((x_simple_recip - lr_intersect["x"])^2 +
-                      (y_simple_recip - lr_intersect["y"])^2)
+        # solve for distance using standard form of line Ax + By + C = 0
+        d <- abs(lm_simple$coefficients[2] * lr_intersect["x"] -
+                lr_intersect["y"] + lm_simple$coefficients[1]) /
+            sqrt(lm_simple$coefficients[2]^2 + (-1)^2)
 
         dist_MSE_ratio[i] <- d / MSE
     }
