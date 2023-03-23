@@ -73,7 +73,7 @@ jm <- function(.data,
         lm_left$coefficients[2] * x0
 
     # use I() function to force model through (x0, b0_plus_b1x0)
-    lm_right <- paste0("I(", .y, "-b0_plus_b1x0)",
+    lm_right <- paste0("I(", .y, "-", b0_plus_b1x0, ")",
                        " ~ 0 + I(", .x, " - ", x0, ")") %>%
         stats::lm(data = df_right)
 
@@ -182,7 +182,7 @@ loop_jm <- function(.data, .x, .y) {
         # Therefore, we will subtract x0 from each value of x
         # use I() function to force model through (x0, b0_plus_b1x0)
         # This workaround requires forcing the intercept through zero, or at least using that notation
-        lm_right <- paste0("I(", .y, "-b0_plus_b1x0)",
+        lm_right <- paste0("I(", .y, "-", b0_plus_b1x0, ")",
                            " ~ 0 + I(", .x, " - ", x0, ")") %>%
             stats::lm(data = df_right)
 
