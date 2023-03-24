@@ -83,30 +83,73 @@ d2_reg_spline_maxima <- function(.data,
                                               change = "pos_to_neg")
         # filter by expected slope (usually positive)
         # there can be a spike in accel during the initial drop in vent eqs
-        sign_change_idx <- sign_change_idx[spline_func(
-            x = equi_spaced_x[sign_change_idx],
-            deriv = 1) > 0] # deriv 1 gives slope
+        # however, only remove these thresholds with a negative derivative
+        # if there is more than one value with a negative slope
+        if(length(sign_change_idx) > 1) {
+            # see which derivatives at the sign changes are negative
+            neg_slope_idx <- which(spline_func(
+                x = equi_spaced_x[sign_change_idx],
+                deriv = 1) < 0)
+            while(length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
+                # remove the left-most value
+                neg_slope_idx <- neg_slope_idx[-1]
+                sign_change_idx <- sign_change_idx[neg_slope_idx]
+                neg_slope_idx <- which(spline_func(
+                    x = equi_spaced_x[sign_change_idx],
+                    deriv = 1) < 0)
+            }
+        }
     } else { # this only applies when y var = petco2
         sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
                                                               deriv = 2),
                                               change = "neg_to_pos")
         # filter by expected slope (in this case negative)
-        sign_change_idx <- sign_change_idx[spline_func(
-            x = equi_spaced_x[sign_change_idx],
-            deriv = 1) < 0]
+        if(length(sign_change_idx) > 1) {
+            # see which derivatives at the sign changes are positive
+            pos_slope_idx <- which(spline_func(
+                x = equi_spaced_x[sign_change_idx],
+                deriv = 1) > 0)
+            while(length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
+                # remove the left-most value
+                pos_slope_idx <- pos_slope_idx[-1]
+                sign_change_idx <- sign_change_idx[pos_slope_idx]
+                pos_slope_idx <- which(spline_func(
+                    x = equi_spaced_x[sign_change_idx],
+                    deriv = 1) > 0)
+            }
+        }
     }
 
+    # there can be multiple local extrema. Choose the extrema closer to the
+    # nadir or peak because this often represents the beginning of a systematic
+    # rise
+
+    if(length(sign_change_idx) > 1) {
+        if(pos_change) {
+            # find nadir of y values
+            nadir <- min(pred)
+            sign_change_idx <- sign_change_idx[which.min(abs(
+                nadir - equi_spaced_x[sign_change_idx]))]
+        } else {
+            # find peak (when using petco2 basically)
+            peak <- max(pred)
+            sign_change_idx <- sign_change_idx[which.min(abs(
+                peak - equi_spaced_x[sign_change_idx]))]
+        }
+    }
+
+    # OLD CODE, KEEP FOR A BIT
     # there are often two local maxima. Choose the higher x-axis value
     # for VT2/RC, and the lower for VT1. This is similar to
     # Sherril et al. (1990) and Cross et al. (2012)
-    if(length(sign_change_idx) > 1) {
-        if(bp == "vt1") {
-            sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
-        }
-        if(bp == "vt2") {
-            sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
-        }
-    }
+    # if(length(sign_change_idx) > 1) {
+    #     if(bp == "vt1") {
+    #         sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
+    #     }
+    #     if(bp == "vt2") {
+    #         sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
+    #     }
+    # }
 
     # calculate y-value at the threshold
     # get value on either side of index

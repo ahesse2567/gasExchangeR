@@ -110,7 +110,7 @@ d2_poly_reg_maxima <- function(.data,
 
         # filter by expected slope (in this case negative)
         if(length(sign_change_idx) > 1) {
-            # see which derivatives at the sign changes are negative
+            # see which derivatives at the sign changes are positive
             pos_slope_idx <- which(spline_func(
                 x = equi_spaced_x[sign_change_idx],
                 deriv = 1) > 0)
@@ -125,17 +125,36 @@ d2_poly_reg_maxima <- function(.data,
         }
     }
 
+    # there can be multiple local extrema. Choose the extrema closer to the
+    # nadir or peak because this often represents the beginning of a systematic
+    # rise
+
+    if(length(sign_change_idx) > 1) {
+        if(pos_change) {
+            # find nadir of y values
+            nadir <- min(pred)
+            sign_change_idx <- sign_change_idx[which.min(abs(
+                nadir - equi_spaced_x[sign_change_idx]))]
+        } else {
+            # find peak (when using petco2 basically)
+            peak <- max(pred)
+            sign_change_idx <- sign_change_idx[which.min(abs(
+                peak - equi_spaced_x[sign_change_idx]))]
+        }
+    }
+
+    # OLD CODE, KEEP FOR A BIT
     # there are often two local maxima. Choose the higher x-axis value
     # for VT2/RC, and the lower for VT1. This is similar to
     # Sherril et al. (1990) and Cross et al. (2012)
-    if(length(sign_change_idx) > 1) {
-        if(bp == "vt1") {
-            sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
-        }
-        if(bp == "vt2") {
-            sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
-        }
-    }
+    # if(length(sign_change_idx) > 1) {
+    #     if(bp == "vt1") {
+    #         sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
+    #     }
+    #     if(bp == "vt2") {
+    #         sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
+    #     }
+    # }
 
     # get values at threshold
     if(length(sign_change_idx) > 0) {
@@ -162,6 +181,12 @@ d2_poly_reg_maxima <- function(.data,
         bp_dat <- bp_dat %>%
             dplyr::add_row() %>%
             dplyr::mutate(determinant_bp = FALSE)
+        # add character or factor columns that are all the same value (e.g. ids)
+        non_numeric_df <- .data %>%
+            dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
+                                                all(x == x[1]))) %>%
+            dplyr::slice(1)
+        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
     } else { # breakpoint found
         bp_dat <- bp_dat %>%
             dplyr::mutate(determinant_bp = TRUE)
