@@ -68,7 +68,7 @@ find_threshold_vals.inv_dist <- function(.data,
         stats::dist()
 
     threshold_data <- .data %>%
-        select(-c(.x, .y)) %>%
+        select(-c(.x, .y, names(non_numeric_df))) %>%
         # add distances between threshold and corresponding variables
         dplyr::mutate(
             normalized_dist = d[dist_idx_conv(2:attr(d, "Size"), 1, d)]) %>%
@@ -78,7 +78,7 @@ find_threshold_vals.inv_dist <- function(.data,
         dplyr::mutate(inv_weight = (normalized_dist/max(normalized_dist))^-1,
                       pct_tot_weight = inv_weight/sum(inv_weight)) %>%
         # calculate threshold values
-        summarize(across(!c(normalized_dist, inv_weight, pct_tot_weight),
+        dplyr::summarize(across(!c(normalized_dist, inv_weight, pct_tot_weight),
                          ~ sum(. * pct_tot_weight))) %>%
         # add back variables used to calculate the threshold
         dplyr::mutate("{.x}" := thr_x,
