@@ -74,7 +74,8 @@ v_slope <- function(.data,
         dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     dist_MSE_ratio_idx <- loop_v_slope(.data = .data, .x = .x, .y = .y,
-                                       pos_change, pos_slope_after_bp)
+                                       pos_change, pos_slope_after_bp,
+                                       alpha_linearity)
     slope_change <- 0
     i <- 1
     bp_idx <- dist_MSE_ratio_idx[i]
@@ -89,14 +90,7 @@ v_slope <- function(.data,
           (lm_left$coefficients[2] < left_slope_lim)) {
         # enter this loop if slopes did not change be enough or if the left slope
         # was too low
-        bp_idx <- dist_MSE_ratio_idx[i] # find the next-best fit
-        df_left <- .data[1:bp_idx,]
-        df_right <- .data[bp_idx:n_rows,]
-        lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
-        lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
-
-        slope_change <- lm_right$coefficients[2] - lm_left$coefficients[2]
-
+        # check that we haven't run out of possible options
         if (i > length(dist_MSE_ratio_idx[!is.na(dist_MSE_ratio_idx)])) {
             message(paste0("No VT1 breakpoint found with v-slope method because the change between slopes was never >= ",
                            slope_change_lim, "."))
@@ -119,6 +113,15 @@ v_slope <- function(.data,
                         lm_right = NULL,
                         lm_simple = NULL))
         }
+        bp_idx <- dist_MSE_ratio_idx[i] # find the next-best fit
+        df_left <- .data[1:bp_idx,]
+        df_right <- .data[bp_idx:n_rows,]
+        lm_left <- stats::lm(df_left[[.y]] ~ 1 + df_left[[.x]], data = df_left)
+        lm_right <- stats::lm(df_right[[.y]] ~ 1 + df_right[[.x]], data = df_right)
+
+        slope_change <- lm_right$coefficients[2] - lm_left$coefficients[2]
+
+
         i <- i + 1
     }
 
@@ -186,7 +189,8 @@ v_slope <- function(.data,
 }
 
 #' @keywords internal
-loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp) {
+loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp,
+                         alpha_linearity) {
 
     n_rows <- nrow(.data)
 
@@ -282,7 +286,7 @@ loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp) {
     range_x <- range(.data[[.x]])
 
     dist_MSE_ratio_idx <- v_slope_stats %>%
-        dplyr::filter(p < 0.05 &
+        dplyr::filter(p < alpha_linearity &
                           pos_change_vec == TRUE &
                           pos_slope_after_bp_vec == TRUE &
                           dplyr::between(int_point_x,

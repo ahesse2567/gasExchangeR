@@ -68,7 +68,7 @@ find_threshold_vals.inv_dist <- function(.data,
         stats::dist()
 
     threshold_data <- .data %>%
-        select(-c(.x, .y, names(non_numeric_df))) %>%
+        dplyr::select(-c(.x, .y, names(non_numeric_df))) %>%
         # add distances between threshold and corresponding variables
         dplyr::mutate(
             normalized_dist = d[dist_idx_conv(2:attr(d, "Size"), 1, d)]) %>%
