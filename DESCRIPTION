@@ -16,6 +16,7 @@ Imports:
     dplyr,
     ggplot2,
     glue,
+    gridExtra,
     hms,
     lubridate,
     magrittr,
@@ -25,10 +26,12 @@ Imports:
     rootSolve,
     Ryacas,
     signal,
+    slider,
     splines,
     stats,
     stringr,
     tibble,
+    tidyr,
     tidyselect,
     zoo
 Encoding: UTF-8

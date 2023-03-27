@@ -109,7 +109,7 @@ dmax <- function(.data,
                                               pos_change = pos_change,
                                               pos_slope_after_bp =
                                                   pos_slope_after_bp,
-                                              slope_after_bp = coef(lm_right)[2],
+                                              slope_after_bp = stats::coef(lm_right)[2],
                                               alpha = alpha_linearity)
 
     y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],

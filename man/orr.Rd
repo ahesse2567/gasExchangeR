@@ -59,6 +59,11 @@ A list including slice of the original data frame at the threshold index with ne
 \description{
 Finding a breakpoint using Orr's 'bruteforce' algorithm.
 }
+\details{
+According to the Orr et al. (1982, p. 1350) paper, the "anaerobic threshold is then reported as the first intersection point [of the lines] of the more appropriate model." In an email to Dr. Hughson, a weakness of this method is that the intersection point hardley ever lands on an existing data point. In some cases, the intersection of the best-fit model lies beyond the range of the x-axis. Instead of returning that value, we report the solution with the lowest pooled sums of squares that satisfies the following criteria: 1) the change in slope from the left to the right regression matches the anticipated change, usually positive; 2) the slope of the right regression matches the anticipated slope, usually positive; 3) the p-value of the F-test based on the extra sums of squares principle is statistically significant; and 4) the x-coordinate of the intersection point is within the range of the observed x-values. This differs slightly from the original method, but provides potentially plausible answers when the alternative is a negative VO2 or a VO2 well beyond VO2max.
+
+The text of the original paper states that "Regression lines are calculated for all possible divisions of the data into two \emph{contiguous} groups." We interpret contiguous to mean "shares a boundary". That is, the left and right portions of the data each contain one identical data point at the division.
+}
 \examples{
 # TODO write examples
 }

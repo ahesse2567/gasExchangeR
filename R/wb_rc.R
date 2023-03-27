@@ -149,7 +149,7 @@ wb_rc <- function(.data,
 loop_wb_rc <- function(.data, .x, .y, min_pct_change = 0.15) {
 
     # fit a simple linear model with all the data for a comparison
-    lm_simple <- lm(paste0(.y, " ~ ", .x), data = .data)
+    lm_simple <- stats::lm(paste0(.y, " ~ ", .x), data = .data)
     RSS_simple <- sum(stats::resid(lm_simple)^2)
     df2 <- nrow(lm_simple$model) - 4 # -4 b/c estimating 4 parameters
 

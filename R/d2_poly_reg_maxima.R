@@ -69,99 +69,6 @@ d2_poly_reg_maxima <- function(.data,
                              degree = degree,
                              alpha_linearity = alpha_linearity)
 
-    # TODO what about if the best model is linear? Then this method probably
-    # won't work well and you should get a warning or an error about that
-    # also, I think you need a minimum of a 4th order equation if you want to
-    # find the maxima in the acceleration (2nd derivative) of the relationship
-    # b/c you essentially need to take a third derivative and still have an x term
-
-    poly_expr <- expr_from_coefs(lm_poly$coefficients)
-    deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
-    deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
-    deriv3 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 3) # jerk. Use to find maxima in 2nd deriv
-    deriv4 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 4) # snap. This kinda feels hacky and dumb at this point
-    # 4th deriv used to find maxima vs. minima given multiple extrema
-
-    # find x-values of roots
-    roots_deriv3 <- deriv3 %>%
-        Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
-        Ryacas::yac_str() %>%
-        stringr::str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
-        purrr::map(as.numeric) %>%
-        unlist() %>%
-        rev() %>% # reverse order for polyroot()
-        polyroot() %>%
-        find_real()
-
-    # filter by roots within range of x values
-    roots_deriv3 <- roots_deriv3[roots_deriv3 >= min(.data[[.x]]) &
-                                     roots_deriv3 <= max(.data[[.x]])]
-
-    # use pos_change to search for values above or below 0
-    if(pos_change) {
-        # use 4th derivative to find which are maxima (y @ roots < 0)
-        local_maxima_x <- roots_deriv3[eval(deriv4,
-                                            envir = list(x = roots_deriv3)) < 0]
-        # uncomment if we need local_maxima_y ever later
-        # local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
-    } else {
-        # use 4th derivative to find which are minima (y @ roots > 0)
-        local_maxima_x <- roots_deriv3[eval(deriv4,
-                                            envir = list(x = roots_deriv3)) > 0]
-        # local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
-    }
-
-    # you would generally expect the threshold to be the highest of any possible
-    # local maxima (at least for VT2). In this case, highest means highest x-val
-    # (and usually highest y-val, too)
-
-    # select higher of the two local maxima b/c we expect just one large change
-    # I feel like this goes against my visual detection
-    # according to Cross et al. (2012), one should select the lower of any two
-    # maxima for VT1 and the higher of any two maxima for VT2
-    if(length(local_maxima_x) > 1) {
-        if(bp == "vt1") {
-            local_maxima_x <- local_maxima_x[which.min(local_maxima_x)]
-        }
-        if(bp == "vt2") {
-            # techincally, this is a local minima
-            local_maxima_x <- local_maxima_x[which.max(local_maxima_x)]
-        }
-    }
-
-    y_hat_threshold <- eval(poly_expr, envir = list(x = local_maxima_x))
-
-    if(length(local_maxima_x) > 0) {
-        bp_dat <- find_threshold_vals(.data = .data, thr_x = local_maxima_x,
-                                      thr_y = y_hat_threshold, .x = .x,
-                                      .y = .y, ...)
-    } else {
-        bp_dat <- tibble::tibble()
-    }
-
-    # get values at threshold
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(bp = bp,
-                      algorithm = "d2_reg_spline_maxima",
-                      x_var = .x,
-                      y_var = .y,
-        )
-    if(nrow(bp_dat) == 0) { # no breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::add_row() %>%
-            mutate(determinant_bp = FALSE)
-    } else { # breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::mutate(determinant_bp = TRUE)
-    }
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(algorithm = "d2_poly_reg_maxima",
-                      x_var = .x,
-                      y_var = .y,
-                      bp = bp) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
-
-    # make better plotting data by making more, evenly spaced points
     equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
                          length.out = range(.data[[vo2]]) %>%
                              diff() %>%
@@ -169,6 +76,128 @@ d2_poly_reg_maxima <- function(.data,
 
     pred <- stats::predict(lm_poly,
                            newdata = tibble::tibble("{.x}" := equi_spaced_x))
+
+    spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
+
+    # find number of maxima
+    if(pos_change) {
+        sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
+                                                              deriv = 2),
+                                              change = "pos_to_neg")
+
+        # filter by expected slope (usually positive)
+        # there can be a spike in accel during the initial drop in vent eqs
+        # however, only remove these thresholds with a negative derivative
+        # if there is more than one value with a negative slope
+        if(length(sign_change_idx) > 1) {
+            # see which derivatives at the sign changes are negative
+            neg_slope_idx <- which(spline_func(
+                x = equi_spaced_x[sign_change_idx],
+                deriv = 1) < 0)
+            while(length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
+                # remove the left-most value
+                neg_slope_idx <- neg_slope_idx[-1]
+                sign_change_idx <- sign_change_idx[neg_slope_idx]
+                neg_slope_idx <- which(spline_func(
+                    x = equi_spaced_x[sign_change_idx],
+                    deriv = 1) < 0)
+            }
+        }
+    } else { # this only applies when y var = petco2
+        sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
+                                                              deriv = 2),
+                                              change = "neg_to_pos")
+
+        # filter by expected slope (in this case negative)
+        if(length(sign_change_idx) > 1) {
+            # see which derivatives at the sign changes are positive
+            pos_slope_idx <- which(spline_func(
+                x = equi_spaced_x[sign_change_idx],
+                deriv = 1) > 0)
+            while(length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
+                # remove the left-most value
+                pos_slope_idx <- pos_slope_idx[-1]
+                sign_change_idx <- sign_change_idx[pos_slope_idx]
+                pos_slope_idx <- which(spline_func(
+                    x = equi_spaced_x[sign_change_idx],
+                    deriv = 1) > 0)
+            }
+        }
+    }
+
+    # there can be multiple local extrema. Choose the extrema closer to the
+    # nadir or peak because this often represents the beginning of a systematic
+    # rise
+
+    if(length(sign_change_idx) > 1) {
+        if(pos_change) {
+            # find nadir of y values
+            nadir <- min(pred)
+            sign_change_idx <- sign_change_idx[which.min(abs(
+                nadir - equi_spaced_x[sign_change_idx]))]
+        } else {
+            # find peak (when using petco2 basically)
+            peak <- max(pred)
+            sign_change_idx <- sign_change_idx[which.min(abs(
+                peak - equi_spaced_x[sign_change_idx]))]
+        }
+    }
+
+    # OLD CODE, KEEP FOR A BIT
+    # there are often two local maxima. Choose the higher x-axis value
+    # for VT2/RC, and the lower for VT1. This is similar to
+    # Sherril et al. (1990) and Cross et al. (2012)
+    # if(length(sign_change_idx) > 1) {
+    #     if(bp == "vt1") {
+    #         sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
+    #     }
+    #     if(bp == "vt2") {
+    #         sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
+    #     }
+    # }
+
+    # get values at threshold
+    if(length(sign_change_idx) > 0) {
+        x_threshold <- equi_spaced_x[sign_change_idx]
+        y_hat_threshold <- stats::predict(lm_poly,
+                                          tibble::tibble("{.x}" := x_threshold))
+
+        bp_dat <- find_threshold_vals(.data = .data, thr_x = x_threshold,
+                                      thr_y = y_hat_threshold, .x = .x,
+                                      .y = .y, ...)
+
+        # get values at threshold
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(bp = bp,
+                          algorithm = "d2_reg_spline_maxima",
+                          x_var = .x,
+                          y_var = .y,
+            )
+    } else {
+        bp_dat <- tibble::tibble()
+    }
+
+    if(nrow(bp_dat) == 0) { # no breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::add_row() %>%
+            dplyr::mutate(determinant_bp = FALSE)
+        # add character or factor columns that are all the same value (e.g. ids)
+        non_numeric_df <- .data %>%
+            dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
+                                                all(x == x[1]))) %>%
+            dplyr::slice(1)
+        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
+    } else { # breakpoint found
+        bp_dat <- bp_dat %>%
+            dplyr::mutate(determinant_bp = TRUE)
+    }
+
+    bp_dat <- bp_dat %>%
+        dplyr::mutate(algorithm = "d2_poly_reg_maxima",
+                      x_var = .x,
+                      y_var = .y,
+                      bp = bp) %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
     bp_plot <- ggplot2::ggplot(data = .data,
                                ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
@@ -182,8 +211,8 @@ d2_poly_reg_maxima <- function(.data,
 
     return(list(breakpoint_data = bp_dat,
                 lm_poly_reg = lm_poly,
-                deriv1_expr = deriv1,
-                deriv2_expr = deriv2,
+                deriv_func = spline_func,
+                # deriv2_expr = deriv2,
                 bp_plot = bp_plot))
 }
 
@@ -228,3 +257,88 @@ loop_d2_poly_reg_maxima <- function(.data, .x, .y,
 
     lm_poly
 }
+
+
+
+# OLD CODE USING SYMBOLIC DIFFERENTIATION
+
+# TODO what about if the best model is linear? Then this method probably
+# won't work well and you should get a warning or an error about that
+# also, I think you need a minimum of a 4th order equation if you want to
+# find the maxima in the acceleration (2nd derivative) of the relationship
+# b/c you essentially need to take a third derivative and still have an x term
+
+# poly_expr <- expr_from_coefs(lm_poly$coefficients)
+# deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
+# deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
+# deriv3 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 3) # jerk. Use to find maxima in 2nd deriv
+
+# find x-values of roots
+# roots_deriv3 <- deriv3 %>%
+#     Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
+#     Ryacas::yac_str() %>%
+#     stringr::str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
+#     purrr::map(as.numeric) %>%
+#     unlist() %>%
+#     rev() %>% # reverse order for polyroot()
+#     polyroot() %>%
+#     find_real()
+
+# filter by roots within range of x values
+# roots_deriv3 <- roots_deriv3[roots_deriv3 >= min(.data[[.x]]) &
+#                                  roots_deriv3 <= max(.data[[.x]])]
+
+# use pos_change to search for values above or below 0
+# if(pos_change) {
+#     # use 4th derivative to find which are maxima (y @ roots < 0)
+#     local_maxima_x <- roots_deriv3[grad(expr_to_func(deriv3),
+#                                         roots_deriv3) < 0]
+#     # uncomment if we need local_maxima_y ever later
+#     # local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
+# } else {
+#     # use 4th derivative to find which are minima (y @ roots > 0)
+#     local_maxima_x <- roots_deriv3[grad(expr_to_func(deriv3),
+#                                         roots_deriv3) > 0]
+    # local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
+# }
+
+
+# you would generally expect the threshold to be the highest of any possible
+# local maxima (at least for VT2). In this case, highest means highest x-val
+# (and usually highest y-val, too)
+
+# select higher of the two local maxima b/c we expect just one large change
+# I feel like this goes against my visual detection
+# according to Cross et al. (2012), one should select the lower of any two
+# maxima for VT1 and the higher of any two maxima for VT2
+# if(length(local_maxima_x) > 1) {
+#     if(bp == "vt1") {
+#         local_maxima_x <- local_maxima_x[which.min(local_maxima_x)]
+#     }
+#     if(bp == "vt2") {
+#         # techincally, this is a local minima
+#         local_maxima_x <- local_maxima_x[which.max(local_maxima_x)]
+#     }
+# }
+#
+# y_hat_threshold <- eval(poly_expr, envir = list(x = local_maxima_x))
+
+# if(length(local_maxima_x) > 0) {
+#     x_threshold <- equi_spaced_x[sign_change_idx]
+#     y_hat_threshold <- stats::predict(lm_spline,
+#                                       tibble::tibble("{.x}" := x_threshold))
+#     bp_dat <- find_threshold_vals(.data = .data, thr_x = local_maxima_x,
+#                                   thr_y = y_hat_threshold, .x = .x,
+#                                   .y = .y, ...)
+# } else {
+#     bp_dat <- tibble::tibble()
+# }
+
+# make better plotting data by making more, evenly spaced points
+# equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
+#                      length.out = range(.data[[vo2]]) %>%
+#                          diff() %>%
+#                          round())
+#
+# pred <- stats::predict(lm_poly,
+#                        newdata = tibble::tibble("{.x}" := equi_spaced_x))

@@ -100,3 +100,39 @@ ggplot(data = df_avg, aes(x = vo2_abs, y = vco2)) +
     geom_vline(xintercept = orr_dat$breakpoint_data$vo2_abs) +
     geom_point(data = point, color = "green", size = 8, alpha = 0.5) +
     geom_point(data = fitted_point, color = "blue", size = 3, alpha = 0.5)
+
+
+
+
+
+
+
+
+##### code to vectorize loop_orr()
+
+library(profvis)
+
+calc_ss <- function(df, x, y) {
+    splits <- vector(mode = "list", length = nrow(df) - 2)
+    for(i in 2:(nrow(df)-1)) {
+        splits[[i]] <- list(left = data[1:i,], right = data[(i+1):nrow(data),])
+    }
+}
+
+splits <- map(2:(nrow(df)-1), function(i) {
+    list(left = df[1:i, ], right = df[(i+1):nrow(df), ])
+})
+
+profvis({
+    df <- tibble(x = 1:10000, y = 2 * x)
+
+    splits <- vector(mode = "list", length = nrow(df))
+    for(i in seq_along(splits)) {
+        splits[[i]] <- list(df_left = df[1:i,], df_right = df[i:nrow(df),])
+    }
+
+    splits2 <- map2(1:nrow(df), df, function(i, df) {
+        list(left = df[1:i, ], right = df[i:nrow(df), ])
+    })
+})
+

@@ -70,6 +70,8 @@ V-slope uses the v-slope \emph{algorithm} to find a breakpoint. Note, the v-slop
 }
 \details{
 If the \code{method} argument is set to \code{"v-slope"}, the function enters a while loop to satisfy the quality control criteria (see Warnings section for details). Otherwise, the function returns the breakpoint as described the initial description.
+
+According to the Beaver et al. (1986, p. 2023) paper, the "intersection between the two regression lines is the tentative AT point." This usually provides a reasonable solution, but in some cases, the intersection of the best-fit model lies beyond the range of the x-axis. Instead of returning that value, we report the solution with the highest ratio of distance between the intersection point of the left and right regressions and the single regression line to the mean square error of the piecewise regression that also satisfies the following criteria: 1) the change in slope from the left to the right regression matches the anticipated change, usually positive; 2) the slope of the right regression matches the anticipated slope, usually positive; 3) the p-value of the F-test based on the extra sums of squares principle is statistically significant; and 4) the x-coordinate of the intersection point is within the range of the observed x-values. This differs slightly from the original method, but provides potentially plausible answers when the alternative is a negative VO2 or a VO2 well beyond VO2max.
 }
 \section{Warning}{
 

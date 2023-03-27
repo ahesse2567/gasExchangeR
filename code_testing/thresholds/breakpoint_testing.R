@@ -4,7 +4,7 @@ library(tidyverse)
 library(janitor)
 library(readxl)
 
-df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_exercisethresholds/mar22_196_post_retest_gxt.xlsx") %>%
+df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_exercisethresholds/mar22_117_post_gxt.xlsx") %>%
     rename(vo2 = vo2_abs,
            vo2_kg = vo2)
 
@@ -40,10 +40,12 @@ df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
                             time_col = "time", bin_w = 15)
 
 ggplot(data = df_avg, aes(x = time)) +
-    geom_point(aes(y = vo2), color = "red", alpha = 0.5) +
-    geom_line(aes(y = vo2), color = "red", alpha = 0.5) +
-    geom_point(aes(y = vco2), color = "blue", alpha = 0.5) +
-    geom_line(aes(y = vco2), color = "blue", alpha = 0.5) +
+    geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
+    geom_line(aes(y = vo2, color = "vo2"), alpha = 0.5) +
+    geom_point(aes(y = vco2, color = "vco2"), alpha = 0.5) +
+    geom_line(aes(y = vco2, color = "vco2"), alpha = 0.5) +
+    scale_color_manual(name = NULL,
+                       values = c("vo2" = "red", "vco2" = "blue")) +
     theme_minimal()
 
 ggplot(data = df_avg, aes(x = vo2, y = vco2)) +
@@ -57,54 +59,89 @@ ggplot(data = df_avg, aes(x = vco2, y = ve)) +
     theme_minimal()
 
 ggplot(data = df_avg, aes(x = time)) +
-    geom_point(aes(y = ve_vco2), color = "green", alpha = 0.5) +
-    geom_line(aes(y = ve_vco2), color = "green", alpha = 0.5) +
-    geom_point(aes(y = ve_vo2), color = "purple", alpha = 0.5) +
-    geom_line(aes(y = ve_vo2), color = "purple", alpha = 0.5) +
+    geom_point(aes(y = ve_vco2, color = "ve_vco2"), alpha = 0.5) +
+    geom_line(aes(y = ve_vco2, color = "ve_vco2"), alpha = 0.5) +
+    geom_point(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
+    geom_line(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
     ggtitle("Ventilatory Equivalents") +
+    scale_color_manual(name = NULL,
+                       values = c("ve_vco2" = "purple", "ve_vo2" = "green")) +
     theme_minimal()
 
-# vt1_only_algs <- c("v-slope", "d1_crossing")
-
-# algorithms <- c("jm", "orr", "dmax", "spline_bp",
-#                 "d2_inflection", "d1_poly_reg_maxima",
-#                 "d2_reg_spline_maxima")
-debug(breakpoint)
-
+debug(gasExchangeR::orr)
+# debug(d2_reg_spline_maxima)
+# Rprof()
 breakpoint(df_avg,
            algorithm_vt1 = "v-slope",
            x_vt1 = "vo2",
            y_vt1 = "vco2",
-           algorithm_vt2 = "d2_reg_spline_maxima",
+           algorithm_vt2 = "d2_inflection",
            x_vt2 = "vco2",
            y_vt2 = "ve",
            bp = "both",
            truncate = TRUE,
-           pos_slope_after_bp = FALSE,
+           pos_slope_after_bp = TRUE,
+)
+# Rprof(NULL)
+prof_summary <- summaryRprof()
+
+prof_summary$by.self
+
+breakpoint(df_avg,
+           algorithm_vt1 = "orr",
+           x_vt1 = "vo2",
+           y_vt1 = "vco2",
+           algorithm_vt2 = "orr",
+           x_vt2 = "vco2",
+           y_vt2 = "ve",
+           bp = "both",
+           truncate = TRUE,
+           pos_slope_after_bp = TRUE,
 )
 
+undebug(breakpoint)
 undebug(d2_reg_spline_maxima)
 
 
 bp_dat <- breakpoint(.data = df_avg, method = "excess_co2",
                      x_vt1 = "vo2",
-                     algorithm_vt1 = "spline_bp",
+                     algorithm_vt1 = "d2_poly_reg_maxima",
                      algorithm_vt2 = "d2_poly_reg_maxima",
-                     x_vt2 = "vo2", y_vt2 = "ve_vco2", truncate = TRUE,
+                     x_vt2 = "ve", y_vt2 = "ve_vco2", truncate = FALSE,
                      front_trim_vt1 = 90)
 bp_dat$vt1_dat$bp_plot
 bp_dat$vt2_dat$bp_plot
 
+debug(add_threshold_lines)
+undebug(add_threshold_lines)
+debug(breakpoint)
+
 bp_dat <- breakpoint(.data = df_avg,
-                     algorithm_vt1 = "d1_crossing",
-                     x_vt1 = "time", y_vt1 = "vo2",
+                     algorithm_vt1 = "d2_reg_spline_maxima",
+                     x_vt1 = "vo2", y_vt1 = "vco2",
                      algorithm_vt2 = "d2_reg_spline_maxima",
-                     x_vt2 = "vo2", y_vt2 = "ve_vco2",
+                     x_vt2 = "vo2", y_vt2 = "vco2",
                      bp = "both", truncate = FALSE)
+bp_dat$bp_dat
+bp_dat$bp_plots$vt1_plot
+bp_dat$bp_plots$vt2_plot
 bp_dat$vt1_dat$bp_plot
 bp_dat$vt2_dat$bp_plot
 
-debug(d2_reg_spline_maxima)
+
+nine_panel_plot(.data = df_avg,
+                vt1_dat = bp_dat$vt1_dat,
+                vt2_dat = bp_dat$vt2_dat,
+                vo2 = "vo2",
+                vco2 = "vco2",
+                ve = "ve",
+                hr = "hr",
+                time = "time",
+                vt = "vt_btps")
+
+
+
+# debug(d2_reg_spline_maxima)
 bp_dat <- breakpoint(.data = df_avg, x_vt1 = "vo2", y_vt1 = "vco2",
                      algorithm_vt1 = "d2_reg_spline_maxima",
                      algorithm_vt2 = "d2_reg_spline_maxima",

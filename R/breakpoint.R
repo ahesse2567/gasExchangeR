@@ -136,16 +136,34 @@ breakpoint <- function(.data,
                                                          params),
                           "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima",
                                                            params),
-                          stop("Invalid `algorithm_vt2` value"))
+                          stop("Invalid `algorithm_vt1` value"))
         if(bp == "vt1") {
             return(vt1_out)
         }
     }
-
+    # combine breakpoint data
     vt_out <- suppressMessages(dplyr::full_join(vt1_out$breakpoint_data,
                                          vt2_out$breakpoint_data)) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+    # generate plot showing both thresholds
+    vt1_plot <- ggplot2::ggplot(data = .data,
+                                ggplot2::aes(x = .data[[x_vt1]], .data[[y_vt1]])) +
+        ggplot2::geom_point() +
+        ggplot2::theme_minimal()
+    vt1_plot <- add_threshold_lines(vt1_plot, x_var = x_vt1,
+                                    vt1_out, vt2_out)
+
+    vt2_plot <- ggplot2::ggplot(data = .data,
+                                ggplot2:: aes(x = .data[[x_vt2]], .data[[y_vt2]])) +
+        ggplot2::geom_point() +
+        ggplot2::theme_minimal()
+    vt2_plot <- add_threshold_lines(plt = vt2_plot, x_var = x_vt2,
+                                    vt1_out, vt2_out)
+
+    bp_plots <- list("vt1_plot" = vt1_plot, "vt2_plot" = vt2_plot)
+
     out <- list(bp_dat = vt_out,
+                bp_plots = bp_plots,
                 vt1_dat = vt1_out,
                 vt2_dat = vt2_out)
     out
