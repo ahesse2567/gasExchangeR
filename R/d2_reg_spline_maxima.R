@@ -186,10 +186,10 @@ d2_reg_spline_maxima <- function(.data,
             dplyr::add_row() %>%
             dplyr::mutate(determinant_bp = FALSE)
         # add character or factor columns that are all the same value (e.g. ids)
-        non_numeric_df <- .data %>%
-            dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
-                             all(x == x[1]))) %>%
-            dplyr::slice(1)
+        # non_numeric_df <- .data %>%
+        #     dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
+        #                      all(x == x[1]))) %>%
+        #     dplyr::slice(1)
         bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
     } else { # breakpoint found
         bp_dat <- bp_dat %>%
