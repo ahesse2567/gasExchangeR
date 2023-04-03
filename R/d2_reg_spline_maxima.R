@@ -124,17 +124,35 @@ d2_reg_spline_maxima <- function(.data,
     # nadir or peak because this often represents the beginning of a systematic
     # rise
 
+    # choosing closest to the nadir/peak probably isn't a good idea when
+    # the graph is NOT a ventilatory equivalents graph b/c the nadir will
+    # be super close to the beginning of the test
+    # At least for now, for better or for worse, I'd say choose the extrema
+    # with the largest y-magnitude
+
+    y_val_sign_change <- spline_func(x = equi_spaced_x[sign_change_idx],
+                                     deriv = 1)
+
     if(length(sign_change_idx) > 1) {
         if(pos_change) {
+
+            sign_change_idx <- sign_change_idx[which.max(
+                spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
+            )]
+            # OLD code
             # find nadir of y values
-            nadir <- min(pred)
-            sign_change_idx <- sign_change_idx[which.min(abs(
-                nadir - equi_spaced_x[sign_change_idx]))]
+            # nadir <- min(pred)
+            # sign_change_idx <- sign_change_idx[which.min(abs(
+            #     nadir - equi_spaced_x[sign_change_idx]))]
         } else {
+            sign_change_idx <- sign_change_idx[which.min(
+                spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
+            )]
+            # OLD code
             # find peak (when using petco2 basically)
-            peak <- max(pred)
-            sign_change_idx <- sign_change_idx[which.min(abs(
-                peak - equi_spaced_x[sign_change_idx]))]
+            # peak <- max(pred)
+            # sign_change_idx <- sign_change_idx[which.min(abs(
+            #     peak - equi_spaced_x[sign_change_idx]))]
         }
     }
 
