@@ -47,6 +47,7 @@ d2_reg_spline_maxima <- function(.data,
                                  alpha_linearity = 0.05,
                                  pos_change = TRUE,
                                  ordering = c("by_x", "time")
+                                 # TODO ADD FRONT TRIM ARGUMENTS
                                  ) {
 
     # check if there is crucial missing data
@@ -91,9 +92,11 @@ d2_reg_spline_maxima <- function(.data,
                 x = equi_spaced_x[sign_change_idx],
                 deriv = 1) < 0)
             while(length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                # remove the left-most value
-                neg_slope_idx <- neg_slope_idx[-1]
-                sign_change_idx <- sign_change_idx[neg_slope_idx]
+                # remove one value with a negative slope at a time in case
+                # all are negative. If the derivative is negative but it's
+                # right befor a clear upturn, that's probably the threshold
+                sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
+                # find which values have negative signs to exit loop
                 neg_slope_idx <- which(spline_func(
                     x = equi_spaced_x[sign_change_idx],
                     deriv = 1) < 0)
@@ -110,9 +113,14 @@ d2_reg_spline_maxima <- function(.data,
                 x = equi_spaced_x[sign_change_idx],
                 deriv = 1) > 0)
             while(length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                # remove the left-most value
-                pos_slope_idx <- pos_slope_idx[-1]
-                sign_change_idx <- sign_change_idx[pos_slope_idx]
+                # remove values with a positive slope by logical indexing
+                # should I still be removing these incrementally? in case the
+                # nadir isocapnic buffering period is VERY short-lived?
+                # I could see how the deriv could be negative, but the
+                # accel could be very positive. this would be okay if
+                # it were the only maxima (I think)
+                sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
+                # find values with positive slope again to exit loop
                 pos_slope_idx <- which(spline_func(
                     x = equi_spaced_x[sign_change_idx],
                     deriv = 1) > 0)

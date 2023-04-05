@@ -55,6 +55,7 @@ d2_poly_reg_maxima <- function(.data,
                             alpha_linearity = 0.05,
                             pos_change = TRUE,
                             ordering = c("by_x", "time"),
+                            # TODO ADD FRONT TRIM ARGUMENTS
                             ...
                             ) {
 
@@ -95,9 +96,11 @@ d2_poly_reg_maxima <- function(.data,
                 x = equi_spaced_x[sign_change_idx],
                 deriv = 1) < 0)
             while(length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                # remove the left-most value
-                neg_slope_idx <- neg_slope_idx[-1]
-                sign_change_idx <- sign_change_idx[neg_slope_idx]
+                # remove one value with a negative slope at a time in case
+                # all are negative. If the derivative is negative but it's
+                # right befor a clear upturn, that's probably the threshold
+                sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
+                # find which values have negative signs to exit loop
                 neg_slope_idx <- which(spline_func(
                     x = equi_spaced_x[sign_change_idx],
                     deriv = 1) < 0)
@@ -115,9 +118,9 @@ d2_poly_reg_maxima <- function(.data,
                 x = equi_spaced_x[sign_change_idx],
                 deriv = 1) > 0)
             while(length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                # remove the left-most value
-                pos_slope_idx <- pos_slope_idx[-1]
-                sign_change_idx <- sign_change_idx[pos_slope_idx]
+                # remove values with a positive slope by logical indexing
+                sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
+                # find values with positive slope again to exit loop
                 pos_slope_idx <- which(spline_func(
                     x = equi_spaced_x[sign_change_idx],
                     deriv = 1) > 0)
