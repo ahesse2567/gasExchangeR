@@ -37,8 +37,10 @@
 #' @examples
 #' # write example later
 vo2_plateau <- function(.data,
-                        method = "slope_eot",
-                        vo2_col,
+                        method = c("slope_eot",
+                                   "vo2max_neighbor",
+                                   "zero_slope"),
+                        vo2_col = "vo2",
                         time_col = "time",
                         units = "mL",
                         last_x_s = 30,
@@ -46,14 +48,16 @@ vo2_plateau <- function(.data,
                         alpha = 0.05) {
 
     stopifnot(!missing(.data),
-              !missing(vo2_col),
+              # !missing(vo2_col),
               !missing(method),
               last_x_s > 0,
               delta_vo2 > 0)
 
-    method = match.arg(
-        method,
-        choices = c("slope_eot", "zero_slope", "vo2max_neighbor"))
+    method = match.arg(method,
+                       choices = c("slope_eot",
+                                   "vo2max_neighbor",
+                                   "zero_slope"),
+                       several.ok = FALSE)
 
     class(.data) <- append(class(.data), method)
     UseMethod("vo2_plateau", .data)
@@ -62,7 +66,7 @@ vo2_plateau <- function(.data,
 #' @export
 vo2_plateau.slope_eot <- function(.data,
                                   method = "slope_eot",
-                                  vo2_col,
+                                  vo2_col = "vo2",
                                   time_col = "time",
                                   units = "mL",
                                   last_x_s = 30,
@@ -95,7 +99,7 @@ vo2_plateau.slope_eot <- function(.data,
 #' @export
 vo2_plateau.zero_slope <- function(.data,
                                    method = "slope_eot",
-                                   vo2_col,
+                                   vo2_col = "vo2",
                                    time_col = "time",
                                    units = "mL",
                                    last_x_s = 30,
@@ -130,7 +134,7 @@ vo2_plateau.zero_slope <- function(.data,
 #' @export
 vo2_plateau.vo2max_neighbor <- function(.data,
                                         method = "slope_eot",
-                                        vo2_col,
+                                        vo2_col = "vo2",
                                         time_col = "time",
                                         units = "mL",
                                         last_x_s = 30,
@@ -143,8 +147,47 @@ vo2_plateau.vo2max_neighbor <- function(.data,
     }
 
     vo2max_idx <- which.max(.data[[vo2_col]])
-    vo2max_neighbor_diff <- .data[[vo2_col]][vo2max_idx] -
-        .data[[vo2_col]][vo2max_idx - 1]
+    vo2max <- max(.data[[vo2_col]])
+
+    if(vo2max_idx == nrow(.data)) {
+        # this is a special case when the VO2max index is the last data point
+        vo2max_neighbor_diff <- vo2max -
+            .data[[vo2_col]][vo2max_idx - 1]
+    } else {
+        # find the neighbors, i.e. data points on either side of VO2max
+        t_diffs <- abs(c(.data[[time_col]][vo2max_idx - 1],
+                         .data[[time_col]][vo2max_idx + 1]) - .data[[time_col]][vo2max_idx])
+
+        # don't use which.min() for this b/c that only returns 1 value, and with
+        # time averages there will often be ties
+        min_t_diff_idx <- which(t_diffs == min(t_diffs))
+
+        if(length(min_t_diff_idx) > 1) {
+            # there's a tie for the nearest data point with respect to time,
+            # so find the VO2 (y-value) at each index and use the one closest
+            # to VO2max as the comparison
+            closer_neighbor_idx <- which.max(c(.data[[vo2_col]][vo2max_idx - 1],
+                                               .data[[vo2_col]][vo2max_idx + 1]))
+            # higher VO2 value is to the left
+            if(closer_neighbor_idx == 1) {
+                vo2max_neighbor_diff <- vo2max -
+                    .data[[vo2_col]][vo2max_idx - 1]
+            } else { # higher VO2 value is to the right
+                vo2max_neighbor_diff <- vo2max -
+                    .data[[vo2_col]][vo2max_idx + 1]
+            }
+        } else {
+            if(min_t_diff_idx == 1) {
+                # closer point is to the left
+                vo2max_neighbor_diff <- vo2max -
+                    .data[[vo2_col]][vo2max_idx - 1]
+            } else {
+                # closer point is to the right
+                vo2max_neighbor_diff <- vo2max -
+                    .data[[vo2_col]][vo2max_idx + 1]
+            }
+        }
+    }
 
     if(vo2max_neighbor_diff < delta_vo2) {
         plateau <- TRUE
