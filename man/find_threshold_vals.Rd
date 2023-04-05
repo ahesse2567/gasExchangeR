@@ -10,7 +10,7 @@ find_threshold_vals(
   thr_y,
   .x = .x,
   .y = .y,
-  thr_calc_method = c("inv_dist", "dist_x_y", "dist_x"),
+  thr_calc_method = c("inv_dist_knn", "dist_x_y", "dist_x"),
   k = 5,
   ...
 )
@@ -26,7 +26,7 @@ find_threshold_vals(
 
 \item{.y}{Name of the y variable used to find the threshold}
 
-\item{thr_calc_method}{Name of the threshold calculation method. Default is `inv_dist`. The next recommended method is `dist_x_y`, but `dist_x` is also an option.}
+\item{thr_calc_method}{Name of the threshold calculation method. Default is `inv_dist_knn`. The next recommended method is `dist_x_y`, but `dist_x` is also an option.}
 
 \item{k}{How many of the nearest data points should be used to calculate the inverse distance weights?}
 
