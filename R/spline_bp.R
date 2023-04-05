@@ -135,6 +135,11 @@ spline_bp <- function(.data,
 loop_spline_bp <- function(.data, .x, .y, degree = 1) {
     ss_models <- numeric(length = nrow(.data))
 
+    ### ADD SOME OF THE SAME CONSTRAINTS THAT WERE ADDED TO ORR AND V-SLOPE?
+    # this function by default requires the x coordinate to be within the
+    # x-axis range, but it might choose a solution that doesn't match the expected
+    # change in slope, etc.
+
     for(i in 1:nrow(.data)) {
         if(i == 1 | i == nrow(.data)) {
             ss_models[i] <- NA

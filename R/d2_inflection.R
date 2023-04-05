@@ -40,6 +40,7 @@ d2_inflection <- function(.data,
                           time = "time",
                           alpha_linearity = 0.05,
                           ordering = c("by_x", "time")
+                          # TODO ADD FROM TRIM ARGUMENTS
                           ) {
 
     # check if there is crucial missing data

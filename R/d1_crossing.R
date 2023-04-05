@@ -41,6 +41,7 @@ d1_crossing <- function(.data,
                         alpha_linearity = 0.05, # change to just alpha?
                         pos_change = TRUE,
                         ordering = c("by_x", "time")
+                        # TODO ADD FRONT TRIM ARGUMENTS
                         ) {
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
