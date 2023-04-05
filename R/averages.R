@@ -4,9 +4,9 @@
 #' If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
 #'
 #' @param .data Breath-by-breath gas exchange data.
-#' @param type Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.
+#' @param method Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.
 #' @param time_col The name of the column with time.
-#' @param subtype Choose \code{rolling}, \code{bin}, or \code{bin-roll}.
+#' @param calc_type Choose \code{rolling}, \code{bin}, or \code{bin-roll}.
 #' @param roll_window How many seconds or breaths to include if rolling.
 #' @param bin_w Bin size of breaths or time.
 #' @param align If using a rolling method, how to align the rolling average. Default is \code{"center"} Other choices include \code{"left"}, and \code{"right"}.
@@ -24,7 +24,7 @@
 #' @export
 #'
 #' @details
-#' If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
+#' If you combine rolling and bin averages with \code{calc_type = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{method} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
 #'
 #' \code{roll_window} must be evenly divisible by \code{bin_w}
 #'
@@ -35,8 +35,8 @@
 #' # TODO force people to use this function twice if doing bin-roll or rolling-bin?
 #'
 avg_exercise_test <- function(.data,
-                              type = "breath",
-                              subtype = "rolling",
+                              method = "breath",
+                              calc_type = "rolling",
                               time_col = "time",
                               roll_window = 15,
                               bin_w = 15,
@@ -55,15 +55,15 @@ avg_exercise_test <- function(.data,
               roll_trim >= 0 & roll_trim %% 2 == 0,
               bin_trim >= 0 & bin_trim %% 2 == 0)
 
-    type <- match.arg(type, choices = c("breath", "time", "digital"))
-    class(.data) <- append(class(.data), type)
+    method <- match.arg(method, choices = c("breath", "time", "digital"))
+    class(.data) <- append(class(.data), method)
     UseMethod("avg_exercise_test", .data)
 }
 
 #' @export
 avg_exercise_test.breath <- function(.data,
-                                     type = "breath",
-                                     subtype = "rolling",
+                                     method = "breath",
+                                     calc_type = "rolling",
                                      time_col = "time",
                                      roll_window = 15,
                                      bin_w = 15,
@@ -74,7 +74,7 @@ avg_exercise_test.breath <- function(.data,
                                      cutoff = 0.04,
                                      fs = 1,
                                      order = 3) {
-    subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
+    calc_type <- match.arg(calc_type, choices = c("rolling", "bin", "bin_roll"))
 
     # save character cols for later
     # I'm beginning to think this is less important and may cause issues
@@ -91,7 +91,7 @@ avg_exercise_test.breath <- function(.data,
     data_num <- .data %>% # coerce to numeric b/c time may not be of another class
         dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
                                     as.numeric))
-    if(subtype == "rolling") {
+    if(calc_type == "rolling") {
         # rm comments if you want to exactly replicate how breeze does rolling avgs
         # roll_i <- tibble::tibble()
         # for(i in 1:(roll_window-1)) {
@@ -115,7 +115,7 @@ avg_exercise_test.breath <- function(.data,
         # out <- rbind(roll_i, out) # if using breeze rolling
         out <- dplyr::bind_cols(char_cols, out)
         return(out)
-    } else if (subtype == "bin") {
+    } else if (calc_type == "bin") {
         # because of piping, group_by_at(1, ...) means group by the first column.
         # that's probably okay b/c we need to group by breath. For time averaging
         # we should actually find the time_col
@@ -156,8 +156,8 @@ avg_exercise_test.breath <- function(.data,
 
 #' @export
 avg_exercise_test.time <- function(.data,
-                                   type = "breath",
-                                   subtype = "rolling",
+                                   method = "breath",
+                                   calc_type = "rolling",
                                    time_col = "time",
                                    roll_window = 15,
                                    bin_w = 15,
@@ -169,7 +169,7 @@ avg_exercise_test.time <- function(.data,
                                    fs = 1,
                                    order = 3) {
     # browser()
-    subtype <- match.arg(subtype, choices = c("rolling", "bin", "bin_roll"))
+    calc_type <- match.arg(calc_type, choices = c("rolling", "bin", "bin_roll"))
 
     # save character cols for later
     # I'm beginning to think this is less important and may cause issues
@@ -185,7 +185,7 @@ avg_exercise_test.time <- function(.data,
     data_num <- .data %>% # coerce to numeric b/c time may not be of another class
         dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
                                     as.numeric))
-    if(subtype == "rolling") {
+    if(calc_type == "rolling") {
         align <- match.arg(align, choices = c("left", "right", "center"))
         mos <- match.arg(mos, choices = c("mean", "median"))
 
@@ -221,7 +221,7 @@ avg_exercise_test.time <- function(.data,
 
         return(out)
 
-    } else if (subtype == "bin") {
+    } else if (calc_type == "bin") {
         out <- data_num %>%
             dplyr::group_by_at(.vars = time_col,
                                function(x) ceiling(x / bin_w) * bin_w) %>%
@@ -259,8 +259,8 @@ avg_exercise_test.time <- function(.data,
 
 #' @export
 avg_exercise_test.digital <- function(.data,
-                                      type = "breath",
-                                      subtype = "rolling",
+                                      method = "breath",
+                                      calc_type = "rolling",
                                       time_col = "time",
                                       roll_window = 15,
                                       bin_w = 15,
