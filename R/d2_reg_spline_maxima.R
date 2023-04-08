@@ -21,6 +21,9 @@
 #' @param pos_change Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param ci Should the output include confidence interval data? Default is `FALSE`.
+#' @param conf_level Confidence level to use if calculating confidence intervals.
+#' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' #' @references
 #' Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
@@ -46,8 +49,11 @@ d2_reg_spline_maxima <- function(.data,
                                  time = "time",
                                  alpha_linearity = 0.05,
                                  pos_change = TRUE,
-                                 ordering = c("by_x", "time")
-                                 # TODO ADD FRONT TRIM ARGUMENTS
+                                 ordering = c("by_x", "time"),
+                                 # TODO ADD FRONT TRIM ARGUMENTS,
+                                 ci = FALSE,
+                                 conf_level = 0.95,
+                                 plots = TRUE
                                  ) {
 
     # check if there is crucial missing data
@@ -229,15 +235,19 @@ d2_reg_spline_maxima <- function(.data,
                       bp = bp) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
-    bp_plot <- ggplot2::ggplot(data = .data,
-                               ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
-        ggplot2::geom_point(alpha = 0.5) +
-        ggplot2::geom_line(
-            data = tibble::tibble(x = equi_spaced_x,
-                                  y = pred),
-                                  ggplot2::aes(x = equi_spaced_x, y = pred)) +
-        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
-        ggplot2::theme_minimal()
+    if(plots) {
+        bp_plot <- ggplot2::ggplot(data = .data,
+                                   ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
+            ggplot2::geom_point(alpha = 0.5) +
+            ggplot2::geom_line(
+                data = tibble::tibble(x = equi_spaced_x,
+                                      y = pred),
+                ggplot2::aes(x = equi_spaced_x, y = pred)) +
+            ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+            ggplot2::theme_minimal()
+    } else {
+        bp_plot <- NULL
+    }
 
     return(list(breakpoint_data = bp_dat,
                 lm_reg_spline = lm_spline,
@@ -247,7 +257,7 @@ d2_reg_spline_maxima <- function(.data,
 
 #' @keywords internal
 loop_d2_reg_spline <- function(.data, .x, .y, df = NULL,
-                               degree = 3, alpha_linearity = 0.05) {
+                               degree = 5, alpha_linearity = 0.05) {
     # TODO allow users to specify b-spline or natural-spline basis
     # would that use do.call()?
 

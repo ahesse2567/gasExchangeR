@@ -17,7 +17,10 @@ d1_crossing(
   time = "time",
   alpha_linearity = 0.05,
   pos_change = TRUE,
-  ordering = c("by_x", "time")
+  ordering = c("by_x", "time"),
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE
 )
 }
 \arguments{
@@ -46,6 +49,12 @@ d1_crossing(
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
 \item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 }
 \value{
 A list include breakpoint data, best-fit and related functions, and a plot.

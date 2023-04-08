@@ -18,7 +18,10 @@ d2_reg_spline_maxima(
   time = "time",
   alpha_linearity = 0.05,
   pos_change = TRUE,
-  ordering = c("by_x", "time")
+  ordering = c("by_x", "time"),
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE
 )
 }
 \arguments{
@@ -48,7 +51,13 @@ d2_reg_spline_maxima(
 
 \item{pos_change}{Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.}
 
-\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.
 
 #' @references
 Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
