@@ -40,7 +40,8 @@ intersection_point <- function(lm1, lm2) {
 #' @noMd
 make_piecewise_bp_plot <- function(.data, .x, .y, lm_left, lm_right,
                                    bp_dat, ...) {
-
+    # right now this function adds upper and lower CI values if supplied
+    # I should probably make that optional later
     plot_x <- .data[[.x]]
     plot_df <- tibble::tibble("{.x}" := plot_x) %>%
         dplyr::mutate(y_hat_left = stats::predict(lm_left,
@@ -73,4 +74,34 @@ check_if_determinant_bp <- function(p, pct_slope_change,
                                          pos_slope_after_bp == (slope_after_bp > 0)),
                                      TRUE, FALSE)
     determinant_bp
+}
+
+#' @keywords internal
+#' @noMd
+get_best_piecewise_idx <- function(loop_res_df,
+                                   data_range,
+                                   alpha_linearity,
+                                   pos_change,
+                                   pos_slope_after_bp) {
+    # filter loop results for the best-fit, determinant solution
+    best_idx <- loop_res_df %>%
+        dplyr::filter(p < alpha_linearity &
+                          pos_change == TRUE &
+                          pos_slope_after_bp == TRUE &
+                          dplyr::between(int_point_x,
+                                         data_range[1],
+                                         data_range[2]),
+                      inside_ci) %>%
+        dplyr::filter(p == min(p)) %>% # filter by smallest p-value (lowest RSS)
+        dplyr::select(idx) %>%
+        dplyr::pull()
+
+    # manage corner cases and if there is no valid solution
+    best_idx <- dplyr::case_when(length(best_idx) == 1 ~ best_idx,
+                                 # break ties in case of multiple best solutions
+                                 length(best_idx) > 1 ~ sample(best_idx, 1),
+                                 # use lowest RSS
+                                 length(best_idx) == 0 ~ which.min(
+                                     loop_res_df$p))
+    best_idx
 }
