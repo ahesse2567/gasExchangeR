@@ -9,6 +9,7 @@ spline_bp(
   .x,
   .y,
   bp,
+  ...,
   degree = 1,
   vo2 = "vo2",
   vco2 = "vco2",
@@ -20,7 +21,9 @@ spline_bp(
   pos_change = TRUE,
   pos_slope_after_bp = TRUE,
   ordering = c("by_x", "time"),
-  ...
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE
 )
 }
 \arguments{
@@ -31,6 +34,8 @@ spline_bp(
 \item{.y}{the y-axis variable.}
 
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if this function gets passed arguments that are not strictly necessary.}
 
 \item{degree}{The degree of polynomial spline to use. Default is 1 to mimic other algorithms.}
 
@@ -54,7 +59,11 @@ spline_bp(
 
 \item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simiple linear regression.
