@@ -28,6 +28,9 @@
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
+#' @param ci Should the output include confidence interval data? Default is `FALSE`.
+#' @param conf_level Confidence level to use if calculating confidence intervals.
+#' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #' @importFrom rlang :=
@@ -47,7 +50,8 @@ v_slope <- function(.data,
                     vco2 = "vco2",
                     ve = "ve",
                     time = "time",
-                    method = NULL,
+                    ordering = c("by_x", "time"),
+                    method = NULL, # can I get rid of this?
                     slope_change_lim = 0.1,
                     left_slope_lim = 0.6,
                     front_trim_vt1 = 60,
@@ -55,7 +59,9 @@ v_slope <- function(.data,
                     alpha_linearity = 0.05,
                     pos_change = TRUE,
                     pos_slope_after_bp = TRUE,
-                    ordering = c("by_x", "time")
+                    ci = FALSE,
+                    conf_level = 0.95,
+                    plots = TRUE
                     ) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     if(.x != vo2 | .y != vco2) {
@@ -67,27 +73,78 @@ v_slope <- function(.data,
                            ordering = ordering)
     plot_df <- .data
 
+    # for now, we're ignoring the initial segment < 0.6 b/c it's unclear
+    # what counted as the "initial segment". Did they create linear regressions
+    # iteratively from the first data point through all the remaining ones and
+    # filter the slope that way?
+    # calculate all possible slopes to find initial segments of < 0.6
+    # slopes <- intercepts <- numeric(length = nrow(plot_df))
+    # slopes[1] <- intercepts[1] <-  NA
+    # for(i in 2:length(slopes)) {
+    #     lm_initial_segment <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    #         stats::lm(data = plot_df[1:i,])
+    #     slopes[i] <- coef(lm_initial_segment)[2]
+    #     intercepts[i] <- coef(lm_initial_segment)[1]
+    # }
+    #
+    # left_slope_idx <- 1
+    #
+    # for(i in 2:length(slopes)) {
+    #     color = dplyr::if_else(slopes[i] > 0.6, "black", "red")
+    #     abline(a = intercepts[i], b = slopes[i], col = color)
+    # }
+    #
+    # for (i in seq_along(slopes)) {
+    #     if (all(slopes[(i+1):length(slopes)] > 0.6)) {
+    #         left_slope_idx <- i + 1
+    #         break
+    #     }
+    # }
+    #
+    # remove data from the left side if "any initial segment of the curve above
+    # [one minute has] a slope < 0.6" (Beaver et al., 1986, p. 2023)
+    # .data <- .data[left_slope_idx:nrow(.data),]
+
+
     front_trim <- set_front_trim(bp = bp,
                                  front_trim_vt1 = front_trim_vt1,
                                  front_trim_vt2 = front_trim_vt2)
     .data <- .data %>%
         dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-    dist_MSE_ratio_idx <- loop_v_slope(.data = .data, .x = .x, .y = .y,
-                                       pos_change, pos_slope_after_bp,
-                                       alpha_linearity)
+    loop_res <- loop_v_slope(.data = .data,
+                             .x = .x,
+                             .y = .y,
+                             alpha_linearity = alpha_linearity,
+                             conf_level = conf_level)
+
+    # need to go by dist_MSE_ratio? Basically how doe this interact with while
+    # loop()
+    range_x <- range(.data[[.x]])
+
+    dist_MSE_ratio_idx <- loop_res %>%
+        dplyr::filter(p < alpha_linearity &
+                          pos_change == pos_change &
+                          pos_slope_after_bp == pos_slope_after_bp &
+                          dplyr::between(int_point_x,
+                                         range_x[1],
+                                         range_x[2]) &
+                          inside_ci) %>%
+        dplyr::arrange(dplyr::desc(dist_MSE_ratio)) %>%
+        dplyr::select(idx) %>%
+        dplyr::pull()
+
     slope_change <- 0
     i <- 1
-    bp_idx <- dist_MSE_ratio_idx[i]
-    df_left <- .data[1:bp_idx,]
-    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = df_left)
+    # bp_idx <- dist_MSE_ratio_idx[i]
+    # df_left <- .data[1:bp_idx,]
+    # lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    #     stats::lm(data = df_left)
 
     n_rows <- nrow(.data)
 
     # browser()
-    while((slope_change < slope_change_lim) |
-          (lm_left$coefficients[2] < left_slope_lim)) {
+    while(slope_change < slope_change_lim) {
         # enter this loop if slopes did not change be enough or if the left slope
         # was too low
         # check that we haven't run out of possible options
@@ -121,76 +178,85 @@ v_slope <- function(.data,
 
         slope_change <- lm_right$coefficients[2] - lm_left$coefficients[2]
 
-
         i <- i + 1
     }
 
-    df_left <- .data[1:bp_idx,] # split data into left portion
-    df_right <- .data[(bp_idx+1):n_rows,] # split data into right portion
+    estimate_res <- get_v_slope_res(.data = .data,
+                                    bp_idx = bp_idx,
+                                    .x = .x,
+                                    .y = .y,
+                                    bp = bp,
+                                    alpha_linearity = alpha_linearity,
+                                    pos_change = pos_change,
+                                    pos_slope_after_bp = pos_slope_after_bp,
+                                    est_ci = "estimate")
 
-    # make linear models of the two regressions
-    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = df_left)
-    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = df_right)
-    # simple linear regression
-    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = .data)
+    if(ci) {
+        ci_lower_idx <- loop_res %>%
+            dplyr::filter(inside_ci) %>%
+            dplyr::filter(int_point_x == min(int_point_x)) %>%
+            dplyr::select(idx) %>%
+            dplyr::pull()
 
-    # check for a significant departure from linearity
-    pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
-    list2env(pw_stats, envir = environment())
+        lower_ci_res <- get_v_slope_res(.data = .data,
+                                    bp_idx = ci_lower_idx,
+                                    .x = .x,
+                                    .y = .y,
+                                    bp = bp,
+                                    alpha_linearity = alpha_linearity,
+                                    pos_change = pos_change,
+                                    pos_slope_after_bp = pos_slope_after_bp,
+                                    est_ci = "lower")
 
-    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
-        abs(lm_left$coefficients[2])
+        ci_upper_idx <- loop_res %>%
+            dplyr::filter(inside_ci) %>%
+            dplyr::filter(int_point_x == max(int_point_x)) %>%
+            dplyr::select(idx) %>%
+            dplyr::pull()
 
-    determinant_bp <- check_if_determinant_bp(p = pf_two,
-                                              pct_slope_change = pct_slope_change,
-                                              pos_change = pos_change,
-                                              pos_slope_after_bp =
-                                                  pos_slope_after_bp,
-                                              slope_after_bp = stats::coef(lm_right)[2],
-                                              alpha = alpha_linearity)
+        upper_ci_res <- get_v_slope_res(.data = .data,
+                                    bp_idx = ci_upper_idx,
+                                    .x = .x,
+                                    .y = .y,
+                                    bp = bp,
+                                    alpha_linearity = alpha_linearity,
+                                    pos_change = pos_change,
+                                    pos_slope_after_bp = pos_slope_after_bp,
+                                    est_ci = "upper")
 
-    y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
-                         "{.y}" := lm_left$fitted.values,
-                         algorithm = "v-slope")
-    y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
-                          "{.y}" := lm_right$fitted.values,
-                          algorithm = "v-slope")
-    pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
+        # combine estimate and both CI breakpoint res into one tibble
+        estimate_res$bp_dat <- rbind(lower_ci_res$bp_dat,
+                                     estimate_res$bp_dat,
+                                     upper_ci_res$bp_dat)
+    }
 
-    # find intersection point of left and right regressions
-    int_point <- intersection_point(lm_left, lm_right)
-    # find closest data point to intersection point and prepare output
-    bp_dat <- find_threshold_vals(.data = .data, thr_x = int_point["x"],
-                                  thr_y = int_point["y"], .x = .x,
-                                  .y = .y, ...)
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(algorithm = "v-slope",
-                      x_var = .x,
-                      y_var = .y,
-                      determinant_bp = determinant_bp,
-                      bp = bp,
-                      pct_slope_change = pct_slope_change,
-                      f_stat = f_stat,
-                      p_val_f = pf_two) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
-                        pct_slope_change, f_stat, p_val_f)
+    if(plots) {
+        bp_plot <- make_piecewise_bp_plot(plot_df,
+                                          .x,
+                                          .y,
+                                          estimate_res$lm_left,
+                                          estimate_res$lm_right,
+                                          estimate_res$bp_dat)
+    } else {
+        bp_plot <- NULL
+    }
 
-    bp_plot <- make_piecewise_bp_plot(plot_df, .x, .y, lm_left, lm_right, bp_dat)
-
-    return(list(breakpoint_data = bp_dat,
-                fitted_vals = pred,
-                lm_left = lm_left,
-                lm_right = lm_right,
-                lm_simple = lm_simple,
+    return(list(breakpoint_data = estimate_res$bp_dat,
+                fitted_vals = estimate_res$pred,
+                lm_left = estimate_res$lm_left,
+                lm_right = estimate_res$lm_right,
+                lm_simple = estimate_res$lm_simple,
                 bp_plot = bp_plot))
 }
 
 #' @keywords internal
-loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp,
-                         alpha_linearity) {
+loop_v_slope <- function(.data,
+                         .x,
+                         .y,
+                         pos_change,
+                         pos_slope_after_bp,
+                         alpha_linearity = 0.05,
+                         conf_level = 0.95) {
 
     n_rows <- nrow(.data)
 
@@ -214,18 +280,11 @@ loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp,
     # https://brilliant.org/wiki/dot-product-distance-between-point-and-a-line/
 
     for(i in 1:n_rows) {
+        # setting first and last iteration to NA keeps the index lengths equal
         if(i == 1 | i == n_rows) {
-            ss_left[i] <- NA
-            ss_right[i] <- NA
-            ss_both[i] <- NA
-            RSS_two[i] <- NA
-            MSE_two[i] <- NA
-            f_stat[i] <- NA
-            pf_two[i] <- NA
-            pos_change_vec[i] <- NA
-            pos_slope_after_bp_vec[i] <- NA
-            int_point_x[i] <- NA
-            dist_MSE_ratio[i] <- NA
+            ss_left[i] <- ss_right[i] <- ss_both[i] <- RSS_two[i] <-
+                MSE_two[i] <- f_stat[i] <- pf_two[i] <- pos_change_vec[i] <-
+                pos_slope_after_bp_vec[i] <- int_point_x[i] <- dist_MSE_ratio[i] <- NA
             next
         }
 
@@ -253,8 +312,8 @@ loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp,
         pct_slope_change[i] <- 100*(lm_right$coefficients[2] -
                                         lm_left$coefficients[2]) /
             abs(lm_left$coefficients[2])
-        pos_change_vec[i] <- if_else(pct_slope_change[i] > 0, TRUE, FALSE)
-        pos_slope_after_bp_vec[i] <- if_else(
+        pos_change_vec[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
+        pos_slope_after_bp_vec[i] <- dplyr::if_else(
             lm_right$coefficients[2] > 0, TRUE, FALSE)
 
         # Calculate MSE according to the JM algorithm: MSE = ss_both / (n - 4)
@@ -274,33 +333,25 @@ loop_v_slope <- function(.data, .x, .y, pos_change, pos_slope_after_bp,
         dist_MSE_ratio[i] <- d / MSE
     }
 
-    v_slope_stats <- tibble::tibble(p = pf_two,
-                                pos_change = pos_change,
-                                pos_slope_after_bp = pos_slope_after_bp,
+    crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+    inside_ci <- dplyr::if_else(
+        ((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two) < crit_F,
+        TRUE, FALSE)
+
+    # for debugging purposes, plot breakpoints inside 95% CI
+    # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two)
+    # abline(h = crit_F)
+
+    loop_stats <- tibble::tibble(p = pf_two,
+                                pos_change = pos_change_vec,
+                                pos_slope_after_bp = pos_slope_after_bp_vec,
                                 dist_MSE_ratio = dist_MSE_ratio,
                                 int_point_x = int_point_x,
-                                # inside_F95 = inside_F95
+                                inside_ci = inside_ci
     ) %>%
         dplyr::mutate(idx = dplyr::row_number())
 
-    range_x <- range(.data[[.x]])
-
-    dist_MSE_ratio_idx <- v_slope_stats %>%
-        dplyr::filter(p < alpha_linearity &
-                          pos_change_vec == TRUE &
-                          pos_slope_after_bp_vec == TRUE &
-                          dplyr::between(int_point_x,
-                                         range_x[1],
-                                         range_x[2])) %>%
-        arrange(desc(dist_MSE_ratio)) %>%
-        select(idx) %>%
-        pull()
-
-    if(length(dist_MSE_ratio_idx) > 0) {
-        return(dist_MSE_ratio_idx)
-    } else {
-        return(2)
-    }
+    loop_stats
 }
 
 #' @keywords internal
@@ -309,4 +360,72 @@ num_to_na <- function(x) {
         x <- NA
     }
     x
+}
+
+#' @keywords internal
+get_v_slope_res <- function(.data, bp_idx, .x, .y, bp,
+                            alpha_linearity, pos_change,
+                            pos_slope_after_bp,
+                            est_ci = c("estimate", "lower_ci", "upper_ci"),
+                            ...) {
+
+    df_left <- .data[1:bp_idx,] # split data into left portion
+    df_right <- .data[(bp_idx+1):nrow(.data),] # split data into right portion
+
+    # make linear models of the two regressions
+    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::lm(data = df_left)
+    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::lm(data = df_right)
+    # simple linear regression
+    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::lm(data = .data)
+
+    # check for a significant departure from linearity
+    pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
+    list2env(pw_stats, envir = environment())
+
+    pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
+        abs(lm_left$coefficients[2])
+
+    determinant_bp <- check_if_determinant_bp(
+        p = pf_two,
+        pct_slope_change = pct_slope_change,
+        pos_change = pos_change,
+        pos_slope_after_bp =
+            pos_slope_after_bp,
+        slope_after_bp = stats::coef(lm_right)[2],
+        alpha = alpha_linearity)
+
+    y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
+                                 "{.y}" := lm_left$fitted.values,
+                                 algorithm = "v-slope")
+    y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
+                                  "{.y}" := lm_right$fitted.values,
+                                  algorithm = "v-slope")
+    pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
+
+    # find intersection point of left and right regressions
+    int_point <- intersection_point(lm_left, lm_right)
+    # find closest data point to intersection point and prepare output
+    bp_dat <- find_threshold_vals(.data = .data, thr_x = int_point["x"],
+                                  thr_y = int_point["y"], .x = .x,
+                                  .y = .y, ...)
+    bp_dat <- bp_dat %>%
+        dplyr::mutate(algorithm = "v-slope",
+                      est_ci = est_ci,
+                      x_var = .x,
+                      y_var = .y,
+                      determinant_bp = determinant_bp,
+                      bp = bp,
+                      pct_slope_change = pct_slope_change,
+                      f_stat = f_stat,
+                      p_val_f = pf_two) %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp, est_ci,
+                        pct_slope_change, f_stat, p_val_f)
+    list(bp_dat = bp_dat,
+         fitted_vals = pred,
+         lm_left = lm_left,
+         lm_right = lm_right,
+         lm_simple = lm_simple)
 }
