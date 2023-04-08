@@ -78,7 +78,9 @@ find_threshold_vals.inv_dist_knn <- function(.data,
         dplyr::mutate(inv_weight = (normalized_dist/max(normalized_dist))^-1,
                       pct_tot_weight = inv_weight/sum(inv_weight)) %>%
         # calculate threshold values
-        dplyr::summarize(across(!c(normalized_dist, inv_weight, pct_tot_weight),
+        dplyr::summarize(dplyr::across(!c(normalized_dist,
+                                   inv_weight,
+                                   pct_tot_weight),
                          ~ sum(. * pct_tot_weight))) %>%
         # add back variables used to calculate the threshold
         dplyr::mutate("{.x}" := thr_x,

@@ -97,21 +97,40 @@ ggplot(data = df_avg, aes(x = time)) +
                        values = c("ve_vco2" = "purple", "ve_vo2" = "green")) +
     theme_minimal()
 
-# debug(gasExchangeR::orr)
-debug(d2_reg_spline_maxima)
+debugonce(gasExchangeR::jm)
+# undebug(gasExchangeR::find_threshold_vals)
 # Rprof()
 breakpoint(df_avg,
-           algorithm_vt1 = "d2_reg_spline_maxima",
+           algorithm_vt1 = "dmax",
            x_vt1 = "vo2",
-           y_vt1 = "ve_vo2",
-           algorithm_vt2 = "d2_reg_spline_maxima",
-           x_vt2 = "vo2",
-           y_vt2 = "petco2",
+           y_vt1 = "vco2",
+           algorithm_vt2 = "dmax",
+           x_vt2 = "vco2",
+           y_vt2 = "ve",
            bp = "both",
            truncate = TRUE,
-           pos_change_vt2 = FALSE,
+           pos_change_vt2 = TRUE,
            pos_slope_after_bp = TRUE,
+           ci = TRUE,
+           plots = TRUE
 )
+
+bp_dat <- breakpoint(df_avg,
+           algorithm_vt1 = "spline_bp",
+           x_vt1 = "vo2",
+           y_vt1 = "vco2",
+           algorithm_vt2 = "spline_bp",
+           x_vt2 = "vco2",
+           y_vt2 = "ve",
+           bp = "both",
+           truncate = TRUE,
+           pos_change_vt2 = TRUE,
+           pos_slope_after_bp = TRUE,
+           ci = TRUE
+)
+
+bp_dat$bp_dat %>% View
+
 # Rprof(NULL)
 
 # how can I make this faster?
