@@ -130,7 +130,7 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
 
     # leaving vt1_dat and vt2_dat equal to NULL lets you create the nine
     # panel plot without first needing to find any breakpoints
-
+    # browser()
     plt_data <- ggplot2::ggplot_build(plt)
 
     # calculate horizontal adjustment factor based on range of x data
@@ -150,8 +150,8 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
     # conditionally add VT1 line
     if(!is.null(vt1_dat) &&
        length(!is.na(vt1_dat[["breakpoint_data"]][[x_var]]) > 0) &&
-       !is.na(vt1_dat[["breakpoint_data"]][[x_var]]) &&
-       vt1_dat[["breakpoint_data"]][["determinant_bp"]]) {
+       any(!is.na(vt1_dat[["breakpoint_data"]][[x_var]])) &&
+       any(vt1_dat[["breakpoint_data"]][["determinant_bp"]])) {
 
         thresh_line_vt1 <- vt1_dat$breakpoint_data %>%
             dplyr::filter(est_ci == "estimate") %>%
@@ -168,8 +168,8 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
     # conditionally add VT2 line
     if(!is.null(vt2_dat) &&
        length(!is.na(vt2_dat[["breakpoint_data"]][[x_var]]) > 0) &&
-       !is.na(vt2_dat[["breakpoint_data"]][[x_var]]) &&
-       vt2_dat[["breakpoint_data"]][["determinant_bp"]]) {
+       any(!is.na(vt2_dat[["breakpoint_data"]][[x_var]])) &&
+       any(vt2_dat[["breakpoint_data"]][["determinant_bp"]])) {
 
         thresh_line_vt2 <- vt2_dat$breakpoint_data %>%
             dplyr::filter(est_ci == "estimate") %>%
