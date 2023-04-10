@@ -225,7 +225,7 @@ v_slope <- function(.data,
                                     est_ci = "upper")
 
         # combine estimate and both CI breakpoint res into one tibble
-        estimate_res$bp_dat <- rbind(lower_ci_res$bp_dat,
+        estimate_res$bp_dat <- dplyr::bind_rows(lower_ci_res$bp_dat,
                                      estimate_res$bp_dat,
                                      upper_ci_res$bp_dat)
     }

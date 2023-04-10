@@ -124,7 +124,7 @@ orr <- function(.data,
                                         est_ci = "upper")
 
         # combine estimate and both CI breakpoint res into one tibble
-        estimate_res$bp_dat <- rbind(lower_ci_res$bp_dat,
+        estimate_res$bp_dat <- dplyr::bind_rows(lower_ci_res$bp_dat,
               estimate_res$bp_dat,
               upper_ci_res$bp_dat)
     }
@@ -175,9 +175,9 @@ loop_orr <- function(.data,
     for(i in 1:n_rows) {
         # setting first and last iteration to NA keeps the index lengths equal
         if(i == 1 | i == n_rows) {
-            ss_left[i] <- ss_right[i] <- RSS_two[i] <-
-                MSE_two[i] <- f_stat[i] <- pf_two[i] <- pos_change[i] <-
-                pos_slope_after_bp[i] <- int_point_x[i] <- NA
+            RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
+                pos_change[i] <- pos_slope_after_bp[i] <-
+                int_point_x[i] <- NA
             next
         }
         # split data into left and right halves
