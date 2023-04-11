@@ -181,7 +181,6 @@ v_slope <- function(.data,
         i <- i + 1
     }
 
-
     # THIS ISN'T GIVING THE SAME INT POINT X AS THE LOOP
     estimate_res <- get_v_slope_res(.data = .data,
                                     bp_idx = bp_idx,
@@ -366,7 +365,7 @@ get_v_slope_res <- function(.data, bp_idx, .x, .y, bp,
                             ...) {
 
     df_left <- .data[1:bp_idx,] # split data into left portion
-    df_right <- .data[(bp_idx+1):nrow(.data),] # split data into right portion
+    df_right <- .data[bp_idx:nrow(.data),] # split data into right portion
 
     # make linear models of the two regressions
     lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%

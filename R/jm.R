@@ -263,7 +263,7 @@ get_jm_res <- function(.data, bp_idx, .x, .y, bp,
     est_ci <- match.arg(est_ci, several.ok = FALSE)
 
     df_left <- .data[1:bp_idx,] # x < x0
-    df_right <- .data[(bp_idx):nrow(.data),] # x >= x0
+    df_right <- .data[bp_idx:nrow(.data),] # x >= x0
 
     x0 <- .data[[.x]][bp_idx]
 

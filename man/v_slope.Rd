@@ -9,7 +9,6 @@ v_slope(
   .x,
   .y,
   bp,
-  ...,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -25,7 +24,8 @@ v_slope(
   pos_slope_after_bp = TRUE,
   ci = FALSE,
   conf_level = 0.95,
-  plots = TRUE
+  plots = TRUE,
+  ...
 )
 }
 \arguments{
@@ -36,8 +36,6 @@ v_slope(
 \item{.y}{the y-axis variable.}
 
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
-
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
@@ -70,6 +68,8 @@ v_slope(
 \item{conf_level}{Confidence level to use if calculating confidence intervals.}
 
 \item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
