@@ -150,7 +150,7 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
     # conditionally add VT1 line
     if(!is.null(vt1_dat) &&
        length(!is.na(vt1_dat[["breakpoint_data"]][[x_var]]) > 0) &&
-       any(!is.na(vt1_dat[["breakpoint_data"]][[x_var]], na.rm = TRUE)) &&
+       any(!is.na(vt1_dat[["breakpoint_data"]][[x_var]])) &&
        any(vt1_dat[["breakpoint_data"]][["determinant_bp"]], na.rm = TRUE)) {
 
         thresh_line_vt1 <- vt1_dat$breakpoint_data %>%
@@ -168,7 +168,7 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
     # conditionally add VT2 line
     if(!is.null(vt2_dat) &&
        length(!is.na(vt2_dat[["breakpoint_data"]][[x_var]]) > 0) &&
-       any(!is.na(vt2_dat[["breakpoint_data"]][[x_var]], na.rm = TRUE)) &&
+       any(!is.na(vt2_dat[["breakpoint_data"]][[x_var]])) &&
        any(vt2_dat[["breakpoint_data"]][["determinant_bp"]], na.rm = TRUE)) {
 
         thresh_line_vt2 <- vt2_dat$breakpoint_data %>%
