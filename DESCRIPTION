@@ -11,6 +11,7 @@ Description: Gas exchange data analysis: outliers, interpolation,
     ventilatory thresholds.
 License: MIT + file LICENSE
 Imports: 
+    boot,
     broom,
     Deriv,
     dplyr,
