@@ -18,6 +18,8 @@ d2_poly_reg_maxima(
   alpha_linearity = 0.05,
   pos_change = TRUE,
   ordering = c("by_x", "time"),
+  front_trim_vt1 = 60,
+  front_trim_vt2 = 60,
   ci = FALSE,
   conf_level = 0.95,
   plots = TRUE
@@ -49,6 +51,10 @@ d2_poly_reg_maxima(
 \item{pos_change}{Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.}
 
 \item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+
+\item{front_trim_vt1}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
+\item{front_trim_vt2}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
 
 \item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
 

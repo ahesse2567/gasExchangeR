@@ -21,6 +21,8 @@
 #' @param pos_change Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt2 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param ci Should the output include confidence interval data? Default is `FALSE`.
 #' @param conf_level Confidence level to use if calculating confidence intervals.
 #' @param plots Should this function generate plots? Set to `FALSE` to save time.
@@ -40,7 +42,6 @@ d2_reg_spline_maxima <- function(.data,
                                  .x,
                                  .y,
                                  bp,
-                                 ...,
                                  degree = 5,
                                  df = NULL,
                                  vo2 = "vo2",
@@ -50,18 +51,31 @@ d2_reg_spline_maxima <- function(.data,
                                  alpha_linearity = 0.05,
                                  pos_change = TRUE,
                                  ordering = c("by_x", "time"),
-                                 # TODO ADD FRONT TRIM ARGUMENTS,
+                                 front_trim_vt1 = 60,
+                                 front_trim_vt2 = 60,
                                  ci = FALSE,
                                  conf_level = 0.95,
-                                 plots = TRUE
+                                 plots = TRUE,
+                                 ...
                                  ) {
 
     # check if there is crucial missing data
-    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+    stopifnot(!any(missing(.data),
+                   missing(.x),
+                   missing(.y),
+                   missing(bp)))
 
     ordering <- match.arg(ordering, several.ok = FALSE)
     .data <- order_cpet_df(.data, .x = .x , time = time,
                            ordering = ordering)
+
+    plot_df <- .data
+
+    front_trim <- set_front_trim(bp = bp,
+                                 front_trim_vt1 = front_trim_vt1,
+                                 front_trim_vt2 = front_trim_vt2)
+    .data <- .data %>%
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
     # find best number of knots
     lm_spline <- loop_d2_reg_spline(.data = .data, .x = .x, .y = .y,
@@ -78,8 +92,9 @@ d2_reg_spline_maxima <- function(.data,
                          length.out = range(.data[[vo2]]) %>%
                              diff() %>%
                              round())
-    pred <- stats::predict(lm_spline,
-                           newdata = tibble::tibble("{.x}" := equi_spaced_x))
+    pred <- stats::predict(
+        lm_spline,
+        newdata = tibble::tibble("{.x}" := equi_spaced_x))
 
     spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
 
@@ -284,7 +299,7 @@ d2_reg_spline_maxima <- function(.data,
                                    bp_dat,
                                    upper_ci_res)
         # if the estimate was true, set the others to TRUE
-        if(any(bp_dat[["determinant_bp"]])) {
+        if(any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
             bp_dat[["determinant_bp"]] <- TRUE
         }
     }
@@ -293,7 +308,7 @@ d2_reg_spline_maxima <- function(.data,
         dplyr::relocate(bp, algorithm, x_var, y_var, est_ci, determinant_bp)
 
     if(plots) {
-        bp_plot <- ggplot2::ggplot(data = .data,
+        bp_plot <- ggplot2::ggplot(data = plot_df,
                                    ggplot2::aes(x = .data[[.x]],
                                                 y = .data[[.y]])) +
             ggplot2::geom_point(alpha = 0.5) +
