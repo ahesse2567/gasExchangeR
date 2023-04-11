@@ -203,10 +203,12 @@ loop_spline_bp <- function(.data, .x, .y, alpha_linearity = 0.05,
                                df2 = nrow(lm_simple$model) - 4,
                                lower.tail = FALSE)
     }
-
+    # calculate cutoff for finding approximate confidence interval
     crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+    # using min(MSE_two) and min(RSS_two) based on JM paper
     inside_ci <- dplyr::if_else(
-        ((ss_models - min(ss_models, na.rm = TRUE)) / MSE_two) < crit_F,
+        (ss_models - min(ss_models, na.rm = TRUE)) /
+            min(MSE_two, na.rm =TRUE) < crit_F,
         TRUE, FALSE)
     # for debugging purposes, plot breakpoints inside 95% CI
     # plot((ss_models - min(ss_models, na.rm = TRUE)) / MSE_two)

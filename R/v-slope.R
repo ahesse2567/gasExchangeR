@@ -45,7 +45,6 @@ v_slope <- function(.data,
                     .x,
                     .y,
                     bp,
-                    ...,
                     vo2 = "vo2",
                     vco2 = "vco2",
                     ve = "ve",
@@ -61,7 +60,8 @@ v_slope <- function(.data,
                     pos_slope_after_bp = TRUE,
                     ci = FALSE,
                     conf_level = 0.95,
-                    plots = TRUE
+                    plots = TRUE,
+                    ...
                     ) {
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
     if(.x != vo2 | .y != vco2) {
@@ -181,6 +181,8 @@ v_slope <- function(.data,
         i <- i + 1
     }
 
+
+    # THIS ISN'T GIVING THE SAME INT POINT X AS THE LOOP
     estimate_res <- get_v_slope_res(.data = .data,
                                     bp_idx = bp_idx,
                                     .x = .x,
@@ -198,15 +200,16 @@ v_slope <- function(.data,
             dplyr::select(idx) %>%
             dplyr::pull()
 
-        lower_ci_res <- get_v_slope_res(.data = .data,
-                                    bp_idx = ci_lower_idx,
-                                    .x = .x,
-                                    .y = .y,
-                                    bp = bp,
-                                    alpha_linearity = alpha_linearity,
-                                    pos_change = pos_change,
-                                    pos_slope_after_bp = pos_slope_after_bp,
-                                    est_ci = "lower")
+        lower_ci_res <- get_v_slope_res(
+            .data = .data,
+            bp_idx = ci_lower_idx,
+            .x = .x,
+            .y = .y,
+            bp = bp,
+            alpha_linearity = alpha_linearity,
+            pos_change = pos_change,
+            pos_slope_after_bp = pos_slope_after_bp,
+            est_ci = "lower")
 
         ci_upper_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
@@ -261,17 +264,15 @@ loop_v_slope <- function(.data,
     n_rows <- nrow(.data)
 
     # initialize empty vectors
-    ss_left <- ss_right <- ss_both <- RSS_two <- MSE_two <- f_stat <- pf_two <-
-        pct_slope_change <- int_point_x <- dist_MSE_ratio <-  numeric(n_rows)
+    RSS_two <- MSE_two <- f_stat <- pf_two <- pct_slope_change <-
+        int_point_x <- dist_MSE_ratio <- numeric(n_rows)
     pos_change_vec <- pos_slope_after_bp_vec <- logical(n_rows)
 
     lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
         stats::lm(data = .data)
 
-    # y = 0.6953093x + 388.0221420
-
     RSS_simple <- sum(stats::resid(lm_simple)^2)
-    recip_slope <- (-1 / lm_simple$coefficients[2]) # used in for loop
+    # recip_slope <- (-1 / lm_simple$coefficients[2]) # used in for loop
     # find slope of line perpendicular to slope of lm_simple
     # There's an easier way to find the distance between a point and a line
     # by putting the equation of the simple regression into the standard form
@@ -282,14 +283,15 @@ loop_v_slope <- function(.data,
     for(i in 1:n_rows) {
         # setting first and last iteration to NA keeps the index lengths equal
         if(i == 1 | i == n_rows) {
-            ss_left[i] <- ss_right[i] <- ss_both[i] <- RSS_two[i] <-
-                MSE_two[i] <- f_stat[i] <- pf_two[i] <- pos_change_vec[i] <-
-                pos_slope_after_bp_vec[i] <- int_point_x[i] <- dist_MSE_ratio[i] <- NA
+            RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
+                pos_change_vec[i] <- pos_slope_after_bp_vec[i] <-
+                int_point_x[i] <- dist_MSE_ratio[i] <- NA
             next
         }
 
-        df_left <- .data[1:i,] # split data into left half
-        df_right <- .data[i:n_rows,] # split data into right half
+        # split data into left and right portions, sharing division point
+        df_left <- .data[1:i,]
+        df_right <- .data[i:n_rows,]
 
         # make linear models of the two regressions
         lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
@@ -297,13 +299,10 @@ loop_v_slope <- function(.data,
         lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
             stats::lm(data = df_right)
 
-        ss_left[i] <- sum((lm_left$residuals)^2)
-        ss_right[i] <- sum((lm_right$residuals)^2)
-        ss_both[i] <- ss_left[i] + ss_right[i]
-
         RSS_two[i] <- sum(stats::resid(lm_left)^2) +
             sum(stats::resid(lm_right)^2)
-        MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
+        # divide by -4 b/c estimating 4 parameters
+        MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4)
         f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
         pf_two[i] <- stats::pf(
             f_stat[i], df1 = 2, df2 = nrow(lm_simple$model) - 4,
@@ -316,11 +315,6 @@ loop_v_slope <- function(.data,
         pos_slope_after_bp_vec[i] <- dplyr::if_else(
             lm_right$coefficients[2] > 0, TRUE, FALSE)
 
-        # Calculate MSE according to the JM algorithm: MSE = ss_both / (n - 4)
-        # we're subtracting for because we're estimating 4 parameters: two slopes
-        # and two intercepts
-        MSE <- ss_both[i] / (n_rows - 4)
-
         # find intersection point of left and right regressions
         lr_intersect <- intersection_point(lm_left, lm_right)
         int_point_x[i] <- lr_intersect["x"]
@@ -330,18 +324,20 @@ loop_v_slope <- function(.data,
                 lr_intersect["y"] + lm_simple$coefficients[1]) /
             sqrt(lm_simple$coefficients[2]^2 + (-1)^2)
 
-        dist_MSE_ratio[i] <- d / MSE
+        dist_MSE_ratio[i] <- d / MSE_two[i]
     }
-
+    # calculate cutoff for finding approximate confidence interval
     crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+    # using min(MSE_two) and min(RSS_two) based on JM paper
     inside_ci <- dplyr::if_else(
-        ((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two) < crit_F,
+        (RSS_two - min(RSS_two, na.rm = TRUE)) /
+            min(MSE_two, na.rm =TRUE) < crit_F,
         TRUE, FALSE)
 
     # for debugging purposes, plot breakpoints inside 95% CI
     # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two)
     # abline(h = crit_F)
-
+    # add x_range constraint
     loop_stats <- tibble::tibble(p = pf_two,
                                 pos_change = pos_change_vec,
                                 pos_slope_after_bp = pos_slope_after_bp_vec,
@@ -388,14 +384,19 @@ get_v_slope_res <- function(.data, bp_idx, .x, .y, bp,
     pct_slope_change <- 100*(lm_right$coefficients[2] - lm_left$coefficients[2]) /
         abs(lm_left$coefficients[2])
 
-    determinant_bp <- check_if_determinant_bp(
+    int_point <- intersection_point(lm_left, lm_right)
+
+    determinant_bp <- and(check_if_determinant_bp(
         p = pf_two,
         pct_slope_change = pct_slope_change,
         pos_change = pos_change,
-        pos_slope_after_bp =
-            pos_slope_after_bp,
+        pos_slope_after_bp = pos_slope_after_bp,
         slope_after_bp = stats::coef(lm_right)[2],
-        alpha = alpha_linearity)
+        alpha = alpha_linearity),
+        # the intersection point needs to be in the range of x
+        dplyr::between(int_point["x"],
+                       range(.data[[.x]])[1],
+                       range(.data[[.x]])[2]))
 
     y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
                                  "{.y}" := lm_left$fitted.values,
@@ -405,8 +406,6 @@ get_v_slope_res <- function(.data, bp_idx, .x, .y, bp,
                                   algorithm = "v-slope")
     pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
-    # find intersection point of left and right regressions
-    int_point <- intersection_point(lm_left, lm_right)
     # find closest data point to intersection point and prepare output
     bp_dat <- find_threshold_vals(.data = .data, thr_x = int_point["x"],
                                   thr_y = int_point["y"], .x = .x,

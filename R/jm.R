@@ -89,6 +89,7 @@ jm <- function(.data,
         ci_lower_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == min(int_point_x)) %>%
+            dplyr::filter(p == min(p)) %>% # for breaking ties
             dplyr::select(idx) %>%
             dplyr::pull()
 
@@ -176,9 +177,8 @@ loop_jm <- function(.data,
 
     for(i in 1:n_rows) {
         if(i %in% c(1, n_rows, n_rows - 1)) {
-            ss_left[i] <- ss_right[i] <- ss_both[i] <- RSS_two[i] <-
-                MSE_two[i] <- f_stat[i] <- pf_two[i] <- pos_change[i] <-
-                pos_slope_after_bp[i] <- int_point_x[i] <- NA
+            RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
+                pos_change[i] <- pos_slope_after_bp[i] <- int_point_x[i] <- NA
             next
         }
         # split data into left and right halves. x0 = .x at index i
@@ -214,10 +214,6 @@ loop_jm <- function(.data,
                            " ~ 0 + I(", .x, " - ", x0, ")") %>%
             stats::lm(data = df_right)
 
-        ss_left[i] <- sum((lm_left$residuals)^2)
-        ss_right[i] <- sum((lm_right$residuals)^2)
-        ss_both[i] <- (ss_left[i] + ss_right[i])
-
         RSS_two[i] <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
         MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
         f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
@@ -229,16 +225,19 @@ loop_jm <- function(.data,
                                         lm_left$coefficients[2]) /
             abs(lm_left$coefficients[2])
         pos_change[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
-        pos_slope_after_bp[i] <- dplyr::if_else(lm_right$coefficients[1] > 0, TRUE, FALSE)
+        pos_slope_after_bp[i] <- dplyr::if_else(
+            lm_right$coefficients[1] > 0, TRUE, FALSE)
     }
-
+    # calculate cutoff for finding approximate confidence interval
     crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+    # using min(MSE_two) and min(RSS_two) based on JM paper
     inside_ci <- dplyr::if_else(
-        ((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two) < crit_F,
+        (RSS_two - min(RSS_two, na.rm = TRUE)) /
+            min(MSE_two, na.rm =TRUE) < crit_F,
         TRUE, FALSE)
     # for debugging purposes, plot breakpoints inside 95% CI
-    # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two)
-    # Browse[5]> abline(h = crit_F)
+    # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / min(MSE_two, na.rm = TRUE))
+    # abline(h = crit_F)
 
     loop_stats <- tibble::tibble(p = pf_two,
                                  pos_change = pos_change,

@@ -213,11 +213,13 @@ loop_orr <- function(.data,
 
         int_point_x[i] <- intersection_point(lm_left, lm_right)["x"]
     }
-
+    # calculate cutoff for finding approximate confidence interval
     crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+    # using min(MSE_two) and min(RSS_two) based on JM paper
     inside_ci <- dplyr::if_else(
-        ((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two) < crit_F,
-                          TRUE, FALSE)
+        (RSS_two - min(RSS_two, na.rm = TRUE)) /
+            min(MSE_two, na.rm =TRUE) < crit_F,
+        TRUE, FALSE)
     # for debugging purposes, plot breakpoints inside 95% CI
     # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two)
     # abline(h = crit_F)
@@ -267,16 +269,18 @@ get_orr_res <- function(.data, bp_idx, .x, .y, bp,
                                   algorithm = "orr")
     pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
-    determinant_bp <- check_if_determinant_bp(
+    int_point <- intersection_point(lm_left, lm_right)
+
+    determinant_bp <- and(check_if_determinant_bp(
         p = pf_two,
         pct_slope_change = pct_slope_change,
         pos_change = pos_change,
-        pos_slope_after_bp =
-            pos_slope_after_bp,
+        pos_slope_after_bp = pos_slope_after_bp,
         slope_after_bp = stats::coef(lm_right)[2],
-        alpha = alpha_linearity)
-
-    int_point <- intersection_point(lm_left, lm_right)
+        alpha = alpha_linearity),
+        dplyr::between(int_point["x"],
+                       range(.data[[.x]])[1],
+                       range(.data[[.x]])[2]))
 
     bp_dat <- find_threshold_vals(.data = .data,
                                   thr_x = int_point["x"],
