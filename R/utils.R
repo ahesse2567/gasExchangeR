@@ -98,3 +98,21 @@ order_cpet_df <- function(.data, .x, time, ordering = c("by_x", "time")) {
     }
     .data
 }
+
+#' Order data by x-variable and time, or by exclusively the time variable
+#'
+#' @keywords internal
+#' @noRd
+return_null_findings <- function(bp,
+                                 algorithm,
+                                 .x,
+                                 .y,
+                                 est_ci = "estimate") {
+    bp_dat <- tibble::tibble(bp = bp,
+                   algorithm = algorithm,
+                   x_var = .x,
+                   y_var = .y,
+                   est_ci = "estimate",
+                   determinant_bp = FALSE)
+    bp_dat
+}

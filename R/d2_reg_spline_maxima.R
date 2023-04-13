@@ -81,6 +81,28 @@ d2_reg_spline_maxima <- function(.data,
     lm_spline <- loop_d2_reg_spline(.data = .data, .x = .x, .y = .y,
                                     df = df, degree = degree)
 
+    # return quick summary if generating models fails
+    if(is.null(lm_spline)) {
+        # extract char/factor columns with unique values to retain ID
+        # and related info. Use plot_df since this is a copy
+        non_numeric_df <- plot_df %>%
+            dplyr::select(tidyselect::where(
+                function(x) is.character(x) |
+                    is.factor(x) &
+                    all(x == x[1]))) %>%
+            dplyr::slice(1)
+
+        bp_dat <- return_null_findings(
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
+        return(list(breakpoint_data = bp_dat))
+    }
+
     # It feels like there's a better way than splinefun to find a more exact
     # 2nd derivative, but I don't know it
 
@@ -333,6 +355,11 @@ loop_d2_reg_spline <- function(.data, .x, .y, df = NULL,
                                degree = 5, alpha_linearity = 0.05) {
     # TODO allow users to specify b-spline or natural-spline basis
     # would that use do.call()?
+
+    # sometimes, using something like the orr method has a weird
+    # intersection point at the very front of the data.
+    # after trimming off the first (usually) 60 seconds, there is no df left
+    if(nrow(.data) == 0) return(NULL)
 
     # if statement for if users specify the knots or df
     if(!is.null(df)) {

@@ -40,7 +40,7 @@ library(readxl)
 #            excess_co2 = vco2^2 / vo2 - vco2)
 
 df_unavg <- read_csv(
-    "inst/extdata/anton_vo2max_clean.csv",
+    file.path("inst/extdata/anton_vo2max_clean.csv"),
     show_col_types = FALSE)
 
 # remove outliers
@@ -64,8 +64,31 @@ df_unavg_no_outliers <- ventilatory_outliers(df_unavg,
 
 # average exercise test
 df_avg <- avg_exercise_test(df_unavg_no_outliers, method = "time",
-                            calc_type = "bin",
-                            time_col = "time", bin_w = 10)
+                            calc_type = "rolling",
+                            time_col = "time", roll_window = 10)
+
+# debugonce(gasExchangeR::jm)
+# undebug(gasExchangeR::find_threshold_vals)
+# Rprof()
+debugonce(gasExchangeR::d2_poly_reg_maxima)
+# undebug(jm)
+bp_dat <- breakpoint(df_avg,
+           algorithm_vt1 = "jm",
+           x_vt1 = "vo2",
+           y_vt1 = "vco2",
+           algorithm_vt2 = "d2_poly_reg_maxima",
+           x_vt2 = "vco2",
+           y_vt2 = "ve",
+           bp = "both",
+           truncate = TRUE,
+           pos_change_vt2 = TRUE,
+           pos_slope_after_bp = TRUE,
+           ci = TRUE,
+           plots = TRUE
+)
+
+bp_dat$bp_dat
+
 
 # basic plots
 ggplot(data = df_avg, aes(x = time)) +
@@ -93,27 +116,10 @@ ggplot(data = df_avg, aes(x = time)) +
     geom_point(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
     geom_line(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
     ggtitle("Ventilatory Equivalents") +
-    scale_color_manual(name = NULL,
-                       values = c("ve_vco2" = "purple", "ve_vo2" = "green")) +
+    scale_color_manual(
+        name = NULL,
+        values = c("ve_vco2" = "purple", "ve_vo2" = "green")) +
     theme_minimal()
-
-debugonce(gasExchangeR::jm)
-# undebug(gasExchangeR::find_threshold_vals)
-# Rprof()
-breakpoint(df_avg,
-           algorithm_vt1 = "dmax",
-           x_vt1 = "vo2",
-           y_vt1 = "vco2",
-           algorithm_vt2 = "dmax",
-           x_vt2 = "vco2",
-           y_vt2 = "ve",
-           bp = "both",
-           truncate = TRUE,
-           pos_change_vt2 = TRUE,
-           pos_slope_after_bp = TRUE,
-           ci = TRUE,
-           plots = TRUE
-)
 
 bp_dat <- breakpoint(df_avg,
            algorithm_vt1 = "spline_bp",

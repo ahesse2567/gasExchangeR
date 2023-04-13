@@ -69,11 +69,34 @@ jm <- function(.data,
                         alpha_linearity = alpha_linearity,
                         conf_level = conf_level)
 
-    best_idx <- get_best_piecewise_idx(loop_res,
-                                       range(.data[[.x]]),
-                                       alpha_linearity = alpha_linearity,
-                                       pos_change = pos_change,
-                                       pos_slope_after_bp = pos_slope_after_bp)
+    # return quick summary if generating models fails
+    if(is.null(loop_res)) {
+        # extract char/factor columns with unique values to retain ID
+        # and related info. Use plot_df since this is a copy
+        non_numeric_df <- plot_df %>%
+            dplyr::select(tidyselect::where(
+                function(x) is.character(x) |
+                    is.factor(x) &
+                    all(x == x[1]))) %>%
+            dplyr::slice(1)
+
+        bp_dat <- return_null_findings(
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
+        return(list(breakpoint_data = bp_dat))
+    }
+
+    best_idx <- get_best_piecewise_idx(
+        loop_res,
+        range(.data[[.x]]),
+        alpha_linearity = alpha_linearity,
+        pos_change = pos_change,
+        pos_slope_after_bp = pos_slope_after_bp)
 
     estimate_res <- get_jm_res(.data = .data,
                                 bp_idx = best_idx,
@@ -163,10 +186,12 @@ loop_jm <- function(.data,
                     alpha_linearity = 0.05,
                     conf_level = 0.95) {
 
+    if(nrow(.data) == 0) return(NULL)
+
     n_rows <- nrow(.data) # calculate number of rows to reduce repeated calcs
 
     # initialize empty vectors
-    ss_left <- ss_right <- ss_both <- RSS_two <- MSE_two <- f_stat <- pf_two <-
+    RSS_two <- MSE_two <- f_stat <- pf_two <-
         pct_slope_change <- int_point_x <- numeric(n_rows)
     pos_change <- pos_slope_after_bp <- logical(n_rows)
 

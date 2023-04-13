@@ -87,6 +87,28 @@ d2_poly_reg_maxima <- function(.data,
                              degree = degree,
                              alpha_linearity = alpha_linearity)
 
+    # return quick summary if generating models fails
+    if(is.null(lm_poly)) {
+        # extract char/factor columns with unique values to retain ID
+        # and related info. Use plot_df since this is a copy
+        non_numeric_df <- plot_df %>%
+            dplyr::select(tidyselect::where(
+                function(x) is.character(x) |
+                    is.factor(x) &
+                    all(x == x[1]))) %>%
+            dplyr::slice(1)
+
+        bp_dat <- return_null_findings(
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
+        return(list(breakpoint_data = bp_dat))
+    }
+
     equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
                          length.out = range(.data[[vo2]]) %>%
                              diff() %>%
@@ -251,13 +273,16 @@ d2_poly_reg_maxima <- function(.data,
                                alpha_linearity = alpha_linearity,
                                parallel = "multicore")
         # calculate percentile CI's
+        # is there a problem with this not dealing with NA values?
+        # I may need to use the boot.ci() funtion
         boot_ci <- broom::tidy(boot_res,
                                conf.int = TRUE,
                                conf.method = "perc")
         # calculate new values at threshold
         ci_lower_x <- boot_ci$conf.low
-        ci_lower_y <- stats::predict(lm_poly,
-                                     tibble::tibble("{.x}" := ci_lower_x))
+        ci_lower_y <- stats::predict(
+            lm_poly,
+            tibble::tibble("{.x}" := ci_lower_x))
 
         lower_ci_res <- find_threshold_vals(.data = .data,
                                             thr_x = ci_lower_x,
@@ -326,6 +351,8 @@ d2_poly_reg_maxima <- function(.data,
 #' @keywords internal
 loop_d2_poly_reg_maxima <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
+
+    if(nrow(.data) == 0) return(NULL)
 
     if (!is.null(degree)) {
         # if the user specifies a degree, find that and be done with it

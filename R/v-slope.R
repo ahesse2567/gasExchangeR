@@ -118,6 +118,28 @@ v_slope <- function(.data,
                              alpha_linearity = alpha_linearity,
                              conf_level = conf_level)
 
+    # return quick summary if generating models fails
+    if(is.null(loop_res)) {
+        # extract char/factor columns with unique values to retain ID
+        # and related info. Use plot_df since this is a copy
+        non_numeric_df <- plot_df %>%
+            dplyr::select(tidyselect::where(
+                function(x) is.character(x) |
+                    is.factor(x) &
+                    all(x == x[1]))) %>%
+            dplyr::slice(1)
+
+        bp_dat <- return_null_findings(
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
+        return(list(breakpoint_data = bp_dat))
+    }
+
     # need to go by dist_MSE_ratio? Basically how doe this interact with while
     # loop()
     range_x <- range(.data[[.x]])
@@ -259,6 +281,8 @@ loop_v_slope <- function(.data,
                          pos_slope_after_bp,
                          alpha_linearity = 0.05,
                          conf_level = 0.95) {
+    # you can't fit a model if you don't have any data
+    if(nrow(.data) == 0) return(NULL)
 
     n_rows <- nrow(.data)
 
