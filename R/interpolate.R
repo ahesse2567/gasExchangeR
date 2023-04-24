@@ -36,7 +36,7 @@ interpolate <- function(.data,
         dplyr::slice(1)
 
     data_num <- .data %>%
-        select(where(~ all(!is.na(.)))) %>% # this breaks w/ all NA cols
+        dplyr::select(where(~ all(!is.na(.)))) %>% # this breaks w/ all NA cols
         dplyr::select(-names(non_numeric_df)) %>%
         dplyr::mutate(
             dplyr::across(tidyselect::where(purrr::negate(is.character)),
