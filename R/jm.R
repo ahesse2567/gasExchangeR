@@ -71,23 +71,14 @@ jm <- function(.data,
 
     # return quick summary if generating models fails
     if(is.null(loop_res)) {
-        # extract char/factor columns with unique values to retain ID
-        # and related info. Use plot_df since this is a copy
-        non_numeric_df <- plot_df %>%
-            dplyr::select(tidyselect::where(
-                function(x) is.character(x) |
-                    is.factor(x) &
-                    all(x == x[1]))) %>%
-            dplyr::slice(1)
-
-        bp_dat <- return_null_findings(
+        bp_dat <- return_indeterminant_findings(
+            .data = plot_df,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
             .y = .y,
             est_ci = "estimate")
 
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
         return(list(breakpoint_data = bp_dat))
     }
 
@@ -97,6 +88,19 @@ jm <- function(.data,
         alpha_linearity = alpha_linearity,
         pos_change = pos_change,
         pos_slope_after_bp = pos_slope_after_bp)
+
+    if(length(best_idx) == 0) {
+        # sometimes the p-value is NA, so best_idx sometimes has length 0
+        bp_dat <- return_indeterminant_findings(
+            .data = plot_df,
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        return(list(breakpoint_data = bp_dat))
+    }
 
     estimate_res <- get_jm_res(.data = .data,
                                 bp_idx = best_idx,
@@ -216,8 +220,7 @@ loop_jm <- function(.data,
         if(is.na(lm_left$coefficients[2])) {
             # avoids a strange corner case when there are only a few
             # data points (e.g. two) and they are both (nearly) identical
-            ss_left[i] <- ss_right[i] <- ss_both[i] <- RSS_two[i] <-
-                MSE_two[i] <- f_stat[i] <- pf_two[i] <- pos_change[i] <-
+           RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <- pos_change[i] <-
                 pos_slope_after_bp[i] <- int_point_x[i] <- NA
             next
         }
@@ -274,8 +277,6 @@ loop_jm <- function(.data,
 
     loop_stats
 
-    # ss_both[which(ss_both == 0)] <- NA
-    # ss_both
 }
 
 #' @keywords internal

@@ -67,26 +67,21 @@ d1_crossing <- function(.data,
                                   alpha_linearity = alpha_linearity)
 
     # if creating the linear model fails, return a quick summary
-    if(is.null(lm_poly_vo2) | is.null(lm_poly_vco2)) {
-        # extract char/factor columns with unique values to retain ID
-        # and related info. Use plot_df since this is a copy
-        non_numeric_df <- plot_df %>%
-            dplyr::select(tidyselect::where(
-                function(x) is.character(x) |
-                    is.factor(x) &
-                    all(x == x[1]))) %>%
-            dplyr::slice(1)
-
-        bp_dat <- return_null_findings(
+    if(is.null(lm_poly_vo2) |
+       is.null(lm_poly_vco2) |
+       any(is.na(lm_poly_vo2$coefficients),
+           is.na(lm_poly_vco2$coefficients))) {
+        bp_dat <- return_indeterminant_findings(
+            .data = .data, # change to plot_data later?
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
             .y = .y,
             est_ci = "estimate")
 
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
         return(list(breakpoint_data = bp_dat))
     }
+
 
     # 1st derivative for vo2
     poly_expr_vo2 <- expr_from_coefs(lm_poly_vo2$coefficients)

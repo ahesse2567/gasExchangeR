@@ -76,23 +76,14 @@ orr <- function(.data,
 
     # return quick summary if generating models fails
     if(is.null(loop_res)) {
-        # extract char/factor columns with unique values to retain ID
-        # and related info. Use plot_df since this is a copy
-        non_numeric_df <- plot_df %>%
-            dplyr::select(tidyselect::where(
-                function(x) is.character(x) |
-                    is.factor(x) &
-                    all(x == x[1]))) %>%
-            dplyr::slice(1)
-
-        bp_dat <- return_null_findings(
+        bp_dat <- return_indeterminant_findings(
+            .data = plot_df,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
             .y = .y,
             est_ci = "estimate")
 
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
         return(list(breakpoint_data = bp_dat))
     }
 
@@ -101,6 +92,19 @@ orr <- function(.data,
                                        alpha_linearity = alpha_linearity,
                                        pos_change = pos_change,
                                        pos_slope_after_bp = pos_slope_after_bp)
+
+    if(length(best_idx) == 0) {
+        # sometimes the p-value is NA, so best_idx sometimes has length 0
+        bp_dat <- return_indeterminant_findings(
+            .data = plot_df,
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        return(list(breakpoint_data = bp_dat))
+    }
 
     estimate_res <- get_orr_res(.data = .data,
                            bp_idx = best_idx,

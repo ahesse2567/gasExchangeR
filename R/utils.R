@@ -103,16 +103,27 @@ order_cpet_df <- function(.data, .x, time, ordering = c("by_x", "time")) {
 #'
 #' @keywords internal
 #' @noRd
-return_null_findings <- function(bp,
+return_indeterminant_findings <- function(.data,
+                                 bp,
                                  algorithm,
                                  .x,
                                  .y,
                                  est_ci = "estimate") {
+    # extract char/factor columns with unique values to retain ID
+    # and related info. Use plot_df since this is a copy
+    non_numeric_df <- .data %>%
+        dplyr::select(tidyselect::where(
+            function(x) is.character(x) |
+                is.factor(x) &
+                all(x == x[1]))) %>%
+        dplyr::slice(1)
+
     bp_dat <- tibble::tibble(bp = bp,
                    algorithm = algorithm,
                    x_var = .x,
                    y_var = .y,
                    est_ci = "estimate",
                    determinant_bp = FALSE)
+    bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
     bp_dat
 }
