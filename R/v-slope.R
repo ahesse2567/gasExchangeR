@@ -230,7 +230,7 @@ v_slope <- function(.data,
             alpha_linearity = alpha_linearity,
             pos_change = pos_change,
             pos_slope_after_bp = pos_slope_after_bp,
-            est_ci = "lower")
+            est_ci = "lower_ci")
 
         ci_upper_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
@@ -246,7 +246,7 @@ v_slope <- function(.data,
                                     alpha_linearity = alpha_linearity,
                                     pos_change = pos_change,
                                     pos_slope_after_bp = pos_slope_after_bp,
-                                    est_ci = "upper")
+                                    est_ci = "upper_ci")
 
         # combine estimate and both CI breakpoint res into one tibble
         estimate_res$bp_dat <- dplyr::bind_rows(lower_ci_res$bp_dat,
