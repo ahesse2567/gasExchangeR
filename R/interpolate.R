@@ -31,7 +31,9 @@ interpolate <- function(.data,
     # UseMethod("interpolate", .data)
 
     non_numeric_df <- .data %>%
-        dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
+        dplyr::select(
+            tidyselect::where(
+                function(x) is.character(x) | is.factor(x) &
                                             all(x == x[1]))) %>%
         dplyr::slice(1)
 

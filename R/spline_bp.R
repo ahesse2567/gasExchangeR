@@ -93,7 +93,6 @@ spline_bp <- function(.data,
             .y = .y,
             est_ci = "estimate")
 
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
         return(list(breakpoint_data = bp_dat))
     }
 

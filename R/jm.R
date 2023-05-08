@@ -96,7 +96,6 @@ jm <- function(.data,
             .y = .y,
             est_ci = "estimate")
 
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
         return(list(breakpoint_data = bp_dat))
     }
 
@@ -282,8 +281,6 @@ loop_jm <- function(.data,
 
     loop_stats
 
-    # ss_both[which(ss_both == 0)] <- NA
-    # ss_both
 }
 
 #' @keywords internal

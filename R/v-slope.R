@@ -120,27 +120,17 @@ v_slope <- function(.data,
 
     # return quick summary if generating models fails
     if(is.null(loop_res)) {
-        # extract char/factor columns with unique values to retain ID
-        # and related info. Use plot_df since this is a copy
-        non_numeric_df <- plot_df %>%
-            dplyr::select(tidyselect::where(
-                function(x) is.character(x) |
-                    is.factor(x) &
-                    all(x == x[1]))) %>%
-            dplyr::slice(1)
-
-        bp_dat <- return_null_findings(
+        bp_dat <- return_indeterminant_findings(
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
             .y = .y,
             est_ci = "estimate")
 
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
         return(list(breakpoint_data = bp_dat))
     }
 
-    # need to go by dist_MSE_ratio? Basically how doe this interact with while
+    # need to go by dist_MSE_ratio? Basically how does this interact with while
     # loop()
     range_x <- range(.data[[.x]])
 
@@ -214,7 +204,127 @@ v_slope <- function(.data,
                                     pos_slope_after_bp = pos_slope_after_bp,
                                     est_ci = "estimate")
 
+    # browser()
+
     if(ci) {
+
+        # broom::tidy(estimate_res$lm_left)
+        # broom::tidy(estimate_res$lm_right)
+        # conf_stats_left <- stats::confint(estimate_res$lm_left)
+        # conf_stats_left
+        # conf_stats_right <- stats::confint(estimate_res$lm_right)
+        # conf_stats_right
+        #
+        # plot(.data[[.x]], .data[[.y]])
+        # plot_lims <- 3000
+        # plot(.data[[.x]], .data[[.y]],
+        #      xlim = c(1600, 2000),
+        #      ylim = c(1400, 1600))
+        # abline(lm_left, col = "blue") # add estimated left regression
+        # abline(lm_right, col = "blue") # add estimated right regression
+        # x_est <- intersection_point(lm_left, lm_right)["x"]
+        # abline(v = x_est, col = "blue")
+        # # from left regression
+        # # add lower intercept and lower slope
+        # abline(a = conf_stats_left[1,1], b = conf_stats_left[2,1])
+        # # add lower intercept and higher slope
+        # abline(a = conf_stats_left[1,1], b = conf_stats_left[2,2])
+        # # add higher intercept and lower slope
+        # abline(a = conf_stats_left[1,2], b = conf_stats_left[2,1])
+        # # add higher intercept and higher slope
+        # abline(a = conf_stats_left[1,2], b = conf_stats_left[2,2])
+        #
+        # # from right regression
+        # # add lower intercept and lower slope
+        # abline(a = conf_stats_right[1,1],
+        #        b = conf_stats_right[2,1], col = "red")
+        # # add lower intercept and higher slope
+        # abline(a = conf_stats_right[1,1],
+        #        b = conf_stats_right[2,2], col = "red")
+        # # add higher intercept and lower slope
+        # abline(a = conf_stats_right[1,2],
+        #        b = conf_stats_right[2,1], col = "red")
+        # # add higher intercept and higher slope
+        # abline(a = conf_stats_right[1,2],
+        #        b = conf_stats_right[2,2], col = "red")
+        #
+        # x_lower <- (conf_stats_left[1,1] - conf_stats_right[1,2]) /
+        #     (conf_stats_right[2,2] -
+        #          conf_stats_left[2,1])
+        # x_lower
+        # x_upper <- (conf_stats_left[1,2] - conf_stats_right[1,1]) /
+        #     (conf_stats_right[2,1] -
+        #          conf_stats_left[2,2])
+        # x_upper
+        # x_est <- intersection_point(lm_left, lm_right)["x"]
+        #
+        # abline(v = x_lower)
+        # abline(v = x_upper)
+        # abline(v = x_est, col = "blue")
+        #
+        # # it's still a little anecdotal, but it seems like the
+        # # confidence interval using the combinations of lowest and highest
+        # # confidence intervals for the slopes and intercepts of the
+        # # two regression lines gives estimates that extend beyond the
+        # # range of the x-axis
+        #
+        # # what about just using the different intercepts and not the slopes
+        # # to create the confidence interval?
+        #
+        # plot(.data[[.x]], .data[[.y]])
+        # # plot estimate lines
+        # abline(lm_left, col = "blue")
+        # abline(lm_right, col = "blue")
+        # # left regression lines
+        # # lower intercept
+        # abline(a = conf_stats_left[1,1],
+        #        b = broom::tidy(estimate_res$lm_left)$estimate[2])
+        # # upper intercept
+        # abline(a = conf_stats_left[1,2],
+        #        b = broom::tidy(estimate_res$lm_left)$estimate[2])
+        # # right regression lines
+        # # lower intercept
+        # abline(a = conf_stats_right[1,1],
+        #        b = broom::tidy(estimate_res$lm_right)$estimate[2],
+        #        col = "red")
+        # # upper intercept
+        # abline(a = conf_stats_right[1,2],
+        #        b = broom::tidy(estimate_res$lm_right)$estimate[2],
+        #        col = "red")
+        #
+        # x_lower <- (conf_stats_left[1,1] - conf_stats_right[1,2]) /
+        #     (broom::tidy(estimate_res$lm_right)$estimate[2] -
+        #          broom::tidy(estimate_res$lm_left)$estimate[2])
+        # x_lower
+        # x_upper <- (conf_stats_left[1,2] - conf_stats_right[1,1]) /
+        #     (broom::tidy(estimate_res$lm_right)$estimate[2] -
+        #          broom::tidy(estimate_res$lm_left)$estimate[2])
+        # x_upper
+        # x_est <- intersection_point(lm_left, lm_right)["x"]
+        #
+        # abline(v = x_lower)
+        # abline(v = x_upper)
+        # abline(v = x_est, col = "blue")
+        #
+        # # I suspect the following
+        # # farthest left: left lm lower lower, right lm higher higher
+        # # farthest right: lm left higher higher, lm right lower lower
+        # # but maybe we should just calculate all combinations and search
+        # # for the lowest and highest values, respectively
+        #
+        # ?abline
+        # crit_t_left <- qt(1 - 0.05 / 2, estimate_res$lm_left$df.residual)
+        # stats::confint(estimate_res$lm_left)
+        #
+        # std_err_int_left <- broom::tidy(estimate_res$lm_left)$std.error[1]
+        # broom::tidy(estimate_res$lm_left)$estimate[1] +
+        #     c(-1, 1) * crit_t_left * std_err_int_left
+        #
+        #
+        # broom::tidy(estimate_res$lm_left)$std.error[1]
+        # broom::glance(estimate_res$lm_left) %>% View
+        # broom::augment(estimate_res$lm_left) %>% View
+
         ci_lower_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == min(int_point_x)) %>%
