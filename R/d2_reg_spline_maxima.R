@@ -82,7 +82,7 @@ d2_reg_spline_maxima <- function(.data,
                                     df = df, degree = degree)
 
     # return quick summary if generating models fails
-    if(is.null(lm_spline)) {
+    if(is.null(lm_spline) | any(is.na(coef(lm_spline)))) {
         # extract char/factor columns with unique values to retain ID
         # and related info. Use plot_df since this is a copy
         non_numeric_df <- plot_df %>%

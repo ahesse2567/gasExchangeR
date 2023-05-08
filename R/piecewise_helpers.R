@@ -100,7 +100,8 @@ get_best_piecewise_idx <- function(loop_res_df,
                                          data_range[1],
                                          data_range[2]),
                       inside_ci) %>%
-        dplyr::filter(p == min(p)) %>% # filter by smallest p-value (lowest RSS)
+        # best-fit considered smallest p-value (lowest RSS)
+        dplyr::filter(p == min(p)) %>%
         dplyr::select(idx) %>%
         dplyr::pull()
 

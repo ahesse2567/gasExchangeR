@@ -69,8 +69,17 @@ jm <- function(.data,
                         alpha_linearity = alpha_linearity,
                         conf_level = conf_level)
 
+    if(!is.null(loop_res)) {
+        best_idx <- get_best_piecewise_idx(
+            loop_res,
+            range(.data[[.x]]),
+            alpha_linearity = alpha_linearity,
+            pos_change = pos_change,
+            pos_slope_after_bp = pos_slope_after_bp)
+    }
+
     # return quick summary if generating models fails
-    if(is.null(loop_res)) {
+    if(is.null(loop_res) | length(best_idx) == 0) {
         # extract char/factor columns with unique values to retain ID
         # and related info. Use plot_df since this is a copy
         non_numeric_df <- plot_df %>%
@@ -90,13 +99,6 @@ jm <- function(.data,
         bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
         return(list(breakpoint_data = bp_dat))
     }
-
-    best_idx <- get_best_piecewise_idx(
-        loop_res,
-        range(.data[[.x]]),
-        alpha_linearity = alpha_linearity,
-        pos_change = pos_change,
-        pos_slope_after_bp = pos_slope_after_bp)
 
     estimate_res <- get_jm_res(.data = .data,
                                 bp_idx = best_idx,
@@ -186,9 +188,14 @@ loop_jm <- function(.data,
                     alpha_linearity = 0.05,
                     conf_level = 0.95) {
 
-    if(nrow(.data) == 0) return(NULL)
+    # we're estimating 4 parameters, so we need to have at least 5 rows of
+    # data. If not, this breaks our critical F calculation, because
+    # df2 relies on the number of observations minus 4, and df2 needs
+    # to be greater than 0.
+    if(nrow(.data) < 5) return(NULL)
 
-    n_rows <- nrow(.data) # calculate number of rows to reduce repeated calcs
+    # calculate number of rows to reduce repeated calcs
+    n_rows <- nrow(.data)
 
     # initialize empty vectors
     RSS_two <- MSE_two <- f_stat <- pf_two <-
@@ -203,7 +210,8 @@ loop_jm <- function(.data,
     for(i in 1:n_rows) {
         if(i %in% c(1, n_rows, n_rows - 1)) {
             RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
-                pos_change[i] <- pos_slope_after_bp[i] <- int_point_x[i] <- NA
+                pos_change[i] <- pos_slope_after_bp[i] <-
+                int_point_x[i] <- NA
             next
         }
         # split data into left and right halves. x0 = .x at index i
@@ -216,9 +224,9 @@ loop_jm <- function(.data,
         if(is.na(lm_left$coefficients[2])) {
             # avoids a strange corner case when there are only a few
             # data points (e.g. two) and they are both (nearly) identical
-            ss_left[i] <- ss_right[i] <- ss_both[i] <- RSS_two[i] <-
-                MSE_two[i] <- f_stat[i] <- pf_two[i] <- pos_change[i] <-
-                pos_slope_after_bp[i] <- int_point_x[i] <- NA
+            RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
+                pos_change[i] <- pos_slope_after_bp[i] <- int_point_x[i] <-
+                NA
             next
         }
 
