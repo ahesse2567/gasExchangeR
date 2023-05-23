@@ -6,8 +6,8 @@
 \usage{
 vo2_plateau(
   .data,
-  method = "slope_eot",
-  vo2_col,
+  method = c("slope_eot", "vo2max_neighbor", "zero_slope"),
+  vo2_col = "vo2",
   time_col = "time",
   units = "mL",
   last_x_s = 30,

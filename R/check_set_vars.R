@@ -33,17 +33,28 @@ resolve_inputs <- function(inputs = c(as.list(environment(), all = TRUE))) {
     if(!is.null(method)) {
         inputs <- set_vars_by_method(inputs = inputs)
     }
-    # set front_trim values to default if unspecified and using piecewise methods
-    piecewise_methods <- c("jm", "orr", "v-slope", "spline_bp") # TODO add "v-slope_simple"
 
-    if(is.null(inputs[["front_trim_vt1"]]) &
-       inputs[["algorithm_vt1"]] %in% piecewise_methods) {
+    # set from trim to 60 as a default for all methods
+    if(is.null(inputs[["front_trim_vt1"]])) {
         inputs[["front_trim_vt1"]] <- 60
     }
-    if(is.null(inputs[["front_trim_vt2"]]) &
-       inputs[["algorithm_vt2"]] %in% piecewise_methods) {
+    if(is.null(inputs[["front_trim_vt2"]])) {
         inputs[["front_trim_vt2"]] <- 60
     }
+
+    # OLD CODE
+    # set front_trim values to default if unspecified and using piecewise methods
+    # piecewise_methods <- c("jm", "orr", "v-slope", "spline_bp") # TODO add "v-slope_simple"
+    #
+    # if(is.null(inputs[["front_trim_vt1"]]) &
+    #    inputs[["algorithm_vt1"]] %in% piecewise_methods) {
+    #     inputs[["front_trim_vt1"]] <- 60
+    # }
+    # if(is.null(inputs[["front_trim_vt2"]]) &
+    #    inputs[["algorithm_vt2"]] %in% piecewise_methods) {
+    #     inputs[["front_trim_vt2"]] <- 60
+    # }
+
     inputs
 }
 

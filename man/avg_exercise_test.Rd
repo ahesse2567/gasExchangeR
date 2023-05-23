@@ -6,8 +6,8 @@
 \usage{
 avg_exercise_test(
   .data,
-  type = "breath",
-  subtype = "rolling",
+  method = "breath",
+  calc_type = "rolling",
   time_col = "time",
   roll_window = 15,
   bin_w = 15,
@@ -23,9 +23,9 @@ avg_exercise_test(
 \arguments{
 \item{.data}{Breath-by-breath gas exchange data.}
 
-\item{type}{Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.}
+\item{method}{Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.}
 
-\item{subtype}{Choose \code{rolling}, \code{bin}, or \code{bin-roll}.}
+\item{calc_type}{Choose \code{rolling}, \code{bin}, or \code{bin-roll}.}
 
 \item{time_col}{The name of the column with time.}
 
@@ -55,7 +55,7 @@ This function averages first by either breath, time, or digital filtering
 If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
 }
 \details{
-If you combine rolling and bin averages with \code{subtype = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{type} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
+If you combine rolling and bin averages with \code{calc_type = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{method} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
 
 \code{roll_window} must be evenly divisible by \code{bin_w}
 }

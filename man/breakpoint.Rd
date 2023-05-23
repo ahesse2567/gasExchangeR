@@ -26,6 +26,7 @@ breakpoint(
   pos_change_vt2 = TRUE,
   pos_slope_after_bp = TRUE,
   ordering = c("by_x", "time"),
+  plots = TRUE,
   ...
 )
 }
@@ -71,6 +72,8 @@ breakpoint(
 \item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is \code{TRUE}. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to \code{FALSE} when PetCO2 is the y-axis variable.}
 
 \item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+
+\item{plots}{Should this function generate plots? Set to \code{FALSE} to save time.}
 
 \item{...}{Arguments to pass to functions internal to \code{breakpoint()}}
 }

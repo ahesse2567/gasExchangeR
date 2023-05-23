@@ -160,7 +160,6 @@ ventilatory_outliers <- function(.data,
 
     .data %>%
         dplyr::select(-key)
-
 }
 
 #' @keywords internal

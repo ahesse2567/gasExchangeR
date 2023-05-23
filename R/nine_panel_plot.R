@@ -130,7 +130,7 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
 
     # leaving vt1_dat and vt2_dat equal to NULL lets you create the nine
     # panel plot without first needing to find any breakpoints
-
+    # browser()
     plt_data <- ggplot2::ggplot_build(plt)
 
     # calculate horizontal adjustment factor based on range of x data
@@ -139,7 +139,7 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
         {. * 0.015} # use 1% of x range
 
     # calculate height of threshold labels
-    max_y <- map_dbl(plt_data[["data"]], ~ max(.[["y"]], na.rm = TRUE)) %>%
+    max_y <- purrr::map_dbl(plt_data[["data"]], ~ max(.[["y"]], na.rm = TRUE)) %>%
         max()
     # max_y <- numeric(length = length(plt_data[["data"]]))
     # for(i in seq_along(plt_data[["data"]])) {
@@ -150,25 +150,35 @@ add_threshold_lines <- function(plt, x_var, vt1_dat = NULL, vt2_dat = NULL) {
     # conditionally add VT1 line
     if(!is.null(vt1_dat) &&
        length(!is.na(vt1_dat[["breakpoint_data"]][[x_var]]) > 0) &&
-       !is.na(vt1_dat[["breakpoint_data"]][[x_var]]) &&
-       vt1_dat[["breakpoint_data"]][["determinant_bp"]]) {
+       any(!is.na(vt1_dat[["breakpoint_data"]][[x_var]])) &&
+       any(vt1_dat[["breakpoint_data"]][["determinant_bp"]], na.rm = TRUE)) {
+
+        thresh_line_vt1 <- vt1_dat$breakpoint_data %>%
+            dplyr::filter(est_ci == "estimate") %>%
+            {.[[x_var]]}
+
         plt <- plt +
-            ggplot2::geom_vline(xintercept = vt1_dat[["breakpoint_data"]][[x_var]]) +
+            ggplot2::geom_vline(xintercept = thresh_line_vt1) +
             ggplot2::geom_text(ggplot2::aes(
-                x = vt1_dat[["breakpoint_data"]][[x_var]] - h_just_factor,
+                x = thresh_line_vt1 - h_just_factor,
                 y = max_y,
                 label = "VT1"), angle = 90)
     }
 
     # conditionally add VT2 line
-    if(!is.null(vt1_dat) &&
+    if(!is.null(vt2_dat) &&
        length(!is.na(vt2_dat[["breakpoint_data"]][[x_var]]) > 0) &&
-       !is.na(vt2_dat[["breakpoint_data"]][[x_var]]) &&
-       vt2_dat[["breakpoint_data"]][["determinant_bp"]]) {
+       any(!is.na(vt2_dat[["breakpoint_data"]][[x_var]])) &&
+       any(vt2_dat[["breakpoint_data"]][["determinant_bp"]], na.rm = TRUE)) {
+
+        thresh_line_vt2 <- vt2_dat$breakpoint_data %>%
+            dplyr::filter(est_ci == "estimate") %>%
+            {.[[x_var]]}
+
         plt <- plt +
-            ggplot2::geom_vline(xintercept = vt2_dat[["breakpoint_data"]][[x_var]]) +
+            ggplot2::geom_vline(xintercept = thresh_line_vt2) +
             ggplot2::geom_text(ggplot2::aes(
-                x = vt2_dat[["breakpoint_data"]][[x_var]]  - h_just_factor,
+                x = thresh_line_vt2  - h_just_factor,
                 y = max_y,
                 label = "VT2"), angle = 90)
     }
@@ -243,7 +253,7 @@ make_hr_o2pulse_vs_time_plot <- function(.data,
                                         shape = c(15, 16)))) +
         ggplot2::scale_shape_manual(name = NULL, values = c(15, 16),
                                     labels = c("Heart Rate", "Oxygen pulse"),
-                                    guide = guide_legend(override.aes = list(
+                                    guide = ggplot2::guide_legend(override.aes = list(
                                         color = c("darkred", "black")))) +
         ggplot2::theme_bw()
 
@@ -355,8 +365,8 @@ make_vent_eqs_vs_time_plot <- function(.data,
                                        time = "time") {
     # calculate ventilatory equivalents in case they aren't already in the df
     .data <- .data %>%
-        mutate(ve_vo2 = !!sym(ve) / !!sym(vo2) * 1000,
-               ve_vco2 = !!sym(ve) / !!sym(vco2) * 1000)
+        dplyr::mutate(ve_vo2 = !!rlang::sym(ve) / !!rlang::sym(vo2) * 1000,
+               ve_vco2 = !!rlang::sym(ve) / !!rlang::sym(vco2) * 1000)
 
 
     out_plot <- ggplot2::ggplot(data = .data,
@@ -389,8 +399,9 @@ make_vt_vs_ve_plot <- function(.data,
         return(ggplot2::ggplot(data = .data,ggplot2::aes(x = .data[[ve]])))
     }
 
-    out_plot <- ggplot2::ggplot(data = .data,ggplot2::aes(x = .data[[ve]], y = .data[[vt]])) +
-        geom_point(color = "darkslategray3") +
+    out_plot <- ggplot2::ggplot(data = .data,
+                                ggplot2::aes(x = .data[[ve]], y = .data[[vt]])) +
+        ggplot2::geom_point(color = "darkslategray3") +
         ggplot2::xlab(paste(stringr::str_to_upper(ve), "(L/min)")) +
         ggplot2::ylab(stringr::str_to_title(vt)) +
         ggplot2::theme_bw()

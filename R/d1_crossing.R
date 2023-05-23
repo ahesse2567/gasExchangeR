@@ -15,6 +15,9 @@
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param ci Should the output include confidence interval data? Default is `FALSE`.
+#' @param conf_level Confidence level to use if calculating confidence intervals.
+#' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' @returns A list include breakpoint data, best-fit and related functions, and a plot.
 #'
@@ -40,7 +43,11 @@ d1_crossing <- function(.data,
                         time = "time",
                         alpha_linearity = 0.05, # change to just alpha?
                         pos_change = TRUE,
-                        ordering = c("by_x", "time")
+                        ordering = c("by_x", "time"),
+                        # TODO ADD FRONT TRIM ARGUMENTS,
+                        ci = FALSE,
+                        conf_level = 0.95,
+                        plots = TRUE
                         ) {
     # check if there is crucial missing data
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -58,6 +65,24 @@ d1_crossing <- function(.data,
     lm_poly_vco2 <- loop_poly_d1_crossing(.data = .data, .x = time, .y = vco2,
                                   degree = degree,
                                   alpha_linearity = alpha_linearity)
+
+    # if creating the linear model fails, return a quick summary
+    if(is.null(lm_poly_vo2) |
+       is.null(lm_poly_vco2) |
+       any(is.na(lm_poly_vo2$coefficients),
+           is.na(lm_poly_vco2$coefficients))) {
+        bp_dat <- return_indeterminant_findings(
+            .data = .data, # change to plot_data later?
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        return(list(breakpoint_data = bp_dat))
+    }
+
+
     # 1st derivative for vo2
     poly_expr_vo2 <- expr_from_coefs(lm_poly_vo2$coefficients)
     deriv1_vo2 <- Deriv::Deriv(poly_expr_vo2, x = "x", nderiv = 1) # slope
@@ -133,19 +158,28 @@ d1_crossing <- function(.data,
                       bp = bp) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
-    bp_plot <- ggplot2::ggplot(data = .data,
-                               ggplot2::aes(x = .data[[.x]],
-                                            y = .data[[.y]])) +
-        ggplot2::geom_point(ggplot2::aes(y = vo2, color = "vo2"), alpha = 0.5) +
-        ggplot2::geom_point(ggplot2::aes(y = vco2, color = "vco2"), alpha = 0.5) +
-        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr_vo2,
-                                        envir = list(x = .data[[.x]])))) +
-        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr_vco2,
-                                        envir = list(x = .data[[.x]])))) +
-        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
-        ggplot2::scale_color_manual(values = c("vo2" = "red", "vco2" = "blue")) +
-        ggplot2::guides(color = ggplot2::guide_legend(title = NULL)) +
-        ggplot2::theme_minimal()
+    if(plots) {
+        bp_plot <- ggplot2::ggplot(data = .data,
+                                   ggplot2::aes(x = .data[[.x]],
+                                                y = .data[[.y]])) +
+            ggplot2::geom_point(ggplot2::aes(y = vo2, color = "vo2"),
+                                alpha = 0.5) +
+            ggplot2::geom_point(ggplot2::aes(y = vco2, color = "vco2"),
+                                alpha = 0.5) +
+            ggplot2::geom_line(ggplot2::aes(y = eval(
+                poly_expr_vo2,
+                envir = list(x = .data[[.x]])))) +
+            ggplot2::geom_line(ggplot2::aes(y = eval(
+                poly_expr_vco2,
+                envir = list(x = .data[[.x]])))) +
+            ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+            ggplot2::scale_color_manual(values = c(
+                "vo2" = "red", "vco2" = "blue")) +
+            ggplot2::guides(color = ggplot2::guide_legend(title = NULL)) +
+            ggplot2::theme_minimal()
+    } else {
+        bp_plot <- NULL
+    }
 
     return(list(breakpoint_data = bp_dat,
                 lm_poly_vo2 = lm_poly_vo2,
@@ -159,7 +193,8 @@ d1_crossing <- function(.data,
 #' @keywords internal
 loop_poly_d1_crossing <- function(.data, .x, .y,
                           degree = NULL, alpha_linearity = 0.05) {
-    # browser()
+    # you can't fit a model if you don't have any data
+    if(nrow(.data) == 0) return(NULL)
     # if the user specifies a degree, find that and be done with it
     if (!is.null(degree)) {
         lm_poly <- paste0(.y, " ~ ", "1 + ",
@@ -187,8 +222,9 @@ loop_poly_d1_crossing <- function(.data, .x, .y,
         i <- 1 # start at 2 b/c we already made linear (degree = 1) model
         while(cont == TRUE) {
             lm_poly <- paste0(.y, " ~ ", "1 + ",
-                              "poly(", .x, ", degree = ", degree + i, ", raw = TRUE)") %>%
-                lm(data = .data)
+                              "poly(", .x, ", degree = ",
+                              degree + i, ", raw = TRUE)") %>%
+                stats::lm(data = .data)
             lm_list <- append(lm_list, list(lm_poly))
             lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
             if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {

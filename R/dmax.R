@@ -15,6 +15,9 @@
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
+#' @param ci Should the output include confidence interval data? Default is `FALSE`.
+#' @param conf_level Confidence level to use if calculating confidence intervals.
+#' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' @return A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
 #' @importFrom rlang :=
@@ -37,7 +40,10 @@ dmax <- function(.data,
                  ordering = c("by_x", "time"),
                  alpha_linearity = 0.05,
                  pos_change = TRUE,
-                 pos_slope_after_bp = TRUE
+                 pos_slope_after_bp = TRUE,
+                 ci = FALSE,
+                 conf_level = 0.95,
+                 plots = TRUE
                  ){
     # the original paper has something about 50 mL increments in O2
     stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
@@ -125,6 +131,7 @@ dmax <- function(.data,
                                   .x = .x, .y = .y)
     bp_dat <- bp_dat %>%
         dplyr::mutate(bp = bp,
+                      est_ci = "estimate",
                algorithm = "dmax",
                x_var = .x,
                y_var = .y,
@@ -132,13 +139,24 @@ dmax <- function(.data,
                pct_slope_change = pct_slope_change,
                f_stat = f_stat,
                p_val_f = pf_two) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp,
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp, est_ci,
                  pct_slope_change, f_stat, p_val_f)
 
-    bp_plot <- make_piecewise_bp_plot(.data, .x, .y, lm_left, lm_right, bp_dat)
+    # if(ci) {} # Dmax probably requires nonparametric bootstrapping or jacknife?
 
-    bp_plot <- bp_plot +
-        ggplot2::geom_line(ggplot2::aes(y = g.model$fitted.values), linetype = "dashed")
+    if(plots) {
+        bp_plot <- make_piecewise_bp_plot(.data,
+                                          .x,
+                                          .y,
+                                          lm_left,
+                                          lm_right,
+                                          bp_dat)
+        bp_plot <- bp_plot +
+            ggplot2::geom_line(ggplot2::aes(y = g.model$fitted.values),
+                               linetype = "dashed")
+    } else {
+        bp_plot <- NULL
+    }
 
     return(list(breakpoint_data = bp_dat,
                 fitted_vals = pred,

@@ -19,13 +19,14 @@ df_unavg <- df_raw %>%
     relocate(time, speed, grade) %>%
     ventilatory_outliers()
 
-df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
+df_avg <- avg_exercise_test(df_unavg, method = "time", calc_type = "bin",
                             time_col = "time", bin_w = 10)
 
 ggplot(data = df_avg, aes(x = time, y = vo2)) +
     geom_point(alpha = 0.5) +
     theme_bw()
 
+debug(orr)
 breakpoint(.data = df_avg,
            x_vt1 = "vo2",
            y_vt1 = "vco2",
@@ -38,7 +39,7 @@ breakpoint(.data = df_avg,
            vco2 = "vco2",
            ve = "ve",
            time = "time",
-           k = 7)
+           k = 5)
 
 orr_dat <- orr(.data = df_avg, .x = "vo2", .y = "vco2",
                bp = "vt1", vo2 = "vo2", vco2 = "vco2", ve = "ve",

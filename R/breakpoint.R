@@ -32,6 +32,7 @@
 #' @param pos_change_vt1 Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param pos_change_vt2 Do you expect the change in slope to be positive (default) or negative? If a two-line regression significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate. *The only time you should set this to `FALSE` is when your y-axis variable is end-tidal carbon dioxide (PetCO2)*.
 #' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
+#' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' @returns A list that contains a data frame with slices of the original data frame at the threshold index. The data frame new columns describing the methods used and if the breakpoint was truly a breakpoint. Depending on the breakpoint algorithm used, `breakpoint()` also returns fitted values, the left and right sides of the piecewise regression, as well as a simple linear regression.
 #' @export
@@ -74,6 +75,7 @@ breakpoint <- function(.data,
                        pos_change_vt2 = TRUE,
                        pos_slope_after_bp = TRUE,
                        ordering = c("by_x", "time"),
+                       plots = TRUE,
                        ...) {
 
     bp <- match.arg(bp, several.ok = FALSE)
@@ -105,9 +107,20 @@ breakpoint <- function(.data,
             return(vt2_out)
         }
 
+        # check that bp was determinant by using the est_ci value
+        det_bp <- vt2_out$breakpoint_data %>%
+            dplyr::filter(est_ci == "estimate") %>%
+            dplyr::select(determinant_bp) %>%
+            dplyr::pull()
+
         # truncate if VT2 is found
-        if(vt2_out$breakpoint_data$determinant_bp & truncate == TRUE) {
-            trunc_idx <- which.min(abs(.data[[x_vt2]] - vt2_out$breakpoint_data[[x_vt2]]))
+        if(det_bp & truncate == TRUE) {
+            trunc_val <- vt2_out$breakpoint_data %>%
+                dplyr::filter(est_ci == "estimate") %>%
+                dplyr::select(x_vt2) %>%
+                dplyr::pull()
+
+            trunc_idx <- which.min(abs(.data[[x_vt2]] - trunc_val))
             vt1_df <- .data[1:trunc_idx,]
         } else {
             vt1_df <- .data
@@ -145,22 +158,27 @@ breakpoint <- function(.data,
     vt_out <- suppressMessages(dplyr::full_join(vt1_out$breakpoint_data,
                                          vt2_out$breakpoint_data)) %>%
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
-    # generate plot showing both thresholds
-    vt1_plot <- ggplot2::ggplot(data = .data,
-                                ggplot2::aes(x = .data[[x_vt1]], .data[[y_vt1]])) +
-        ggplot2::geom_point() +
-        ggplot2::theme_minimal()
-    vt1_plot <- add_threshold_lines(vt1_plot, x_var = x_vt1,
-                                    vt1_out, vt2_out)
 
-    vt2_plot <- ggplot2::ggplot(data = .data,
-                                ggplot2:: aes(x = .data[[x_vt2]], .data[[y_vt2]])) +
-        ggplot2::geom_point() +
-        ggplot2::theme_minimal()
-    vt2_plot <- add_threshold_lines(plt = vt2_plot, x_var = x_vt2,
-                                    vt1_out, vt2_out)
+    if(plots) {
+        # generate plot showing both thresholds
+        vt1_plot <- ggplot2::ggplot(data = .data,
+                                    ggplot2::aes(x = .data[[x_vt1]], .data[[y_vt1]])) +
+            ggplot2::geom_point() +
+            ggplot2::theme_minimal()
+        vt1_plot <- add_threshold_lines(vt1_plot, x_var = x_vt1,
+                                        vt1_out, vt2_out)
 
-    bp_plots <- list("vt1_plot" = vt1_plot, "vt2_plot" = vt2_plot)
+        vt2_plot <- ggplot2::ggplot(data = .data,
+                                    ggplot2:: aes(x = .data[[x_vt2]], .data[[y_vt2]])) +
+            ggplot2::geom_point() +
+            ggplot2::theme_minimal()
+        vt2_plot <- add_threshold_lines(plt = vt2_plot, x_var = x_vt2,
+                                        vt1_out, vt2_out)
+
+        bp_plots <- list("vt1_plot" = vt1_plot, "vt2_plot" = vt2_plot)
+    } else {
+        bp_plots <- NULL
+    }
 
     out <- list(bp_dat = vt_out,
                 bp_plots = bp_plots,

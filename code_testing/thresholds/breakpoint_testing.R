@@ -4,13 +4,16 @@ library(tidyverse)
 library(janitor)
 library(readxl)
 
-df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_exercisethresholds/mar22_117_post_gxt.xlsx") %>%
-    rename(vo2 = vo2_abs,
-           vo2_kg = vo2)
+# df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_exercisethresholds/mar22_117_post_gxt.xlsx") %>%
+#     rename(vo2 = vo2_abs,
+#            vo2_kg = vo2)
 
+
+# load data
 # file_lines <- readLines("inst/extdata/Anton_vo2max.txt")
 # df_raw <- read.table(textConnection(file_lines[-2]), header = TRUE, sep="\t")
 #
+# # basic cleaning, renaming variables
 # df_unavg <- df_raw %>%
 #     as_tibble() %>%
 #     clean_names() %>%
@@ -26,19 +29,68 @@ df_unavg <- read_xlsx("../gasExchangeR_validation/data/processed/rand_15_cpet_ex
 #     relocate(contains("time")) %>%
 #     filter(!is.na(ex_time)) %>%
 #     filter(speed >= 4.5 & ex_time >= 750) %>%
-#     select(-time) %>%
+#     select(-c(time, hrr)) %>%
 #     rename(time = ex_time,
 #            vo2_kg = vo2,
 #            vo2 = vo2_1,
 #            ve = ve_btps) %>%
-#     mutate(ve_vo2 = ve / vo2 * 1000,
+#     mutate(time = time - min(time),
+#            ve_vo2 = ve / vo2 * 1000,
 #            ve_vco2 = ve/vco2*1000,
-#            excess_co2 = vco2^2 / vo2 - vco2) %>%
-#     ventilatory_outliers(plot_outliers = FALSE)
+#            excess_co2 = vco2^2 / vo2 - vco2)
 
-df_avg <- avg_exercise_test(df_unavg, type = "time", subtype = "bin",
-                            time_col = "time", bin_w = 15)
+df_unavg <- read_csv(
+    file.path("inst/extdata/anton_vo2max_clean.csv"),
+    show_col_types = FALSE)
 
+# remove outliers
+df_unavg_no_outliers <- ventilatory_outliers(df_unavg,
+                                 outlier_cols = "vo2",
+                                 time = "time",
+                                 sd_lim = 3,
+                                 width = 5,
+                                 mos = "mean",
+                                 align = "center",
+                                 use_global_sd = TRUE,
+                                 global_sd_mos = "median",
+                                 exclude_test_val = TRUE,
+                                 remove_outliers = TRUE,
+                                 max_passes = 1,
+                                 plot_outliers = FALSE)
+
+# df_interpolated <- interpolate(df_unavg_no_outliers, time_col = "time")
+# ggplot(data = df_interpolated, aes(x = time, y = vo2)) +
+#     geom_point()
+
+# average exercise test
+df_avg <- avg_exercise_test(df_unavg_no_outliers, method = "time",
+                            calc_type = "rolling",
+                            time_col = "time", roll_window = 10)
+
+# debugonce(gasExchangeR::jm)
+# undebug(gasExchangeR::find_threshold_vals)
+# Rprof()
+debugonce(gasExchangeR::d2_poly_reg_maxima)
+# undebug(jm)
+bp_dat <- breakpoint(df_avg,
+           algorithm_vt1 = "jm",
+           x_vt1 = "vo2",
+           y_vt1 = "vco2",
+           algorithm_vt2 = "d2_poly_reg_maxima",
+           x_vt2 = "vco2",
+           y_vt2 = "ve",
+           bp = "both",
+           truncate = TRUE,
+           pos_change_vt2 = TRUE,
+           pos_slope_after_bp = TRUE,
+           ci = TRUE,
+           plots = TRUE
+)
+
+bp_dat$bp_dat
+
+
+# basic plots
 ggplot(data = df_avg, aes(x = time)) +
     geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
     geom_line(aes(y = vo2, color = "vo2"), alpha = 0.5) +
@@ -64,28 +116,35 @@ ggplot(data = df_avg, aes(x = time)) +
     geom_point(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
     geom_line(aes(y = ve_vo2, color = "ve_vo2"), alpha = 0.5) +
     ggtitle("Ventilatory Equivalents") +
-    scale_color_manual(name = NULL,
-                       values = c("ve_vco2" = "purple", "ve_vo2" = "green")) +
+    scale_color_manual(
+        name = NULL,
+        values = c("ve_vco2" = "purple", "ve_vo2" = "green")) +
     theme_minimal()
 
-debug(gasExchangeR::orr)
-# debug(d2_reg_spline_maxima)
-# Rprof()
-breakpoint(df_avg,
-           algorithm_vt1 = "v-slope",
+bp_dat <- breakpoint(df_avg,
+           algorithm_vt1 = "spline_bp",
            x_vt1 = "vo2",
            y_vt1 = "vco2",
-           algorithm_vt2 = "d2_inflection",
+           algorithm_vt2 = "spline_bp",
            x_vt2 = "vco2",
            y_vt2 = "ve",
            bp = "both",
            truncate = TRUE,
+           pos_change_vt2 = TRUE,
            pos_slope_after_bp = TRUE,
+           ci = TRUE
 )
+
+bp_dat$bp_dat %>% View
+
 # Rprof(NULL)
+
+# how can I make this faster?
 prof_summary <- summaryRprof()
 
 prof_summary$by.self
+
+debug(find_threshold_vals)
 
 breakpoint(df_avg,
            algorithm_vt1 = "orr",
@@ -100,14 +159,13 @@ breakpoint(df_avg,
 )
 
 undebug(breakpoint)
-undebug(d2_reg_spline_maxima)
 
-
+debug(d2_poly_reg_maxima)
 bp_dat <- breakpoint(.data = df_avg, method = "excess_co2",
                      x_vt1 = "vo2",
                      algorithm_vt1 = "d2_poly_reg_maxima",
                      algorithm_vt2 = "d2_poly_reg_maxima",
-                     x_vt2 = "ve", y_vt2 = "ve_vco2", truncate = FALSE,
+                     x_vt2 = "vo2", y_vt2 = "ve_vco2", truncate = FALSE,
                      front_trim_vt1 = 90)
 bp_dat$vt1_dat$bp_plot
 bp_dat$vt2_dat$bp_plot
@@ -181,10 +239,10 @@ bp_dat <- breakpoint(.data = df_avg, x_vt1 = "vo2", y_vt1 = "vco2",
                      ordering = "time")
 bp_dat$vt1_dat$bp_plot
 bp_dat$vt2_dat$bp_plot
-debug(orr)
+debug(gasExchangeR::jm)
 # undebug(orr)
 bp_dat <- breakpoint(.data = df_avg, x_vt1 = "vo2", y_vt1 = "vco2",
-                     algorithm_vt1 = "orr",
+                     algorithm_vt1 = "jm",
                      algorithm_vt2 = "orr",
                      x_vt2 = "vco2", y_vt2 = "ve", truncate = TRUE,
                      ordering = "time")

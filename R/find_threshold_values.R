@@ -7,7 +7,7 @@
 #' @param thr_y Y coordinate at the threshold.
 #' @param .x Name of the x variable used to find the threshold
 #' @param .y Name of the y variable used to find the threshold
-#' @param thr_calc_method Name of the threshold calculation method. Default is `inv_dist`. The next recommended method is `dist_x_y`, but `dist_x` is also an option.
+#' @param thr_calc_method Name of the threshold calculation method. Default is `inv_dist_knn`. The next recommended method is `dist_x_y`, but `dist_x` is also an option.
 #' @param k How many of the nearest data points should be used to calculate the inverse distance weights?
 #' @param ... Dot dot dot so this function plays nice with other functions that call it.
 #'
@@ -31,7 +31,7 @@
 #' # TODO write an example
 #'
 find_threshold_vals <- function(.data, thr_x, thr_y, .x = .x, .y = .y,
-                                thr_calc_method = c("inv_dist",
+                                thr_calc_method = c("inv_dist_knn",
                                            "dist_x_y",
                                            "dist_x"),
                                 k = 5,
@@ -42,12 +42,12 @@ find_threshold_vals <- function(.data, thr_x, thr_y, .x = .x, .y = .y,
 }
 
 #' @keywords internal
-find_threshold_vals.inv_dist <- function(.data,
+find_threshold_vals.inv_dist_knn <- function(.data,
                                          thr_x,
                                          thr_y,
                                          .x = .x,
                                          .y = .y,
-                                         thr_calc_method = c("inv_dist",
+                                         thr_calc_method = c("inv_dist_knn",
                                                              "dist_x-y",
                                                              "dist_x"),
                                          k = 5,
@@ -78,7 +78,9 @@ find_threshold_vals.inv_dist <- function(.data,
         dplyr::mutate(inv_weight = (normalized_dist/max(normalized_dist))^-1,
                       pct_tot_weight = inv_weight/sum(inv_weight)) %>%
         # calculate threshold values
-        dplyr::summarize(across(!c(normalized_dist, inv_weight, pct_tot_weight),
+        dplyr::summarize(dplyr::across(!c(normalized_dist,
+                                   inv_weight,
+                                   pct_tot_weight),
                          ~ sum(. * pct_tot_weight))) %>%
         # add back variables used to calculate the threshold
         dplyr::mutate("{.x}" := thr_x,
@@ -97,7 +99,7 @@ find_threshold_vals.dist_x_y <- function(.data,
                                          thr_y,
                                          .x = .x,
                                          .y = .y,
-                                         thr_calc_method = c("inv_dist",
+                                         thr_calc_method = c("inv_dist_knn",
                                                              "dist_x-y",
                                                              "dist_x"),
                                          k = 5,
@@ -123,7 +125,7 @@ find_threshold_vals.dist_x <- function(.data,
                                        thr_y,
                                        .x = .x,
                                        .y = .y,
-                                       thr_calc_method = c("inv_dist",
+                                       thr_calc_method = c("inv_dist_knn",
                                                            "dist_x-y",
                                                            "dist_x"),
                                        k = 5,

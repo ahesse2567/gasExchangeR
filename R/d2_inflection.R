@@ -14,6 +14,9 @@
 #' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param ci Should the output include confidence interval data? Default is `FALSE`.
+#' @param conf_level Confidence level to use if calculating confidence intervals.
+#' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' @returns A list containing breakpoint data, best-fit and related functions, and a plot.
 #' @export
@@ -39,7 +42,11 @@ d2_inflection <- function(.data,
                           ve = "ve",
                           time = "time",
                           alpha_linearity = 0.05,
-                          ordering = c("by_x", "time")
+                          ordering = c("by_x", "time"),
+                          # TODO ADD FROM TRIM ARGUMENTS,
+                          ci = FALSE,
+                          conf_level = 0.95,
+                          plots = TRUE
                           ) {
 
     # check if there is crucial missing data
@@ -116,13 +123,17 @@ d2_inflection <- function(.data,
         dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
     # make plot for output
-    bp_plot <- ggplot2::ggplot(data = .data,
-                               ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
-        ggplot2::geom_point(alpha = 0.5) +
-        ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr,
-                                        envir = list(x = .data[[.x]])))) +
-        ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
-        ggplot2::theme_minimal()
+    if(plots) {
+        bp_plot <- ggplot2::ggplot(data = .data,
+                                   ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
+            ggplot2::geom_point(alpha = 0.5) +
+            ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr,
+                                                     envir = list(x = .data[[.x]])))) +
+            ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+            ggplot2::theme_minimal()
+    } else {
+        bp_plot <- NULL
+    }
 
     return(list(breakpoint_data = bp_dat,
                 lm_poly_reg = lm_poly,

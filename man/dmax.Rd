@@ -17,7 +17,10 @@ dmax(
   ordering = c("by_x", "time"),
   alpha_linearity = 0.05,
   pos_change = TRUE,
-  pos_slope_after_bp = TRUE
+  pos_slope_after_bp = TRUE,
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE
 )
 }
 \arguments{
@@ -46,6 +49,12 @@ dmax(
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
 \item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.}
+
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

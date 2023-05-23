@@ -9,7 +9,6 @@ d2_reg_spline_maxima(
   .x,
   .y,
   bp,
-  ...,
   degree = 5,
   df = NULL,
   vo2 = "vo2",
@@ -18,7 +17,13 @@ d2_reg_spline_maxima(
   time = "time",
   alpha_linearity = 0.05,
   pos_change = TRUE,
-  ordering = c("by_x", "time")
+  ordering = c("by_x", "time"),
+  front_trim_vt1 = 60,
+  front_trim_vt2 = 60,
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE,
+  ...
 )
 }
 \arguments{
@@ -29,8 +34,6 @@ d2_reg_spline_maxima(
 \item{.y}{the y-axis variable.}
 
 \item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?}
-
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
 \item{degree}{The polynomial degree the function should fit to the curve. Most previous studies using this method use 3 or 5.}
 
@@ -48,12 +51,24 @@ d2_reg_spline_maxima(
 
 \item{pos_change}{Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.}
 
-\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+
+\item{front_trim_vt1}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
+\item{front_trim_vt2}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.
 
 #' @references
 Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
 Sherrill, D. L., Anderson, S. J., & Swanson, G. E. O. R. G. E. (1990). Using smoothing splines for detecting ventilatory thresholds. Medicine and Science in Sports and Exercise, 22(5), 684-689.
 Wade, T. D., Anderson, S. J., Bondy, J., Ramadevi, V. A., Jones, R. H., & Swanson, G. D. (1988). Using smoothing splines to make inferences about the shape of gas-exchange curves. Computers and biomedical research, 21(1), 16-26.}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
 \value{
 A slice of the original data frame at the threshold index with a new `algorithm` column.

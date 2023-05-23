@@ -9,11 +9,11 @@ v_slope(
   .x,
   .y,
   bp,
-  ...,
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
+  ordering = c("by_x", "time"),
   method = NULL,
   slope_change_lim = 0.1,
   left_slope_lim = 0.6,
@@ -22,7 +22,10 @@ v_slope(
   alpha_linearity = 0.05,
   pos_change = TRUE,
   pos_slope_after_bp = TRUE,
-  ordering = c("by_x", "time")
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE,
+  ...
 )
 }
 \arguments{
@@ -34,8 +37,6 @@ v_slope(
 
 \item{bp}{Is this algorithm being used to find vt1 or vt2?}
 
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
-
 \item{vo2}{The name of the vo2 column in \code{.data}}
 
 \item{vco2}{The name of the vco2 column in \code{.data}}
@@ -43,6 +44,8 @@ v_slope(
 \item{ve}{The name of the ve column in \code{.data}}
 
 \item{time}{The name of the time column in \code{.data}}
+
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
 \item{method}{Pass \code{"v-slope"} to the method argument to exactly reproduce the procedure from the original paper. See the Warnings section for details.}
 
@@ -60,7 +63,13 @@ v_slope(
 
 \item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.}
 
-\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

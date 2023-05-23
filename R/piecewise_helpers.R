@@ -40,7 +40,8 @@ intersection_point <- function(lm1, lm2) {
 #' @noMd
 make_piecewise_bp_plot <- function(.data, .x, .y, lm_left, lm_right,
                                    bp_dat, ...) {
-
+    # right now this function adds upper and lower CI values if supplied
+    # I should probably make that optional later
     plot_x <- .data[[.x]]
     plot_df <- tibble::tibble("{.x}" := plot_x) %>%
         dplyr::mutate(y_hat_left = stats::predict(lm_left,
@@ -64,13 +65,52 @@ make_piecewise_bp_plot <- function(.data, .x, .y, lm_left, lm_right,
 #' @keywords internal
 #' @noRd
 #'
-check_if_determinant_bp <- function(p, pct_slope_change,
-                                    pos_change, pos_slope_after_bp,
-                                    slope_after_bp, alpha = 0.05) {
+check_if_determinant_bp <- function(.data,
+                                    .x,
+                                    p,
+                                    pct_slope_change,
+                                    pos_change,
+                                    pos_slope_after_bp,
+                                    slope_after_bp,
+                                    range_x,
+                                    alpha = 0.05) {
 
-    determinant_bp <- dplyr::if_else(all(p < alpha,
-                                         pos_change == (pct_slope_change > 0),
-                                         pos_slope_after_bp == (slope_after_bp > 0)),
-                                     TRUE, FALSE)
+    determinant_bp <- dplyr::if_else(
+        all(p < alpha,
+            pos_change == (pct_slope_change > 0),
+            pos_slope_after_bp == (slope_after_bp > 0)),
+        TRUE,
+        FALSE)
     determinant_bp
+}
+
+#' @keywords internal
+#' @noMd
+get_best_piecewise_idx <- function(loop_res_df,
+                                   data_range,
+                                   alpha_linearity,
+                                   pos_change,
+                                   pos_slope_after_bp) {
+    # filter loop results for the best-fit, determinant solution
+    best_idx <- loop_res_df %>%
+        dplyr::filter(p < alpha_linearity &
+                          pos_change == pos_change &
+                          pos_slope_after_bp == pos_slope_after_bp &
+                          dplyr::between(int_point_x,
+                                         data_range[1],
+                                         data_range[2]),
+                      inside_ci) %>%
+        # best-fit considered smallest p-value (lowest RSS)
+        dplyr::filter(p == min(p)) %>%
+        dplyr::select(idx) %>%
+        dplyr::pull()
+
+    if(length(best_idx) > 1) {
+        best_idx <- sample(best_idx, 1)
+    } else if(length(best_idx) == 0) {
+        # no valid solution, but produce next-best result anyway
+        best_idx <- which.min(loop_res_df$p)
+    }
+
+    best_idx
 }

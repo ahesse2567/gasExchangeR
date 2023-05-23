@@ -9,6 +9,7 @@ d2_poly_reg_maxima(
   .x,
   .y,
   bp,
+  ...,
   degree = NULL,
   vo2 = "vo2",
   vco2 = "vco2",
@@ -17,7 +18,11 @@ d2_poly_reg_maxima(
   alpha_linearity = 0.05,
   pos_change = TRUE,
   ordering = c("by_x", "time"),
-  ...
+  front_trim_vt1 = 60,
+  front_trim_vt2 = 60,
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE
 )
 }
 \arguments{
@@ -28,6 +33,8 @@ d2_poly_reg_maxima(
 \item{.y}{the y-axis variable.}
 
 \item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?}
+
+\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
 \item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
 
@@ -45,7 +52,15 @@ d2_poly_reg_maxima(
 
 \item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+\item{front_trim_vt1}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
+\item{front_trim_vt2}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 }
 \value{
 A slice of the original data frame at the threshold index with a new `algorithm` column.

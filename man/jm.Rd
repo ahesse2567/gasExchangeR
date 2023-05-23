@@ -14,12 +14,15 @@ jm(
   vco2 = "vco2",
   ve = "ve",
   time = "time",
+  ordering = c("by_x", "time"),
   alpha_linearity = 0.05,
   front_trim_vt1 = 60,
   front_trim_vt2 = 60,
   pos_change = TRUE,
   pos_slope_after_bp = TRUE,
-  ordering = c("by_x", "time")
+  ci = FALSE,
+  conf_level = 0.95,
+  plots = TRUE
 )
 }
 \arguments{
@@ -41,6 +44,8 @@ jm(
 
 \item{time}{The name of the time column in \code{.data}}
 
+\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+
 \item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
 
 \item{front_trim_vt1}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
@@ -51,7 +56,11 @@ jm(
 
 \item{pos_slope_after_bp}{Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.}
 
-\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+
+\item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
