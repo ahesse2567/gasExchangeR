@@ -110,7 +110,7 @@ d2_reg_spline_maxima <- function(.data,
 
     # get new values at equal spacing for a smoother splinefun result
     equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
-                         length.out = range(.data[[vo2]]) %>%
+                         length.out = range(.data[[.x]]) %>%
                              diff() %>%
                              round())
     pred <- stats::predict(

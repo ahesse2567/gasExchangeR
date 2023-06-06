@@ -13,7 +13,7 @@ x_threshold_boot <- function(.data, i, .x, .y, df, degree) {
     # get new values at equal spacing for a smoother splinefun result
     equi_spaced_x <- seq(from = min(.data[i,][[.x]]),
                          to = max(.data[i,][[.x]]),
-                         length.out = range(.data[i,][[vo2]]) %>%
+                         length.out = range(.data[i,][[.x]]) %>%
                              diff() %>%
                              round())
     pred <- stats::predict(lm_spline,

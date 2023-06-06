@@ -43,6 +43,13 @@ df_unavg <- read_csv(
     file.path("inst/extdata/anton_vo2max_clean.csv"),
     show_col_types = FALSE)
 
+ggplot(data = df_unavg, aes(x = time)) +
+    geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
+    geom_point(aes(y = vco2, color = "vco2"), alpha = 0.5) +
+    scale_color_manual(name = NULL,
+                       values = c("vo2" = "red", "vco2" = "blue")) +
+    theme_bw()
+
 # remove outliers
 df_unavg_no_outliers <- ventilatory_outliers(df_unavg,
                                  outlier_cols = "vo2",
@@ -55,28 +62,46 @@ df_unavg_no_outliers <- ventilatory_outliers(df_unavg,
                                  global_sd_mos = "median",
                                  exclude_test_val = TRUE,
                                  remove_outliers = TRUE,
-                                 max_passes = 1,
+                                 max_passes = Inf,
                                  plot_outliers = FALSE)
 
-# df_interpolated <- interpolate(df_unavg_no_outliers, time_col = "time")
-# ggplot(data = df_interpolated, aes(x = time, y = vo2)) +
-#     geom_point()
+ggplot(data = df_unavg_no_outliers, aes(x = time)) +
+    geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
+    geom_point(aes(y = vco2, color = "vco2"), alpha = 0.5) +
+    scale_color_manual(name = NULL,
+                       values = c("vo2" = "red", "vco2" = "blue")) +
+    theme_bw()
+
+df_interpolated <- interpolate(df_unavg_no_outliers, time_col = "time")
+ggplot(data = df_interpolated, aes(x = time)) +
+    geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
+    geom_point(aes(y = vco2, color = "vco2"), alpha = 0.5) +
+    scale_color_manual(name = NULL,
+                       values = c("vo2" = "red", "vco2" = "blue")) +
+    theme_bw()
 
 # average exercise test
 df_avg <- avg_exercise_test(df_unavg_no_outliers, method = "time",
                             calc_type = "rolling",
                             time_col = "time", roll_window = 10)
 
+ggplot(data = df_avg, aes(x = time)) +
+    geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
+    geom_point(aes(y = vco2, color = "vco2"), alpha = 0.5) +
+    scale_color_manual(name = NULL,
+                       values = c("vo2" = "red", "vco2" = "blue")) +
+    theme_bw()
+
 # debugonce(gasExchangeR::jm)
 # undebug(gasExchangeR::find_threshold_vals)
 # Rprof()
-debugonce(gasExchangeR::d2_poly_reg_maxima)
+# debugonce(gasExchangeR::d2_poly_reg_maxima)
 # undebug(jm)
 bp_dat <- breakpoint(df_avg,
-           algorithm_vt1 = "jm",
+           algorithm_vt1 = "d2_reg_spline_maxima",
            x_vt1 = "vo2",
-           y_vt1 = "vco2",
-           algorithm_vt2 = "d2_poly_reg_maxima",
+           y_vt1 = "ve_vo2",
+           algorithm_vt2 = "jm",
            x_vt2 = "vco2",
            y_vt2 = "ve",
            bp = "both",
@@ -88,6 +113,7 @@ bp_dat <- breakpoint(df_avg,
 )
 
 bp_dat$bp_dat
+bp_dat
 
 
 # basic plots
