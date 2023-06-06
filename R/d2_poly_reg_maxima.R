@@ -100,7 +100,7 @@ d2_poly_reg_maxima <- function(.data,
     }
 
     equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
-                         length.out = range(.data[[vo2]]) %>%
+                         length.out = range(.data[[.x]]) %>%
                              diff() %>%
                              round())
 
@@ -589,7 +589,7 @@ boot_ci_d2_poly_reg <- #' @keywords internal
 
 # make better plotting data by making more, evenly spaced points
 # equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
-#                      length.out = range(.data[[vo2]]) %>%
+#                      length.out = range(.data[[.x]]) %>%
 #                          diff() %>%
 #                          round())
 #
