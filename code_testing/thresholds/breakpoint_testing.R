@@ -99,7 +99,7 @@ ggplot(data = df_avg, aes(x = time)) +
 # undebug(jm)
 bp_dat <- breakpoint(df_avg,
            algorithm_vt1 = "d2_reg_spline_maxima",
-           x_vt1 = "vo2",
+           x_vt1 = "time",
            y_vt1 = "ve_vo2",
            algorithm_vt2 = "jm",
            x_vt2 = "vco2",
@@ -147,6 +147,7 @@ ggplot(data = df_avg, aes(x = time)) +
         values = c("ve_vco2" = "purple", "ve_vo2" = "green")) +
     theme_minimal()
 
+debug(gasExchangeR:::get_spline_bp_res)
 bp_dat <- breakpoint(df_avg,
            algorithm_vt1 = "spline_bp",
            x_vt1 = "vo2",

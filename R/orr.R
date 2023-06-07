@@ -94,7 +94,7 @@ orr <- function(.data,
                     all(x == x[1]))) %>%
             dplyr::slice(1)
 
-        bp_dat <- return_null_findings(
+        bp_dat <- return_indeterminant_findings(
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
