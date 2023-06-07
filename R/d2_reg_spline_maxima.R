@@ -83,16 +83,8 @@ d2_reg_spline_maxima <- function(.data,
 
     # return quick summary if generating models fails
     if(is.null(lm_spline) | any(is.na(coef(lm_spline)))) {
-        # extract char/factor columns with unique values to retain ID
-        # and related info. Use plot_df since this is a copy
-        non_numeric_df <- plot_df %>%
-            dplyr::select(tidyselect::where(
-                function(x) is.character(x) |
-                    is.factor(x) &
-                    all(x == x[1]))) %>%
-            dplyr::slice(1)
-
         bp_dat <- return_indeterminant_findings(
+            .data = .data,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,

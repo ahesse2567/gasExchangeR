@@ -128,6 +128,8 @@ v_slope <- function(.data,
             est_ci = "estimate")
 
         return(list(breakpoint_data = bp_dat))
+    } else {
+        best_idx <- numeric()
     }
 
     # need to go by dist_MSE_ratio? Basically how does this interact with while
