@@ -90,6 +90,7 @@ d2_poly_reg_maxima <- function(.data,
     # return quick summary if generating models fails
     if(is.null(lm_poly)| any(is.na(lm_poly$coefficients))) {
         bp_dat <- return_indeterminant_findings(
+            .data = .data,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,

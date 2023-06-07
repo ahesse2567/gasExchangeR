@@ -81,20 +81,14 @@ orr <- function(.data,
             alpha_linearity = alpha_linearity,
             pos_change = pos_change,
             pos_slope_after_bp = pos_slope_after_bp)
+    } else {
+        best_idx <- numeric()
     }
 
     # return quick summary if generating models fails
     if(is.null(loop_res) | length(best_idx) == 0) {
-        # extract char/factor columns with unique values to retain ID
-        # and related info. Use plot_df since this is a copy
-        non_numeric_df <- plot_df %>%
-            dplyr::select(tidyselect::where(
-                function(x) is.character(x) |
-                    is.factor(x) &
-                    all(x == x[1]))) %>%
-            dplyr::slice(1)
-
-        bp_dat <- return_null_findings(
+        bp_dat <- return_indeterminant_findings(
+            .data = .data,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
