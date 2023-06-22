@@ -22,7 +22,7 @@ The goal of gasExchangeR is to help exercise physiologist more easily analyze ga
 
 ## Installation
 
-You can install the development version of gasExchangeR from [GitHub](https://github.com/) with:
+You can (hopefully) install this package from CRAN. If that doesn't work, you can install the development version of gasExchangeR from [GitHub](https://github.com/) with:
 
 ``` r
 # install.packages("devtools")
@@ -107,7 +107,7 @@ Removing outliers helps, but some averaging is also required.
 
 ```{r}
 df_avg <- df_unavg_no_outliers %>% 
-    avg_exercise_test(type = "time", subtype = "bin", bin_w = 10)
+    avg_exercise_test(method = "time", calc_type = "bin", bin_w = 10)
 
 ggplot(data = df_avg, aes(x = time)) +
   geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
@@ -125,8 +125,10 @@ bp_dat <- breakpoint(.data = df_avg, method = "v-slope",
                      algorithm_vt2 = "d2_reg_spline_maxima",
                      x_vt2 = "vo2", y_vt2 = "ve_vco2",
                      vo2 = "vo2", vco2 = "vco2", ve = "ve", time = "time",
-                     bp = "both", truncate = TRUE, front_trim_vt1 = 60,
-                     pos_change = TRUE)
+                     bp = "both", truncate = TRUE, 
+                     front_trim_vt1 = 60, front_trim_vt2 = 60,
+                     pos_change_vt1 = TRUE, pos_change_vt2 = TRUE,
+                     pos_slope_after_bp = TRUE)
 print(bp_dat$bp_dat, width = Inf)
 bp_dat$vt1_dat$bp_plot
 bp_dat$vt2_dat$bp_plot

@@ -16,7 +16,8 @@ important values.
 
 ## Installation
 
-You can install the development version of gasExchangeR from
+You can (hopefully) install this package from CRAN. If that doesn’t
+work, you can install the development version of gasExchangeR from
 [GitHub](https://github.com/) with:
 
 ``` r
@@ -122,7 +123,7 @@ Removing outliers helps, but some averaging is also required.
 
 ``` r
 df_avg <- df_unavg_no_outliers %>% 
-    avg_exercise_test(type = "time", subtype = "bin", bin_w = 10)
+    avg_exercise_test(method = "time", calc_type = "bin", bin_w = 10)
 
 ggplot(data = df_avg, aes(x = time)) +
   geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
@@ -143,22 +144,28 @@ bp_dat <- breakpoint(.data = df_avg, method = "v-slope",
                      algorithm_vt2 = "d2_reg_spline_maxima",
                      x_vt2 = "vo2", y_vt2 = "ve_vco2",
                      vo2 = "vo2", vco2 = "vco2", ve = "ve", time = "time",
-                     bp = "both", truncate = TRUE, front_trim_vt1 = 60,
-                     pos_change = TRUE)
+                     bp = "both", truncate = TRUE, 
+                     front_trim_vt1 = 60, front_trim_vt2 = 60,
+                     pos_change_vt1 = TRUE, pos_change_vt2 = TRUE,
+                     pos_slope_after_bp = TRUE)
 print(bp_dat$bp_dat, width = Inf)
-#> # A tibble: 2 × 27
-#>   bp    algorithm            x_var y_var   determinant_bp pct_slope_change
-#>   <chr> <chr>                <chr> <chr>   <lgl>                     <dbl>
-#> 1 vt1   v-slope              vo2   vco2    TRUE                       134.
-#> 2 vt2   d2_reg_spline_maxima vo2   ve_vco2 TRUE                        NA 
-#>   f_stat  p_val_f  time clock_time speed grade vo2_kg   vo2  vco2   rer    rr
-#>    <dbl>    <dbl> <dbl>      <dbl> <dbl> <dbl>  <dbl> <dbl> <dbl> <dbl> <dbl>
-#> 1   38.7  1.09e-9 1143.     42610.  6.72   1.1   38.1 2988. 2426. 0.804  21.6
-#> 2   NA   NA       1342.     42809.  8.82   1.1   45.4 3548. 3271. 0.923  26.9
-#>   vt_btps    ve    br peto2 petco2    hr   hrr ve_vo2 ve_vco2 excess_co2
-#>     <dbl> <dbl> <dbl> <dbl>  <dbl> <dbl> <dbl>  <dbl>   <dbl>      <dbl>
-#> 1   2873.  61.9  65.1  92.8   40.9  156. 18.8    20.8    25.9      -471.
-#> 2   3174.  85.4  51.9  97.7   40.8  178.  7.12   24.1    26.1      -252.
+#> # A tibble: 2 × 28
+#>   bp    algorithm            x_var y_var   determinant_bp est_ci  
+#>   <chr> <chr>                <chr> <chr>   <lgl>          <chr>   
+#> 1 vt1   v-slope              vo2   vco2    TRUE           estimate
+#> 2 vt2   d2_reg_spline_maxima vo2   ve_vco2 TRUE           estimate
+#>   pct_slope_change f_stat   p_val_f  time clock_time speed grade vo2_kg   vo2
+#>              <dbl>  <dbl>     <dbl> <dbl>      <dbl> <dbl> <dbl>  <dbl> <dbl>
+#> 1             183.   51.4  3.81e-11 1149.     42616.  6.83   1.1   37.6 2925.
+#> 2              NA    NA   NA        1360.     42827.  9.06   1.1   46.3 3633.
+#>    vco2   rer    rr vt_btps    ve    br peto2 petco2    hr   hrr ve_vo2 ve_vco2
+#>   <dbl> <dbl> <dbl>   <dbl> <dbl> <dbl> <dbl>  <dbl> <dbl> <dbl>  <dbl>   <dbl>
+#> 1 2334. 0.800  21.8   2777.  60.3  66.0  92.0   41.3  157. 18.5    20.5    25.6
+#> 2 3346. 0.928  28.5   3095.  87.8  50.6  98.4   40.6  179.  6.65   24.3    26.4
+#>   excess_co2
+#>        <dbl>
+#> 1      -469.
+#> 2      -246.
 bp_dat$vt1_dat$bp_plot
 ```
 

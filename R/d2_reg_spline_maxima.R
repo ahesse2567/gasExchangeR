@@ -84,7 +84,7 @@ d2_reg_spline_maxima <- function(.data,
     # return quick summary if generating models fails
     if(is.null(lm_spline) | any(is.na(coef(lm_spline)))) {
         bp_dat <- return_indeterminant_findings(
-            .data = .data,
+            .data = plot_df,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,

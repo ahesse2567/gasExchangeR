@@ -25,7 +25,7 @@
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
 #' @param front_trim_vt2 See front_trim_vt1. This is here so this this function plays nice with `set_front_trim()`. The v-slope method should be used for finding VT1 only, so leave this alone.
-#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param ... Dot dot dot mostly allows this function to work properly if `breakpoint()` passes arguments that are not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
 #' @param ci Should the output include confidence interval data? Default is `FALSE`.
@@ -121,6 +121,7 @@ v_slope <- function(.data,
     # return quick summary if generating models fails
     if(is.null(loop_res)) {
         bp_dat <- return_indeterminant_findings(
+            .data = plot_df,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
@@ -195,7 +196,6 @@ v_slope <- function(.data,
         i <- i + 1
     }
 
-    # THIS ISN'T GIVING THE SAME INT POINT X AS THE LOOP
     estimate_res <- get_v_slope_res(.data = .data,
                                     bp_idx = bp_idx,
                                     .x = .x,

@@ -69,7 +69,7 @@ v_slope(
 
 \item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+\item{...}{Dot dot dot mostly allows this function to work properly if `breakpoint()` passes arguments that are not strictly needed by this function.}
 }
 \value{
 A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.

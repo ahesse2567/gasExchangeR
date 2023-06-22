@@ -83,7 +83,7 @@ jm <- function(.data,
     # return quick summary if generating models fails
     if(is.null(loop_res) | length(best_idx) == 0) {
         bp_dat <- return_indeterminant_findings(
-            .data = .data,
+            .data = plot_df,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,

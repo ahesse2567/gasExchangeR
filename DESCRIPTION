@@ -1,14 +1,14 @@
 Type: Package
 Package: gasExchangeR
-Title: Analyze Gas Exchange Data From Graded Exercise Tests
+Title: Analyze Gas Exchange Data From Cardiopulmonary Exercise Tests
 Version: 0.1.0
 Authors@R: 
     person("Anton", "Hesse", , "ahesse2567@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-8456-7343"))
 Maintainer: Anton Hesse <ahesse2567@gmail.com>
-Description: Gas exchange data analysis: outliers, interpolation,
-    averaging, and important metrics such as VO2max and the 1st and 2nd
-    ventilatory thresholds.
+Description: Gas exchange data processing and analysis: outliers,
+    interpolation, averaging, and important metrics such as VO2max and the
+    1st and 2nd ventilatory thresholds.
 License: MIT + file LICENSE
 Imports: 
     boot,
