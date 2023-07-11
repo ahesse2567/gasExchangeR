@@ -330,6 +330,7 @@ v_slope <- function(.data,
         ci_lower_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == min(int_point_x)) %>%
+            dplyr::filter(p == min(p)) %>% # for breaking ties
             dplyr::select(idx) %>%
             dplyr::pull()
 
@@ -347,6 +348,7 @@ v_slope <- function(.data,
         ci_upper_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == max(int_point_x)) %>%
+            dplyr::filter(p == min(p)) %>% # for breaking ties
             dplyr::select(idx) %>%
             dplyr::pull()
 
