@@ -63,7 +63,7 @@ df_unavg_no_outliers <- ventilatory_outliers(df_unavg,
                                  exclude_test_val = TRUE,
                                  remove_outliers = TRUE,
                                  max_passes = Inf,
-                                 plot_outliers = FALSE)
+                                 plot_outliers = TRUE)
 
 ggplot(data = df_unavg_no_outliers, aes(x = time)) +
     geom_point(aes(y = vo2, color = "vo2"), alpha = 0.5) +
@@ -97,23 +97,33 @@ ggplot(data = df_avg, aes(x = time)) +
 # Rprof()
 # debugonce(gasExchangeR::d2_poly_reg_maxima)
 # undebug(jm)
+
 bp_dat <- breakpoint(df_avg,
-           algorithm_vt1 = "d2_reg_spline_maxima",
-           x_vt1 = "time",
-           y_vt1 = "ve_vo2",
-           algorithm_vt2 = "jm",
-           x_vt2 = "vco2",
-           y_vt2 = "ve",
+           algorithm_vt1 = "jm",
+           x_vt1 = "vo2",
+           y_vt1 = "vco2",
+           algorithm_vt2 = "d2_reg_spline_maxima",
+           x_vt2 = "vo2",
+           y_vt2 = "ve_vco2",
            bp = "both",
            truncate = TRUE,
            pos_change_vt2 = TRUE,
            pos_slope_after_bp = TRUE,
-           ci = TRUE,
+           ci = FALSE,
            plots = TRUE
 )
 
-bp_dat$bp_dat
-bp_dat
+bp_dat$bp_dat %>% View
+bp_dat$vt1_dat$bp_plot +
+    ggtitle(expression("VT"[1])) +
+    xlab(expression("VO"[2]~" mL/min")) +
+    ylab(expression("VCO"[2]~" mL/min")) +
+    theme(plot.title = element_text(hjust = 0.5))
+bp_dat$vt2_dat$bp_plot +
+    ggtitle("RC") +
+    xlab(expression("VO"[2]~" mL/min")) +
+    ylab(expression("VE/VCO"[2])) +
+    theme(plot.title = element_text(hjust = 0.5))
 
 
 # basic plots

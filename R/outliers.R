@@ -124,13 +124,15 @@ ventilatory_outliers <- function(.data,
             dplyr::mutate(outlier = outlier_idx)
 
         if(plot_outliers) {
-            outlier_plot <- ggplot2::ggplot(data = copy_df, ggplot2::aes(x = .data[[time]],
-                                                       y = .data[[outlier_cols]])) +
+            outlier_plot <- ggplot2::ggplot(
+                data = copy_df,
+                ggplot2::aes(x = .data[[time]], y = .data[[outlier_cols]])) +
                 ggplot2::geom_point(ggplot2::aes(color = outlier)) +
-                ggplot2::geom_line(ggplot2::aes(y = lower_lim), linetype = "dashed") +
-                ggplot2::geom_line(ggplot2::aes(y = upper_lim), linetype = "dashed") +
+                ggplot2::geom_ribbon(ggplot2::aes(ymin = lower_lim,
+                                                  ymax = upper_lim),
+                                     alpha = 0.25) +
                 ggplot2::ggtitle(glue::glue("Pass {n_passes + 1}, {length(which(outlier_idx))} outliers removed.")) +
-                ggplot2::theme_minimal()
+                ggplot2::theme_bw()
             plot(outlier_plot)
         }
 
