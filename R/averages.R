@@ -28,10 +28,14 @@
 #'
 #' \code{roll_window} must be evenly divisible by \code{bin_w}
 #'
+#' @references
+#' Robergs, R. A., Dwyer, D., & Astorino, T. (2010). Recommendations for improved data processing from expired gas analysis indirect calorimetry. Sports Medicine, 40(2), 95–111. https://doi.org/10.2165/11319670-000000000-00000
+#'
 #' @examples
 #'
 #' # Load raw graded exercise testing file
-#' cpet_raw <- utils::read.csv(system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR"))
+#' cpet_raw <- utils::read.csv(
+#' system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR"))
 #'
 #' # 10-second (time bin) average
 #' cpet_10s_bin <- avg_exercise_test(
@@ -74,7 +78,7 @@
 #'     mos = "mean"
 #'     )
 #'
-#' # 3rd-order Butterworth low-pass filter using recommendations from Robergs, R. A., Dwyer, D., & Astorino, T. (2010). Recommendations for improved data processing from expired gas analysis indirect calorimetry. Sports Medicine, 40(2), 95–111. https://doi.org/10.2165/11319670-000000000-00000
+#' # 3rd-order Butterworth low-pass filter using recommendations from Robergs et al. (2010)
 #'
 #' cpet_dbf <- avg_exercise_test(
 #'  cpet_raw,
@@ -83,7 +87,9 @@
 #'  fs = 1,
 #'  order = 3)
 #'
-#' # Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath average). This removes the highest and lowest VO2 values (roll_trim = 2) before calculating average.
+#' # Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath average).
+#' # This removes the highest and lowest VO2 values (roll_trim = 2) before calculating average.
+#'
 #' cpet_m5o7 <- avg_exercise_test(
 #'  cpet_raw,
 #'  method = "breath",

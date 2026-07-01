@@ -25,9 +25,23 @@ Interpolate graded exercise test data with linear or cubic spline interpolation
 The time column must be in seconds.
 }
 \examples{
+set.seed(42)
 time <- sample.int(100, 20)
 time <- sort(time)
 y <- rnorm(length(time), mean = mean(time), sd = sd(time))
 df <- data.frame(time = time, y = y)
 interpolate(.data = df, time_col = "time", every_s = 2, method = "linear")
+
+# For an example with real data
+
+cpet_raw <- utils::read.csv(
+    system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+cpet_lin_1s <- interpolate(
+    cpet_raw,
+    time_col = "time",
+    method = "linear",
+    every_s = 1
+)
 }
