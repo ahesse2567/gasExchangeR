@@ -33,13 +33,13 @@
 #'
 #' @examples
 #'
-#' # Load raw graded exercise testing file
-#' cpet_raw <- utils::read.csv(
+#' # Load breath-by-breaht graded exercise testing file
+#' cpet_bbb <- utils::read.csv(
 #' system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR"))
 #'
 #' # 10-second (time bin) average
 #' cpet_10s_bin <- avg_exercise_test(
-#'     cpet_raw,
+#'     cpet_bbb,
 #'     method = "time",
 #'     calc_type = "bin",
 #'     time_col = "time",
@@ -48,7 +48,7 @@
 #'
 #' # 15-breath (breath bin) average
 #' cpet_15b_bin <- avg_exercise_test(
-#'     cpet_raw,
+#'     cpet_bbb,
 #'     method = "breath",
 #'     calc_type = "bin",
 #'     time_col = "time",
@@ -58,7 +58,7 @@
 #' # 20-second (rolling time) average
 #'
 #' cpet_20s_roll <- avg_exercise_test(
-#'     cpet_raw, method = "time",
+#'     cpet_bbb, method = "time",
 #'     calc_type = "rolling",
 #'     time_col = "time",
 #'     roll_window = 20,
@@ -69,7 +69,7 @@
 #' # 15 breath (rolling breath) average
 #'
 #' cpet_15b_roll <- avg_exercise_test(
-#'     cpet_raw,
+#'     cpet_bbb,
 #'     method = "breath",
 #'     calc_type = "rolling",
 #'     time_col = "time",
@@ -81,8 +81,9 @@
 #' # 3rd-order Butterworth low-pass filter using recommendations from Robergs et al. (2010)
 #'
 #' cpet_dbf <- avg_exercise_test(
-#'  cpet_raw,
+#'  cpet_bbb,
 #'  method = "digital",
+#'  time_col = c("time", "clock_time"),
 #'  cutoff = 0.04,
 #'  fs = 1,
 #'  order = 3)
@@ -91,7 +92,7 @@
 #' # This removes the highest and lowest VO2 values (roll_trim = 2) before calculating average.
 #'
 #' cpet_m5o7 <- avg_exercise_test(
-#'  cpet_raw,
+#'  cpet_bbb,
 #'  method = "breath",
 #'  calc_type = "rolling",
 #'  time_col = "time",
@@ -203,6 +204,8 @@ avg_exercise_test.breath <- function(.data,
         out <- dplyr::bind_cols(char_cols, out)
         return(out)
     } else {
+        # bin-roll section. Will probably drop this and suggest users
+        # use a rolling average after bin averaging.
         if(roll_window %% bin_w != 0) {
             stop("roll_window is not evenly divisible by bin_w")
         }

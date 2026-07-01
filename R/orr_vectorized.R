@@ -1,0 +1,384 @@
+#' Finding a breakpoint using Orr's 'bruteforce' algorithm.
+#'
+#' @param .data Gas exchange data.
+#' @param .x The x-axis variable.
+#' @param .y the y-axis variable.
+#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param bp Is this algorithm being used to find vt1 or vt2?
+#' @param vo2 The name of the vo2 column in \code{.data}
+#' @param vco2 The name of the vco2 column in \code{.data}
+#' @param ve The name of the ve column in \code{.data}
+#' @param time The name of the time column in \code{.data}
+#' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
+#' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param front_trim_vt2 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
+#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
+#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param pos_slope_after_bp Should the slope after the breakpoint be positive? Default is `TRUE`. This catches cases when the percent change in slope is positive, but the second slope is still negative. Change to `FALSE` when PetCO2 is the y-axis variable.
+#' @param ci Should the output include confidence interval data? Default is `FALSE`.
+#' @param conf_level Confidence level to use if calculating confidence intervals.
+#' @param plots Should this function generate plots? Set to `FALSE` to save time.
+#'
+#' @returns A list including slice of the original data frame at the threshold index with new columns `algorithm`, `determinant_bp`, `pct_slope_change`, `f_stat`, and `p_val_f.` The list also includes the fitted values, the left and right sides of the piecewise regression, and a simple linear regression.
+#'
+#' @details
+#' According to the Orr et al. (1982, p. 1350) paper, the "anaerobic threshold is then reported as the first intersection point [of the lines] of the more appropriate model." In an email to Dr. Hughson, a weakness of this method is that the intersection point hardley ever lands on an existing data point. In some cases, the intersection of the best-fit model lies beyond the range of the x-axis. Instead of returning that value, we report the solution with the lowest pooled sums of squares that satisfies the following criteria: 1) the change in slope from the left to the right regression matches the anticipated change, usually positive; 2) the slope of the right regression matches the anticipated slope, usually positive; 3) the p-value of the F-test based on the extra sums of squares principle is statistically significant; and 4) the x-coordinate of the intersection point is within the range of the observed x-values. This differs slightly from the original method, but provides potentially plausible answers when the alternative is a negative VO2 or a VO2 well beyond VO2max.
+#'
+#' The text of the original paper states that "Regression lines are calculated for all possible divisions of the data into two \emph{contiguous} groups." We interpret contiguous to mean "shares a boundary". That is, the left and right portions of the data each contain one identical data point at the division.
+#'
+#' @importFrom rlang :=
+#' @export
+#'
+#' @references
+#' Orr, G. W., Green, H. J., Hughson, R. L., & Bennett, G. W. (1982). A computer linear regression model to determine ventilatory anaerobic threshold. Journal of Applied Physiology Respiratory Environmental and Exercise Physiology, 52(5), 1349–1352. https://doi.org/10.1152/jappl.1982.52.5.1349
+#'
+#' @examples
+#' # TODO write examples
+orr_vectorized <- function(.data,
+                .x,
+                .y,
+                bp,
+                ...,
+                vo2 = "vo2",
+                vco2 = "vco2",
+                ve = "ve",
+                time = "time",
+                ordering = c("by_x", "time"),
+                alpha_linearity = 0.05,
+                front_trim_vt1 = 60,
+                front_trim_vt2 = 60,
+                pos_change = TRUE,
+                pos_slope_after_bp = TRUE,
+                ci = FALSE,
+                conf_level = 0.95,
+                plots = TRUE
+                ) {
+
+    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+    bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
+    ordering <- match.arg(ordering, several.ok = FALSE)
+
+    .data <- order_cpet_df(.data, .x = .x , time = time,
+                           ordering = ordering)
+    plot_df <- .data
+
+    front_trim <- set_front_trim(bp = bp,
+                                 front_trim_vt1 = front_trim_vt1,
+                                 front_trim_vt2 = front_trim_vt2)
+    .data <- .data %>%
+        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
+
+    loop_res <- loop_orr_vectorized(.data = .data,
+                         .x = .x,
+                         .y = .y,
+                         alpha_linearity = alpha_linearity,
+                         conf_level = conf_level)
+
+    if(!is.null(loop_res)) {
+        best_idx <- get_best_piecewise_idx(
+            loop_res,
+            range(.data[[.x]]),
+            alpha_linearity = alpha_linearity,
+            pos_change = pos_change,
+            pos_slope_after_bp = pos_slope_after_bp)
+    } else {
+        best_idx <- numeric()
+    }
+
+    # return quick summary if generating models fails
+    if(is.null(loop_res) | length(best_idx) == 0) {
+        bp_dat <- return_indeterminant_findings(
+            .data = .data,
+            bp = bp,
+            algorithm = as.character(match.call()[[1]]),
+            .x = .x,
+            .y = .y,
+            est_ci = "estimate")
+
+        return(list(breakpoint_data = bp_dat))
+    }
+
+    estimate_res <- get_orr_res(.data = .data,
+                           bp_idx = best_idx,
+                           .x = .x,
+                           .y = .y,
+                           bp = bp,
+                           alpha_linearity = alpha_linearity,
+                           pos_change = pos_change,
+                           pos_slope_after_bp = pos_slope_after_bp,
+                           est_ci = "estimate")
+
+    if(ci) {
+        ci_lower_idx <- loop_res %>%
+            dplyr::filter(inside_ci) %>%
+            dplyr::filter(int_point_x == min(int_point_x)) %>%
+            dplyr::select(idx) %>%
+            dplyr::pull()
+
+        lower_ci_res <- get_orr_res(.data = .data,
+                                    bp_idx = ci_lower_idx,
+                                    .x = .x,
+                                    .y = .y,
+                                    bp = bp,
+                                    alpha_linearity = alpha_linearity,
+                                    pos_change = pos_change,
+                                    pos_slope_after_bp = pos_slope_after_bp,
+                                    est_ci = "lower")
+
+        ci_upper_idx <- loop_res %>%
+            dplyr::filter(inside_ci) %>%
+            dplyr::filter(int_point_x == max(int_point_x)) %>%
+            dplyr::select(idx) %>%
+            dplyr::pull()
+
+        upper_ci_res <- get_orr_res(.data = .data,
+                                        bp_idx = ci_upper_idx,
+                                        .x = .x,
+                                        .y = .y,
+                                        bp = bp,
+                                        alpha_linearity = alpha_linearity,
+                                        pos_change = pos_change,
+                                        pos_slope_after_bp = pos_slope_after_bp,
+                                        est_ci = "upper")
+
+        # combine estimate and both CI breakpoint res into one tibble
+        estimate_res$bp_dat <- dplyr::bind_rows(lower_ci_res$bp_dat,
+              estimate_res$bp_dat,
+              upper_ci_res$bp_dat)
+    }
+
+    if(plots) {
+        bp_plot <- make_piecewise_bp_plot(plot_df,
+                                          .x,
+                                          .y,
+                                          estimate_res$lm_left,
+                                          estimate_res$lm_right,
+                                          estimate_res$bp_dat)
+    } else {
+        bp_plot <- NULL
+    }
+
+    return(list(breakpoint_data = estimate_res$bp_dat,
+                fitted_vals = estimate_res$pred,
+                lm_left = estimate_res$lm_left,
+                lm_right = estimate_res$m_right,
+                lm_simple = estimate_res$lm_simple,
+                bp_plot = bp_plot))
+
+    # Should we add the three line regression code later?
+}
+
+#' @keywords internal
+#' Similar to loop_orr(), but gets results at specific index
+
+# Next: modify get_orr_res to work with vectorized orr loop stats
+get_orr_res <- function(.data, bp_idx, .x, .y, bp,
+                        alpha_linearity, pos_change,
+                        pos_slope_after_bp,
+                        est_ci = c("estimate", "lower_ci", "upper_ci"),
+                        ...) {
+    est_ci <- match.arg(est_ci, several.ok = FALSE)
+
+    df_left <- .data[1:bp_idx,]
+    df_right <- .data[bp_idx:nrow(.data),]
+
+    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::lm(data = df_left)
+    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::lm(data = df_right)
+    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+        stats::lm(data = .data)
+
+    pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
+    list2env(pw_stats, envir = environment())
+
+    pct_slope_change <- 100*(lm_right$coefficients[2] -
+                                 lm_left$coefficients[2]) /
+        abs(lm_left$coefficients[2])
+
+    y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
+                                 "{.y}" := lm_left$fitted.values,
+                                 algorithm = "orr")
+    y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
+                                  "{.y}" := lm_right$fitted.values,
+                                  algorithm = "orr")
+    pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
+
+    int_point <- intersection_point(lm_left, lm_right)
+
+    determinant_bp <- and(check_if_determinant_bp(
+        p = pf_two,
+        pct_slope_change = pct_slope_change,
+        pos_change = pos_change,
+        pos_slope_after_bp = pos_slope_after_bp,
+        slope_after_bp = stats::coef(lm_right)[2],
+        alpha = alpha_linearity),
+        dplyr::between(int_point["x"],
+                       range(.data[[.x]])[1],
+                       range(.data[[.x]])[2]))
+
+    bp_dat <- find_threshold_vals(.data = .data,
+                                  thr_x = int_point["x"],
+                                  thr_y = int_point["y"],
+                                  .x = .x,
+                                  .y = .y,
+                                  ...)
+
+    bp_dat <- bp_dat %>%
+        dplyr::mutate(algorithm = "orr",
+                      est_ci = est_ci,
+                      x_var = .x,
+                      y_var = .y,
+                      determinant_bp = determinant_bp,
+                      bp = bp,
+                      pct_slope_change = pct_slope_change,
+                      f_stat = f_stat,
+                      p_val_f = pf_two) %>%
+        dplyr::relocate(bp, algorithm, determinant_bp, est_ci,
+                        pct_slope_change, f_stat, p_val_f)
+
+    list(bp_dat = bp_dat,
+         fitted_vals = pred,
+         lm_left = lm_left,
+         lm_right = lm_right,
+         lm_simple = lm_simple)
+}
+
+#' Calculate piecewise metrics for a single split point
+#'
+#' Helper function that computes all regression metrics for a given split point.
+#' This extracts the core loop body from loop_orr() for easier testing and
+#' potential parallelization.
+#'
+#' @param .data The data frame to split and fit
+#' @param .x Name of x variable (character)
+#' @param .y Name of y variable (character)
+#' @param split_idx Index where data is split (row number)
+#' @param lm_simple The simple linear model (for RSS comparison)
+#'
+#' @return A tibble containing all regression metrics and models
+#'
+#' @keywords internal
+calculate_piecewise_metrics <- function(.data, .x, .y, split_idx,
+                                        lm_simple, n_rows) {
+
+  # Create formula object once
+  formula_obj <- stats::reformulate(.x, .y)
+
+  # Split data: both halves share the split_idx row
+  df_left <- .data[1:split_idx, ]
+  df_right <- .data[split_idx:n_rows, ]
+
+  # Fit models
+  lm_left <- stats::lm(formula_obj, data = df_left)
+  lm_right <- stats::lm(formula_obj, data = df_right)
+
+  # Calculate sums of squares
+  RSS_two <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
+  df_residual <- n_rows - 4
+  MSE_two <- RSS_two / df_residual
+
+  # F-test
+  RSS_simple <- sum(stats::resid(lm_simple)^2)
+  f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+  pf_two <- stats::pf(f_stat, df1 = 2, df2 = df_residual, lower.tail = FALSE)
+
+  # Slope characteristics
+  slope_left <- lm_left$coefficients[2]
+  slope_right <- lm_right$coefficients[2]
+
+  pct_slope_change <- 100 * (slope_right - slope_left) / abs(slope_left)
+  pos_change <- pct_slope_change > 0
+  pos_slope_after_bp <- slope_right > 0
+
+  # Intersection point
+  int_point_x <- intersection_point(lm_left, lm_right)["x"]
+
+  tibble::tibble(
+    idx = split_idx,
+    RSS_two = RSS_two,
+    MSE_two = MSE_two,
+    p = pf_two,
+    pos_change = pos_change,
+    pos_slope_after_bp = pos_slope_after_bp,
+    int_point_x = int_point_x
+  )
+}
+
+#' Refactored version of loop_orr using purrr
+#'
+#' Drop-in replacement for loop_orr() using purrr::map_df().
+#' Produces identical output to the original.
+#'
+#' @param .data Gas exchange data frame
+#' @param .x Name of x variable (character)
+#' @param .y Name of y variable (character)
+#' @param alpha_linearity Significance level for F-test
+#' @param conf_level Confidence level for CI calculations
+#'
+#' @return A tibble with same structure as original loop_orr()
+#'
+#' @keywords internal
+loop_orr_vectorized <- function(.data,
+                                .x,
+                                .y,
+                                alpha_linearity = 0.05,
+                                conf_level = 0.95) {
+  if (nrow(.data) == 0) {
+    return(NULL)
+  }
+
+  n_rows <- nrow(.data)
+
+  # Create simple linear model
+  formula_obj <- stats::reformulate(.x, .y)
+  lm_simple <- stats::lm(formula_obj, data = .data)
+
+  # Map over all split points, keeping RSS and MSE for CI calculation
+  loop_stats <- purrr::map(
+    seq_len(n_rows),
+    function(i) {
+      # the first and last index result in only 1 data point in one of the two
+      # halves, meaning you can't create a line. Therefore, return NA values.
+      if (i == 1 || i == n_rows) {
+        return(tibble::tibble(
+          idx = i,
+          p = NA_real_,
+          pos_change = NA,
+          pos_slope_after_bp = NA,
+          int_point_x = NA_real_,
+          RSS_two = NA_real_,
+          MSE_two = NA_real_
+        ))
+      }
+
+      metrics <- calculate_piecewise_metrics(
+        .data = .data,
+        .x = .x,
+        .y = .y,
+        split_idx = i,
+        lm_simple = lm_simple,
+        n_rows = n_rows
+      )
+    }
+  ) %>%
+    purrr::list_rbind()
+
+  # Calculate CI criterion using pre-computed min values
+  crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+  min_RSS <- min(loop_stats$RSS_two, na.rm = TRUE)
+  min_MSE <- min(loop_stats$MSE_two, na.rm = TRUE)
+
+  loop_stats <- loop_stats %>%
+    dplyr::mutate(
+      inside_ci = dplyr::if_else(
+        !is.na(p),
+        (RSS_two - min_RSS) / min_MSE < crit_F,
+        NA
+      )
+    ) %>%
+    dplyr::select(idx, p, pos_change, pos_slope_after_bp, int_point_x, inside_ci)
+
+  loop_stats
+}
+

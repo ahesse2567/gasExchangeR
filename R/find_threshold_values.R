@@ -24,12 +24,7 @@
 #' Tobler, W. R. (1970). A computer movie simulating urban growth in the Detroit region. Economic geography, 46(sup1), 234-240.
 #'
 #' @returns A tibble
-#' @export
-#'
-#' @examples
-#'
-#' # TODO write an example
-#'
+#' @keywords internal
 find_threshold_vals <- function(.data, thr_x, thr_y, .x = .x, .y = .y,
                                 thr_calc_method = c("inv_dist_knn",
                                            "dist_x_y",
@@ -41,6 +36,7 @@ find_threshold_vals <- function(.data, thr_x, thr_y, .x = .x, .y = .y,
     UseMethod("find_threshold_vals", .data)
 }
 
+#' @export
 #' @keywords internal
 find_threshold_vals.inv_dist_knn <- function(.data,
                                          thr_x,
@@ -93,6 +89,7 @@ find_threshold_vals.inv_dist_knn <- function(.data,
     threshold_data
 }
 
+#' @export
 #' @keywords internal
 find_threshold_vals.dist_x_y <- function(.data,
                                          thr_x,
@@ -119,6 +116,7 @@ find_threshold_vals.dist_x_y <- function(.data,
     threshold_data
 }
 
+#' @export
 #' @keywords internal
 find_threshold_vals.dist_x <- function(.data,
                                        thr_x,

@@ -47,11 +47,7 @@ However, what if the x-y coordinate of the threshold is close to several observe
 
 In a similar fashion, this inverse-distance weight function calculates the Euclidean distance between all observed data points and the x-y threshold coordinate. Then, it selects from the nearest `k` points, defined by the user. Then, a "weight" is assigned proportional to the inverse of the distance of each point divided by the farthest distance of the farthest point ((d / max(d)^-1). The sum of the weights multiplied by their respective observed values become the values for each variable at the threshold.
 }
-\examples{
-
-# TODO write an example
-
-}
 \references{
 Tobler, W. R. (1970). A computer movie simulating urban growth in the Detroit region. Economic geography, 46(sup1), 234-240.
 }
+\keyword{internal}
