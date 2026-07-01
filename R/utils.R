@@ -35,9 +35,10 @@ expr_from_coefs <- function(poly_coefs, expr = TRUE) {
 #' @noRd
 slope_sign_changes <- function(y, change = "both") {
     # return the index of sign changes in a vector
-    change <- match.arg(change,
-                        choices = c("both", "pos_to_neg", "neg_to_pos"),
-                        several.ok = FALSE)
+    change <- rlang::arg_match(
+        change, 
+        values = c("both", "pos_to_neg", "neg_to_pos"),
+        multiple = FALSE)
     if(change == "both") {
         return(which(diff(sign(diff(y))) != 0) + 1)
     } else if (change == "pos_to_neg") {

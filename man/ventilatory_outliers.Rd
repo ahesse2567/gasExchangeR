@@ -58,7 +58,27 @@ The current implementation only offers rolling-breath averages.
 }
 \examples{
 
-# TODO add an example
+# Load raw graded exercise testing file
+cpet_raw <- utils::read.csv(
+    system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR"))
+
+# Remove outliers beyond a standard deviation of 3 using a centered 5-breath
+# rolling average with the "test" value removed. Perform a single pass.
+
+cpet_out_rm <- ventilatory_outliers(cpet_raw,
+ outlier_cols = "vo2",
+ time = "time",
+ sd_lim = 3,
+ width = 5,
+ mos = "mean",
+ align = "center",
+ use_global_sd = TRUE,
+ global_sd_mos = "median",
+ exclude_test_val = TRUE,
+ remove_outliers = TRUE,
+ max_passes = 1,
+ plot_outliers = FALSE
+ )
 
 }
 \references{

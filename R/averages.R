@@ -28,11 +28,78 @@
 #'
 #' \code{roll_window} must be evenly divisible by \code{bin_w}
 #'
+#' @references
+#' Robergs, R. A., Dwyer, D., & Astorino, T. (2010). Recommendations for improved data processing from expired gas analysis indirect calorimetry. Sports Medicine, 40(2), 95–111. https://doi.org/10.2165/11319670-000000000-00000
+#'
 #' @examples
 #'
-#' # TODO write an example
+#' # Load raw graded exercise testing file
+#' cpet_raw <- utils::read.csv(
+#' system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR"))
 #'
-#' # TODO force people to use this function twice if doing bin-roll or rolling-bin?
+#' # 10-second (time bin) average
+#' cpet_10s_bin <- avg_exercise_test(
+#'     cpet_raw,
+#'     method = "time",
+#'     calc_type = "bin",
+#'     time_col = "time",
+#'     bin_w = 10
+#' )
+#'
+#' # 15-breath (breath bin) average
+#' cpet_15b_bin <- avg_exercise_test(
+#'     cpet_raw,
+#'     method = "breath",
+#'     calc_type = "bin",
+#'     time_col = "time",
+#'     bin_w = 15
+#' )
+#'
+#' # 20-second (rolling time) average
+#'
+#' cpet_20s_roll <- avg_exercise_test(
+#'     cpet_raw, method = "time",
+#'     calc_type = "rolling",
+#'     time_col = "time",
+#'     roll_window = 20,
+#'     align = "center",
+#'     mos = "mean"
+#' )
+#'
+#' # 15 breath (rolling breath) average
+#'
+#' cpet_15b_roll <- avg_exercise_test(
+#'     cpet_raw,
+#'     method = "breath",
+#'     calc_type = "rolling",
+#'     time_col = "time",
+#'     roll_window = 15,
+#'     align = "center",
+#'     mos = "mean"
+#'     )
+#'
+#' # 3rd-order Butterworth low-pass filter using recommendations from Robergs et al. (2010)
+#'
+#' cpet_dbf <- avg_exercise_test(
+#'  cpet_raw,
+#'  method = "digital",
+#'  cutoff = 0.04,
+#'  fs = 1,
+#'  order = 3)
+#'
+#' # Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath average).
+#' # This removes the highest and lowest VO2 values (roll_trim = 2) before calculating average.
+#'
+#' cpet_m5o7 <- avg_exercise_test(
+#'  cpet_raw,
+#'  method = "breath",
+#'  calc_type = "rolling",
+#'  time_col = "time",
+#'  roll_window = 7,
+#'  roll_trim = 2
+#'  )
+#'
+#' # Force people to use this function twice if doing bin-roll or rolling-bin?
 #'
 avg_exercise_test <- function(.data,
                               method = "breath",
@@ -78,12 +145,19 @@ avg_exercise_test.breath <- function(.data,
 
     # save character cols for later
     # I'm beginning to think this is less important and may cause issues
-    char_cols <- .data[, purrr::map(.data, class) == "character"]
-    if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
-        char_cols <- unique(char_cols)
-        # delete char col b/c they don't play well with rollapply(). Add back later
-        .data <- .data[,-which(colnames(.data) %in% names(char_cols))]
-        # should I automatically add them back to the original positions later?
+    # Drop character columns from .data before aggregation (they don't play
+    # well with rollapply/summarise_all). Keep constant character columns
+    # (e.g. subject_id) as a one-row tibble to reattach after aggregation;
+    # non-constant character columns (e.g. a clock-time string) can't survive
+    # aggregation and are dropped.
+    all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
+    if (ncol(all_chars) > 0) {
+        constant <- vapply(all_chars,
+                           function(x) length(unique(x)) == 1,
+                           logical(1))
+        char_cols <- all_chars[1, constant, drop = FALSE]
+        .data <- .data[, !colnames(.data) %in% colnames(all_chars),
+                       drop = FALSE]
     } else {
         char_cols <- NULL
     }
@@ -171,13 +245,19 @@ avg_exercise_test.time <- function(.data,
     # browser()
     calc_type <- match.arg(calc_type, choices = c("rolling", "bin", "bin_roll"))
 
-    # save character cols for later
-    # I'm beginning to think this is less important and may cause issues
-    char_cols <- .data[, purrr::map(.data, class) == "character"]
-    if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
-        char_cols <- unique(char_cols)
-        # delete char col b/c they don't play well with rollapply(). Add back later
-        .data <- .data[,-which(colnames(.data) %in% names(char_cols))]
+    # Drop character columns from .data before aggregation (they don't play
+    # well with rollapply/summarise_all). Keep constant character columns
+    # (e.g. subject_id) as a one-row tibble to reattach after aggregation;
+    # non-constant character columns (e.g. a clock-time string) can't survive
+    # aggregation and are dropped.
+    all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
+    if (ncol(all_chars) > 0) {
+        constant <- vapply(all_chars,
+                           function(x) length(unique(x)) == 1,
+                           logical(1))
+        char_cols <- all_chars[1, constant, drop = FALSE]
+        .data <- .data[, !colnames(.data) %in% colnames(all_chars),
+                       drop = FALSE]
     } else {
         char_cols <- NULL
     }
@@ -273,13 +353,19 @@ avg_exercise_test.digital <- function(.data,
                                       order = 3) {
     # browser()
 
-    # save character cols for later
-    # I'm beginning to think this is less important and may cause issues
-    char_cols <- .data[, purrr::map(.data, class) == "character"]
-    if(dim(char_cols)[1] > 0 & dim(char_cols)[2] > 0) {
-        char_cols <- unique(char_cols)
-        # delete char col b/c they don't play well with rollapply(). Add back later
-        .data <- .data[,-which(colnames(.data) %in% names(char_cols))]
+    # Drop character columns from .data before aggregation (they don't play
+    # well with rollapply/summarise_all). Keep constant character columns
+    # (e.g. subject_id) as a one-row tibble to reattach after aggregation;
+    # non-constant character columns (e.g. a clock-time string) can't survive
+    # aggregation and are dropped.
+    all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
+    if (ncol(all_chars) > 0) {
+        constant <- vapply(all_chars,
+                           function(x) length(unique(x)) == 1,
+                           logical(1))
+        char_cols <- all_chars[1, constant, drop = FALSE]
+        .data <- .data[, !colnames(.data) %in% colnames(all_chars),
+                       drop = FALSE]
     } else {
         char_cols <- NULL
     }

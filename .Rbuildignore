@@ -2,4 +2,12 @@
 ^\.Rproj\.user$
 ^LICENSE\.md$
 ^README\.Rmd$
-^cran-comments\.md$
+^README\.pdf$
+^articles$
+^code_testing$
+^.*\.docx$
+^\.lintr$
+^\.DS_Store$
+^.*/\.DS_Store$
+^\.git.*$
+^CLAUDE\.md$

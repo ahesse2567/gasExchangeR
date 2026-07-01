@@ -52,7 +52,62 @@
 #' Beaver, W. L., Wasserman, K. A. R. L. M. A. N., & Whipp, B. J. (1986). A new method for detecting anaerobic threshold by gas exchange. Journal of applied physiology, 60(6), 2020-2027.
 #'
 #' @examples
-#' # TODO write an an example
+#'
+#' # Load raw graded exercise testing data
+#' cpet_raw <- utils::read.csv(
+#'     system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
+#'
+#' # Remove outliers beyond 4 SD
+#' cpet_clean <- ventilatory_outliers(
+#'     cpet_raw,
+#'     outlier_cols = "vo2",
+#'     time = "time",
+#'     sd_lim = 4,
+#'     width = 5,
+#'     mos = "mean",
+#'     align = "center",
+#'     use_global_sd = TRUE,
+#'     global_sd_mos = "median",
+#'     exclude_test_val = TRUE,
+#'     remove_outliers = TRUE,
+#'     max_passes = 1,
+#'     plot_outliers = FALSE
+#' )
+#'
+#' # Optionally interpolate after outlier removal, e.g.:
+#' # cpet_clean <- interpolate(cpet_clean, time_col = "time", method = "linear", every_s = 1)
+#'
+#' # 15-breath rolling average
+#' cpet_avg <- avg_exercise_test(
+#'     cpet_clean,
+#'     method = "breath",
+#'     calc_type = "rolling",
+#'     time_col = "time",
+#'     roll_window = 15,
+#'     align = "center",
+#'     mos = "mean"
+#' )
+#'
+#' # Find breakpoints: JM algorithm for VT2 (VE vs VCO2),
+#' # V-slope for VT1 (VCO2 vs VO2)
+#' bp_results <- breakpoint(
+#'     cpet_avg,
+#'     algorithm_vt2 = "jm",
+#'     x_vt2 = "vco2",
+#'     y_vt2 = "ve",
+#'     algorithm_vt1 = "v-slope",
+#'     x_vt1 = "vo2",
+#'     y_vt1 = "vco2",
+#'     vo2 = "vo2",
+#'     vco2 = "vco2",
+#'     ve = "ve",
+#'     time = "time",
+#'     truncate = TRUE,
+#'     plots = FALSE
+#' )
+#'
+#' bp_results$bp_dat
 #'
 breakpoint <- function(.data,
                        method = NULL,

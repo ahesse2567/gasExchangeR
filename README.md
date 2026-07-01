@@ -6,13 +6,9 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of gasExchangeR is to help exercise physiologist more easily
-analyze gas exchange data and to provide more directly control when
-doing so. The overview of the process of analyzing gas exchange data
-involves importing the data, identifying and removing outliers,
-interpolating if desired, and finally averaging the data. Afterwards
-then one can determine ventilatory thresholds, VO2max, and other
-important values.
+The goal of gasExchangeR is to help exercise physiologists more easily
+analyze gas exchange data and provide more direct control when
+doing so. Analyzing gas exchange data involves identifying and removing outliers, interpolating if desired, and averaging the data. Afterward, one can determine ventilatory thresholds, VO2max, and other important values.
 
 ## Installation
 
