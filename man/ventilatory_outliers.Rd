@@ -17,6 +17,7 @@ ventilatory_outliers(
   exclude_test_val = TRUE,
   remove_outliers = TRUE,
   max_passes = Inf,
+  print_outliers = FALSE,
   plot_outliers = FALSE
 )
 }
@@ -44,6 +45,8 @@ ventilatory_outliers(
 \item{remove_outliers}{Should the function return a data frame with outliers removed or merely noted in a new column?}
 
 \item{max_passes}{By default, this function repeats itself (\code{max_passes = Inf}) until all values fit inside the rollowing window. However, users may wish to allow only a certain number of passes.}
+
+\item{print_outliers}{Print outliers removed after running function? Default is `FALSE`.}
 
 \item{plot_outliers}{Plot outliers every iteration of the filter? Default is \code{FALSE}.}
 }

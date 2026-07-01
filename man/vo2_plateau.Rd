@@ -60,5 +60,5 @@ Myers, J., Walsh, D., Sullivan, M., & Froelicher, V. (1990). Effect of sampling 
 
 Robergs, R. A. (2001). An exercise physiologist’s “contemporary” interpretations of the “ugly and creaking edifices” of the VO2max concept. Journal of Exercise Physiology Online, 4(1), 1–44.
 
-Yoon, B. K., Kravitz, L., & Robergs, R. (2007). V̇O2max, protocol duration, and the V̇O2 plateau. Medicine and Science in Sports and Exercise, 39(7), 1186–1192. https://doi.org/10.1249/mss.0b13e318054e304
+Yoon, B. K., Kravitz, L., & Robergs, R. (2007). VO2max, protocol duration, and the VO2 plateau. Medicine and Science in Sports and Exercise, 39(7), 1186–1192. https://doi.org/10.1249/mss.0b13e318054e304
 }

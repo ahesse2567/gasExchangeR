@@ -15,7 +15,7 @@
 #' @param remove_outliers Should the function return a data frame with outliers removed or merely noted in a new column?
 #' @param max_passes By default, this function repeats itself (\code{max_passes = Inf}) until all values fit inside the rollowing window. However, users may wish to allow only a certain number of passes.
 #' @param plot_outliers Plot outliers every iteration of the filter? Default is \code{FALSE}.
-#'
+#' @param print_outliers Print outliers removed after running function? Default is `FALSE`.
 #'
 #' @returns A data frame or tibble with the rows containing outliers removed or retained according to the `remove_outliers` parameter. If outliers are removed, then the data frame returns a new column named `outliers`.
 #'
@@ -60,6 +60,7 @@ ventilatory_outliers <- function(.data,
                                  exclude_test_val = TRUE,
                                  remove_outliers = TRUE,
                                  max_passes = Inf,
+                                 print_outliers = FALSE,
                                  plot_outliers = FALSE) {
     # confirm good user input
     mos <- match.arg(mos, choices = c("mean", "median"))
@@ -143,13 +144,15 @@ ventilatory_outliers <- function(.data,
             dplyr::mutate(outlier = outlier_idx)
 
         if(plot_outliers) {
-            outlier_plot <- ggplot2::ggplot(data = copy_df, ggplot2::aes(x = .data[[time]],
-                                                       y = .data[[outlier_cols]])) +
+            outlier_plot <- ggplot2::ggplot(
+                data = copy_df,
+                ggplot2::aes(x = .data[[time]], y = .data[[outlier_cols]])) +
                 ggplot2::geom_point(ggplot2::aes(color = outlier)) +
-                ggplot2::geom_line(ggplot2::aes(y = lower_lim), linetype = "dashed") +
-                ggplot2::geom_line(ggplot2::aes(y = upper_lim), linetype = "dashed") +
+                ggplot2::geom_ribbon(ggplot2::aes(ymin = lower_lim,
+                                                  ymax = upper_lim),
+                                     alpha = 0.25) +
                 ggplot2::ggtitle(glue::glue("Pass {n_passes + 1}, {length(which(outlier_idx))} outliers removed.")) +
-                ggplot2::theme_minimal()
+                ggplot2::theme_bw()
             plot(outlier_plot)
         }
 
@@ -172,7 +175,7 @@ ventilatory_outliers <- function(.data,
             dplyr::select(-outlier)
     }
 
-    if(any(outliers)) {
+    if(any(outliers) & print_outliers) {
         event <- dplyr::if_else(remove_outliers, "removed", "detected")
         outs <- paste(which(outliers), collapse = ", ")
         print(glue::glue("{length(which(outliers))} outliers {event} at indicies {outs}"))

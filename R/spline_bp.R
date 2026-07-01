@@ -80,7 +80,7 @@ spline_bp <- function(.data,
     # return quick summary if generating models fails
     if(is.null(loop_res) | length(best_idx) == 0) {
         bp_dat <- return_indeterminant_findings(
-            .data = .data,
+            .data = plot_df,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
@@ -116,6 +116,7 @@ spline_bp <- function(.data,
         ci_lower_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == min(int_point_x)) %>%
+            dplyr::filter(p == min(p)) %>% # for breaking ties
             dplyr::select(idx) %>%
             dplyr::pull()
 
@@ -132,6 +133,7 @@ spline_bp <- function(.data,
         ci_upper_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == max(int_point_x)) %>%
+            dplyr::filter(p == min(p)) %>% # for breaking ties
             dplyr::select(idx) %>%
             dplyr::pull()
 
@@ -273,8 +275,8 @@ get_spline_bp_res <- function(.data, bp_idx, .x, .y, bp,
     f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
     pf_two <- stats::pf(f_stat, df1 = 2, df2 = n_rows - 4, lower.tail = FALSE)
 
-    # slope BEFORE breakpoint = β1
-    # slope AFTER breakpoint = β1 + β2
+    # slope BEFORE breakpoint = b1
+    # slope AFTER breakpoint = b1 + b2
     # this is wrong if degree > 1
     slope_left <- lm_spline$coefficients[2]
     slope_right <- lm_spline$coefficients[2]+lm_spline$coefficients[3]

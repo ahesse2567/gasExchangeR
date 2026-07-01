@@ -88,7 +88,7 @@ orr <- function(.data,
     # return quick summary if generating models fails
     if(is.null(loop_res) | length(best_idx) == 0) {
         bp_dat <- return_indeterminant_findings(
-            .data = .data,
+            .data = plot_df,
             bp = bp,
             algorithm = as.character(match.call()[[1]]),
             .x = .x,
@@ -112,6 +112,7 @@ orr <- function(.data,
         ci_lower_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == min(int_point_x)) %>%
+            dplyr::filter(p == min(p)) %>% # for breaking ties
             dplyr::select(idx) %>%
             dplyr::pull()
 
@@ -128,6 +129,7 @@ orr <- function(.data,
         ci_upper_idx <- loop_res %>%
             dplyr::filter(inside_ci) %>%
             dplyr::filter(int_point_x == max(int_point_x)) %>%
+            dplyr::filter(p == min(p)) %>% # for breaking ties
             dplyr::select(idx) %>%
             dplyr::pull()
 
