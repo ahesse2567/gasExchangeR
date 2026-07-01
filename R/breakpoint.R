@@ -55,24 +55,24 @@
 #'
 #' # Load raw graded exercise testing data
 #' cpet_raw <- utils::read.csv(
-#'     system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
 #' )
 #'
 #' # Remove outliers beyond 4 SD
 #' cpet_clean <- ventilatory_outliers(
-#'     cpet_raw,
-#'     outlier_cols = "vo2",
-#'     time = "time",
-#'     sd_lim = 4,
-#'     width = 5,
-#'     mos = "mean",
-#'     align = "center",
-#'     use_global_sd = TRUE,
-#'     global_sd_mos = "median",
-#'     exclude_test_val = TRUE,
-#'     remove_outliers = TRUE,
-#'     max_passes = 1,
-#'     plot_outliers = FALSE
+#'   cpet_raw,
+#'   outlier_cols = "vo2",
+#'   time = "time",
+#'   sd_lim = 4,
+#'   width = 5,
+#'   mos = "mean",
+#'   align = "center",
+#'   use_global_sd = TRUE,
+#'   global_sd_mos = "median",
+#'   exclude_test_val = TRUE,
+#'   remove_outliers = TRUE,
+#'   max_passes = 1,
+#'   plot_outliers = FALSE
 #' )
 #'
 #' # Optionally interpolate after outlier removal, e.g.:
@@ -80,31 +80,31 @@
 #'
 #' # 15-breath rolling average
 #' cpet_avg <- avg_exercise_test(
-#'     cpet_clean,
-#'     method = "breath",
-#'     calc_type = "rolling",
-#'     time_col = "time",
-#'     roll_window = 15,
-#'     align = "center",
-#'     mos = "mean"
+#'   cpet_clean,
+#'   method = "breath",
+#'   calc_type = "rolling",
+#'   time_col = "time",
+#'   window = 15,
+#'   align = "center",
+#'   mos = "mean"
 #' )
 #'
 #' # Find breakpoints: JM algorithm for VT2 (VE vs VCO2),
 #' # V-slope for VT1 (VCO2 vs VO2)
 #' bp_results <- breakpoint(
-#'     cpet_avg,
-#'     algorithm_vt2 = "jm",
-#'     x_vt2 = "vco2",
-#'     y_vt2 = "ve",
-#'     algorithm_vt1 = "v-slope",
-#'     x_vt1 = "vo2",
-#'     y_vt1 = "vco2",
-#'     vo2 = "vo2",
-#'     vco2 = "vco2",
-#'     ve = "ve",
-#'     time = "time",
-#'     truncate = TRUE,
-#'     plots = FALSE
+#'   cpet_avg,
+#'   algorithm_vt2 = "jm",
+#'   x_vt2 = "vco2",
+#'   y_vt2 = "ve",
+#'   algorithm_vt1 = "v-slope",
+#'   x_vt1 = "vo2",
+#'   y_vt1 = "vco2",
+#'   vo2 = "vo2",
+#'   vco2 = "vco2",
+#'   ve = "ve",
+#'   time = "time",
+#'   truncate = TRUE,
+#'   plots = FALSE
 #' )
 #'
 #' bp_results$bp_dat
@@ -132,112 +132,135 @@ breakpoint <- function(.data,
                        ordering = c("by_x", "time"),
                        plots = TRUE,
                        ...) {
+  bp <- match.arg(bp, several.ok = FALSE)
+  ordering <- match.arg(ordering, several.ok = FALSE)
+  # fill in NULL values, primarily based on "method" argument
+  resolved_inputs <- resolve_inputs(inputs = as.list(environment(),
+    all = TRUE
+  ))
+  list2env(resolved_inputs, envir = environment()) # add values from resolved_inputs
 
-    bp <- match.arg(bp, several.ok = FALSE)
-    ordering <- match.arg(ordering, several.ok = FALSE)
-    # fill in NULL values, primarily based on "method" argument
-    resolved_inputs <- resolve_inputs(inputs = as.list(environment(),
-                                                       all = TRUE))
-    list2env(resolved_inputs, envir = environment()) # add values from resolved_inputs
+  if (bp == "both" | bp == "vt2") {
+    resolved_inputs[["bp"]] <- "vt2"
+    params <- append(resolved_inputs, c(
+      list(
+        .x = x_vt2, .y = y_vt2,
+        pos_change = pos_change_vt2
+      ),
+      list(...)
+    ))
+    vt2_out <- switch(algorithm_vt2,
+      "jm" = do.call("jm", params),
+      "orr" = do.call("orr", params),
+      "v-slope" = do.call("v_slope", params),
+      "dmax" = do.call("dmax", params),
+      "spline_bp" = do.call("spline_bp", params),
+      "d1_crossing" = do.call("d1_crossing", params),
+      "d2_inflection" = do.call("d2_inflection", params),
+      "d2_poly_reg_maxima" = do.call(
+        "d2_poly_reg_maxima", params
+      ),
+      "d2_reg_spline_maxima" = do.call(
+        "d2_reg_spline_maxima", params
+      ),
+      stop("Invalid `algorithm_vt2` value")
+    )
+    if (bp == "vt2") {
+      return(vt2_out)
+    }
 
-    if(bp == "both" | bp == "vt2") {
-        resolved_inputs[["bp"]] <- "vt2"
-        params = append(resolved_inputs, c(list(.x = x_vt2, .y = y_vt2,
-                                                pos_change = pos_change_vt2),
-                                           list(...)))
-        vt2_out <- switch(algorithm_vt2,
-                          "jm" = do.call("jm", params),
-                          "orr" = do.call("orr", params),
-                          "v-slope" = do.call("v_slope", params),
-                          "dmax" = do.call("dmax", params),
-                          "spline_bp" = do.call("spline_bp", params),
-                          "d1_crossing" = do.call("d1_crossing", params),
-                          "d2_inflection" = do.call("d2_inflection", params),
-                          "d2_poly_reg_maxima" = do.call(
-                              "d2_poly_reg_maxima", params),
-                          "d2_reg_spline_maxima" = do.call(
-                              "d2_reg_spline_maxima", params),
-                          stop("Invalid `algorithm_vt2` value"))
-        if(bp == "vt2") {
-            return(vt2_out)
-        }
+    # check that bp was determinant by using the est_ci value
+    det_bp <- vt2_out$breakpoint_data %>%
+      dplyr::filter(est_ci == "estimate") %>%
+      dplyr::select(determinant_bp) %>%
+      dplyr::pull()
 
-        # check that bp was determinant by using the est_ci value
-        det_bp <- vt2_out$breakpoint_data %>%
-            dplyr::filter(est_ci == "estimate") %>%
-            dplyr::select(determinant_bp) %>%
-            dplyr::pull()
+    # truncate if VT2 is found
+    if (det_bp & truncate == TRUE) {
+      trunc_val <- vt2_out$breakpoint_data %>%
+        dplyr::filter(est_ci == "estimate") %>%
+        dplyr::select(x_vt2) %>%
+        dplyr::pull()
 
-        # truncate if VT2 is found
-        if(det_bp & truncate == TRUE) {
-            trunc_val <- vt2_out$breakpoint_data %>%
-                dplyr::filter(est_ci == "estimate") %>%
-                dplyr::select(x_vt2) %>%
-                dplyr::pull()
-
-            trunc_idx <- which.min(abs(.data[[x_vt2]] - trunc_val))
-            vt1_df <- .data[1:trunc_idx,]
-        } else {
-            vt1_df <- .data
-        }
-
+      trunc_idx <- which.min(abs(.data[[x_vt2]] - trunc_val))
+      vt1_df <- .data[1:trunc_idx, ]
     } else {
-        vt1_df <- .data
+      vt1_df <- .data
     }
+  } else {
+    vt1_df <- .data
+  }
 
-    if(bp == "both" | bp == "vt1") {
-        # should we pass the full df for plotting purposes?
-        params[[".data"]] <- vt1_df
-        params[[".x"]] <- x_vt1
-        params[[".y"]] <- y_vt1
-        params[["bp"]] <- "vt1"
-        params[["pos_change"]] <- pos_change_vt1
-        vt1_out <- switch(algorithm_vt1,
-                          "jm" = do.call("jm", params),
-                          "orr" = do.call("orr", params),
-                          "v-slope" = do.call("v_slope", params),
-                          "dmax" = do.call("dmax", params),
-                          "spline_bp" = do.call("spline_bp", params),
-                          "d1_crossing" = do.call("d1_crossing", params),
-                          "d2_inflection" = do.call("d2_inflection", params),
-                          "d2_poly_reg_maxima" = do.call("d2_poly_reg_maxima",
-                                                         params),
-                          "d2_reg_spline_maxima" = do.call("d2_reg_spline_maxima",
-                                                           params),
-                          stop("Invalid `algorithm_vt1` value"))
-        if(bp == "vt1") {
-            return(vt1_out)
-        }
+  if (bp == "both" | bp == "vt1") {
+    # should we pass the full df for plotting purposes?
+    params[[".data"]] <- vt1_df
+    params[[".x"]] <- x_vt1
+    params[[".y"]] <- y_vt1
+    params[["bp"]] <- "vt1"
+    params[["pos_change"]] <- pos_change_vt1
+    vt1_out <- switch(algorithm_vt1,
+      "jm" = do.call("jm", params),
+      "orr" = do.call("orr", params),
+      "v-slope" = do.call("v_slope", params),
+      "dmax" = do.call("dmax", params),
+      "spline_bp" = do.call("spline_bp", params),
+      "d1_crossing" = do.call("d1_crossing", params),
+      "d2_inflection" = do.call("d2_inflection", params),
+      "d2_poly_reg_maxima" = do.call(
+        "d2_poly_reg_maxima",
+        params
+      ),
+      "d2_reg_spline_maxima" = do.call(
+        "d2_reg_spline_maxima",
+        params
+      ),
+      stop("Invalid `algorithm_vt1` value")
+    )
+    if (bp == "vt1") {
+      return(vt1_out)
     }
-    # combine breakpoint data
-    vt_out <- suppressMessages(dplyr::full_join(vt1_out$breakpoint_data,
-                                         vt2_out$breakpoint_data)) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+  }
+  # combine breakpoint data
+  vt_out <- suppressMessages(dplyr::full_join(
+    vt1_out$breakpoint_data,
+    vt2_out$breakpoint_data
+  )) %>%
+    dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
-    if(plots) {
-        # generate plot showing both thresholds
-        vt1_plot <- ggplot2::ggplot(data = .data,
-                                    ggplot2::aes(x = .data[[x_vt1]], .data[[y_vt1]])) +
-            ggplot2::geom_point() +
-            ggplot2::theme_minimal()
-        vt1_plot <- add_threshold_lines(vt1_plot, x_var = x_vt1,
-                                        vt1_out, vt2_out)
+  if (plots) {
+    # generate plot showing both thresholds
+    vt1_plot <- ggplot2::ggplot(
+      data = .data,
+      ggplot2::aes(x = .data[[x_vt1]], .data[[y_vt1]])
+    ) +
+      ggplot2::geom_point() +
+      ggplot2::theme_minimal()
+    vt1_plot <- add_threshold_lines(vt1_plot,
+      x_var = x_vt1,
+      vt1_out, vt2_out
+    )
 
-        vt2_plot <- ggplot2::ggplot(data = .data,
-                                    ggplot2:: aes(x = .data[[x_vt2]], .data[[y_vt2]])) +
-            ggplot2::geom_point() +
-            ggplot2::theme_minimal()
-        vt2_plot <- add_threshold_lines(plt = vt2_plot, x_var = x_vt2,
-                                        vt1_out, vt2_out)
+    vt2_plot <- ggplot2::ggplot(
+      data = .data,
+      ggplot2::aes(x = .data[[x_vt2]], .data[[y_vt2]])
+    ) +
+      ggplot2::geom_point() +
+      ggplot2::theme_minimal()
+    vt2_plot <- add_threshold_lines(
+      plt = vt2_plot, x_var = x_vt2,
+      vt1_out, vt2_out
+    )
 
-        bp_plots <- list("vt1_plot" = vt1_plot, "vt2_plot" = vt2_plot)
-    } else {
-        bp_plots <- NULL
-    }
+    bp_plots <- list("vt1_plot" = vt1_plot, "vt2_plot" = vt2_plot)
+  } else {
+    bp_plots <- NULL
+  }
 
-    out <- list(bp_dat = vt_out,
-                bp_plots = bp_plots,
-                vt1_dat = vt1_out,
-                vt2_dat = vt2_out)
-    out
+  out <- list(
+    bp_dat = vt_out,
+    bp_plots = bp_plots,
+    vt1_dat = vt1_out,
+    vt2_dat = vt2_out
+  )
+  out
 }

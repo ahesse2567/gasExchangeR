@@ -51,123 +51,141 @@ orr <- function(.data,
                 pos_slope_after_bp = TRUE,
                 ci = FALSE,
                 conf_level = 0.95,
-                plots = TRUE
-                ) {
+                plots = TRUE) {
+  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+  bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
+  ordering <- match.arg(ordering, several.ok = FALSE)
 
-    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
-    bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
-    ordering <- match.arg(ordering, several.ok = FALSE)
+  .data <- order_cpet_df(.data,
+    .x = .x, time = time,
+    ordering = ordering
+  )
+  plot_df <- .data
 
-    .data <- order_cpet_df(.data, .x = .x , time = time,
-                           ordering = ordering)
-    plot_df <- .data
+  front_trim <- set_front_trim(
+    bp = bp,
+    front_trim_vt1 = front_trim_vt1,
+    front_trim_vt2 = front_trim_vt2
+  )
+  .data <- .data %>%
+    dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-    front_trim <- set_front_trim(bp = bp,
-                                 front_trim_vt1 = front_trim_vt1,
-                                 front_trim_vt2 = front_trim_vt2)
-    .data <- .data %>%
-        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
+  loop_res <- loop_orr(
+    .data = .data,
+    .x = .x,
+    .y = .y,
+    alpha_linearity = alpha_linearity,
+    conf_level = conf_level
+  )
 
-    loop_res <- loop_orr(.data = .data,
-                         .x = .x,
-                         .y = .y,
-                         alpha_linearity = alpha_linearity,
-                         conf_level = conf_level)
+  if (!is.null(loop_res)) {
+    best_idx <- get_best_piecewise_idx(
+      loop_res,
+      range(.data[[.x]]),
+      alpha_linearity = alpha_linearity,
+      pos_change = pos_change,
+      pos_slope_after_bp = pos_slope_after_bp
+    )
+  } else {
+    best_idx <- numeric()
+  }
 
-    if(!is.null(loop_res)) {
-        best_idx <- get_best_piecewise_idx(
-            loop_res,
-            range(.data[[.x]]),
-            alpha_linearity = alpha_linearity,
-            pos_change = pos_change,
-            pos_slope_after_bp = pos_slope_after_bp)
-    } else {
-        best_idx <- numeric()
-    }
+  # return quick summary if generating models fails
+  if (is.null(loop_res) | length(best_idx) == 0) {
+    bp_dat <- return_indeterminant_findings(
+      .data = plot_df,
+      bp = bp,
+      algorithm = as.character(match.call()[[1]]),
+      .x = .x,
+      .y = .y,
+      est_ci = "estimate"
+    )
 
-    # return quick summary if generating models fails
-    if(is.null(loop_res) | length(best_idx) == 0) {
-        bp_dat <- return_indeterminant_findings(
-            .data = plot_df,
-            bp = bp,
-            algorithm = as.character(match.call()[[1]]),
-            .x = .x,
-            .y = .y,
-            est_ci = "estimate")
+    return(list(breakpoint_data = bp_dat))
+  }
 
-        return(list(breakpoint_data = bp_dat))
-    }
+  estimate_res <- get_orr_res(
+    .data = .data,
+    bp_idx = best_idx,
+    .x = .x,
+    .y = .y,
+    bp = bp,
+    alpha_linearity = alpha_linearity,
+    pos_change = pos_change,
+    pos_slope_after_bp = pos_slope_after_bp,
+    est_ci = "estimate"
+  )
 
-    estimate_res <- get_orr_res(.data = .data,
-                           bp_idx = best_idx,
-                           .x = .x,
-                           .y = .y,
-                           bp = bp,
-                           alpha_linearity = alpha_linearity,
-                           pos_change = pos_change,
-                           pos_slope_after_bp = pos_slope_after_bp,
-                           est_ci = "estimate")
+  if (ci) {
+    ci_lower_idx <- loop_res %>%
+      dplyr::filter(inside_ci) %>%
+      dplyr::filter(int_point_x == min(int_point_x)) %>%
+      dplyr::filter(p == min(p)) %>% # for breaking ties
+      dplyr::select(idx) %>%
+      dplyr::pull()
 
-    if(ci) {
-        ci_lower_idx <- loop_res %>%
-            dplyr::filter(inside_ci) %>%
-            dplyr::filter(int_point_x == min(int_point_x)) %>%
-            dplyr::filter(p == min(p)) %>% # for breaking ties
-            dplyr::select(idx) %>%
-            dplyr::pull()
+    lower_ci_res <- get_orr_res(
+      .data = .data,
+      bp_idx = ci_lower_idx,
+      .x = .x,
+      .y = .y,
+      bp = bp,
+      alpha_linearity = alpha_linearity,
+      pos_change = pos_change,
+      pos_slope_after_bp = pos_slope_after_bp,
+      est_ci = "lower"
+    )
 
-        lower_ci_res <- get_orr_res(.data = .data,
-                                    bp_idx = ci_lower_idx,
-                                    .x = .x,
-                                    .y = .y,
-                                    bp = bp,
-                                    alpha_linearity = alpha_linearity,
-                                    pos_change = pos_change,
-                                    pos_slope_after_bp = pos_slope_after_bp,
-                                    est_ci = "lower")
+    ci_upper_idx <- loop_res %>%
+      dplyr::filter(inside_ci) %>%
+      dplyr::filter(int_point_x == max(int_point_x)) %>%
+      dplyr::filter(p == min(p)) %>% # for breaking ties
+      dplyr::select(idx) %>%
+      dplyr::pull()
 
-        ci_upper_idx <- loop_res %>%
-            dplyr::filter(inside_ci) %>%
-            dplyr::filter(int_point_x == max(int_point_x)) %>%
-            dplyr::filter(p == min(p)) %>% # for breaking ties
-            dplyr::select(idx) %>%
-            dplyr::pull()
+    upper_ci_res <- get_orr_res(
+      .data = .data,
+      bp_idx = ci_upper_idx,
+      .x = .x,
+      .y = .y,
+      bp = bp,
+      alpha_linearity = alpha_linearity,
+      pos_change = pos_change,
+      pos_slope_after_bp = pos_slope_after_bp,
+      est_ci = "upper"
+    )
 
-        upper_ci_res <- get_orr_res(.data = .data,
-                                        bp_idx = ci_upper_idx,
-                                        .x = .x,
-                                        .y = .y,
-                                        bp = bp,
-                                        alpha_linearity = alpha_linearity,
-                                        pos_change = pos_change,
-                                        pos_slope_after_bp = pos_slope_after_bp,
-                                        est_ci = "upper")
+    # combine estimate and both CI breakpoint res into one tibble
+    estimate_res$bp_dat <- dplyr::bind_rows(
+      lower_ci_res$bp_dat,
+      estimate_res$bp_dat,
+      upper_ci_res$bp_dat
+    )
+  }
 
-        # combine estimate and both CI breakpoint res into one tibble
-        estimate_res$bp_dat <- dplyr::bind_rows(lower_ci_res$bp_dat,
-              estimate_res$bp_dat,
-              upper_ci_res$bp_dat)
-    }
+  if (plots) {
+    bp_plot <- make_piecewise_bp_plot(
+      plot_df,
+      .x,
+      .y,
+      estimate_res$lm_left,
+      estimate_res$lm_right,
+      estimate_res$bp_dat
+    )
+  } else {
+    bp_plot <- NULL
+  }
 
-    if(plots) {
-        bp_plot <- make_piecewise_bp_plot(plot_df,
-                                          .x,
-                                          .y,
-                                          estimate_res$lm_left,
-                                          estimate_res$lm_right,
-                                          estimate_res$bp_dat)
-    } else {
-        bp_plot <- NULL
-    }
+  return(list(
+    breakpoint_data = estimate_res$bp_dat,
+    fitted_vals = estimate_res$pred,
+    lm_left = estimate_res$lm_left,
+    lm_right = estimate_res$m_right,
+    lm_simple = estimate_res$lm_simple,
+    bp_plot = bp_plot
+  ))
 
-    return(list(breakpoint_data = estimate_res$bp_dat,
-                fitted_vals = estimate_res$pred,
-                lm_left = estimate_res$lm_left,
-                lm_right = estimate_res$m_right,
-                lm_simple = estimate_res$lm_simple,
-                bp_plot = bp_plot))
-
-    # Should we add the three line regression code later?
+  # Should we add the three line regression code later?
 }
 
 #' @keywords internal
@@ -178,83 +196,90 @@ loop_orr <- function(.data,
                      .y,
                      alpha_linearity = 0.05,
                      conf_level = 0.95) {
-    # you can't fit a model if you don't have any data
-    if(nrow(.data) == 0) return(NULL)
+  # you can't fit a model if you don't have any data
+  if (nrow(.data) == 0) {
+    return(NULL)
+  }
 
-    n_rows <- nrow(.data)
+  n_rows <- nrow(.data)
 
-    # initialize empty vectors
-    RSS_two <- MSE_two <- f_stat <- pf_two <-
-        pct_slope_change <- int_point_x <- numeric(n_rows)
-    pos_change <- pos_slope_after_bp <- logical(n_rows)
+  # initialize empty vectors
+  RSS_two <- MSE_two <- f_stat <- pf_two <-
+    pct_slope_change <- int_point_x <- numeric(n_rows)
+  pos_change <- pos_slope_after_bp <- logical(n_rows)
 
-    # create simple linear model and calculate its RSS
-    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = .data)
-    RSS_simple <- sum(stats::resid(lm_simple)^2)
+  # create simple linear model and calculate its RSS
+  lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    stats::lm(data = .data)
+  RSS_simple <- sum(stats::resid(lm_simple)^2)
 
-    for(i in 1:n_rows) {
-        # setting first and last iteration to NA keeps the index lengths equal
-        if(i == 1 | i == n_rows) {
-            RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
-                pos_change[i] <- pos_slope_after_bp[i] <-
-                int_point_x[i] <- NA
-            next
-        }
-        # split data into left and right halves
-        # should these share the same point? Or should, they be different by 1 point?
-        # Ekkekakis said WB makes them differ by 1 pt
-        # I wonder exactly what the word 'contiguous' means in this context
-        df_left <- .data[1:i,]
-        df_right <- .data[i:n_rows,]
-        # NOTE: WB'S implementation of Orr does NOT share a point at i
-
-        # make linear models of the two halves
-        lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-            stats::lm(data = df_left)
-        lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
-            stats::lm(data = df_right)
-
-        # ss_left[i] <- sum((lm_left$residuals)^2)
-        # ss_right[i] <- sum((lm_right$residuals)^2)
-
-        RSS_two[i] <- sum(stats::resid(lm_left)^2) +
-            sum(stats::resid(lm_right)^2)
-        MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
-        f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
-        pf_two[i] <- stats::pf(f_stat[i], df1 = 2,
-                               df2 = nrow(lm_simple$model) - 4,
-                            lower.tail = FALSE)
-
-        pct_slope_change[i] <- 100*(lm_right$coefficients[2] -
-                                        lm_left$coefficients[2]) /
-            abs(lm_left$coefficients[2])
-        pos_change[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
-        pos_slope_after_bp[i] <- dplyr::if_else(lm_right$coefficients[2] > 0,
-                                                TRUE, FALSE)
-
-        int_point_x[i] <- intersection_point(lm_left, lm_right)["x"]
+  for (i in 1:n_rows) {
+    # setting first and last iteration to NA keeps the index lengths equal
+    if (i == 1 | i == n_rows) {
+      RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
+        pos_change[i] <- pos_slope_after_bp[i] <-
+        int_point_x[i] <- NA
+      next
     }
-    # calculate cutoff for finding approximate confidence interval
-    crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
-    # using min(MSE_two) and min(RSS_two) based on JM paper
-    inside_ci <- dplyr::if_else(
-        (RSS_two - min(RSS_two, na.rm = TRUE)) /
-            min(MSE_two, na.rm =TRUE) < crit_F,
-        TRUE, FALSE)
-    # for debugging purposes, plot breakpoints inside 95% CI
-    # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two)
-    # abline(h = crit_F)
+    # split data into left and right halves
+    # should these share the same point? Or should, they be different by 1 point?
+    # Ekkekakis said WB makes them differ by 1 pt
+    # I wonder exactly what the word 'contiguous' means in this context
+    df_left <- .data[1:i, ]
+    df_right <- .data[i:n_rows, ]
+    # NOTE: WB'S implementation of Orr does NOT share a point at i
 
-    loop_stats <- tibble::tibble(p = pf_two,
-                        pos_change = pos_change,
-                        pos_slope_after_bp = pos_slope_after_bp,
-                        int_point_x = int_point_x,
-                        inside_ci = inside_ci
-                        ) %>%
-        dplyr::mutate(idx = dplyr::row_number())
+    # make linear models of the two halves
+    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+      stats::lm(data = df_left)
+    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
+      stats::lm(data = df_right)
 
-    loop_stats
+    # ss_left[i] <- sum((lm_left$residuals)^2)
+    # ss_right[i] <- sum((lm_right$residuals)^2)
+
+    RSS_two[i] <- sum(stats::resid(lm_left)^2) +
+      sum(stats::resid(lm_right)^2)
+    MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
+    f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
+    pf_two[i] <- stats::pf(f_stat[i],
+      df1 = 2,
+      df2 = nrow(lm_simple$model) - 4,
+      lower.tail = FALSE
+    )
+
+    pct_slope_change[i] <- 100 * (lm_right$coefficients[2] -
+      lm_left$coefficients[2]) /
+      abs(lm_left$coefficients[2])
+    pos_change[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
+    pos_slope_after_bp[i] <- dplyr::if_else(lm_right$coefficients[2] > 0,
+      TRUE, FALSE
+    )
+
+    int_point_x[i] <- intersection_point(lm_left, lm_right)["x"]
+  }
+  # calculate cutoff for finding approximate confidence interval
+  crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+  # using min(MSE_two) and min(RSS_two) based on JM paper
+  inside_ci <- dplyr::if_else(
+    (RSS_two - min(RSS_two, na.rm = TRUE)) /
+      min(MSE_two, na.rm = TRUE) < crit_F,
+    TRUE, FALSE
+  )
+  # for debugging purposes, plot breakpoints inside 95% CI
+  # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two)
+  # abline(h = crit_F)
+
+  loop_stats <- tibble::tibble(
+    p = pf_two,
+    pos_change = pos_change,
+    pos_slope_after_bp = pos_slope_after_bp,
+    int_point_x = int_point_x,
+    inside_ci = inside_ci
+  ) %>%
+    dplyr::mutate(idx = dplyr::row_number())
+
+  loop_stats
 }
 
 #' @keywords internal
@@ -264,69 +289,84 @@ get_orr_res <- function(.data, bp_idx, .x, .y, bp,
                         pos_slope_after_bp,
                         est_ci = c("estimate", "lower_ci", "upper_ci"),
                         ...) {
-    est_ci <- match.arg(est_ci, several.ok = FALSE)
+  est_ci <- match.arg(est_ci, several.ok = FALSE)
 
-    df_left <- .data[1:bp_idx,]
-    df_right <- .data[bp_idx:nrow(.data),]
+  df_left <- .data[1:bp_idx, ]
+  df_right <- .data[bp_idx:nrow(.data), ]
 
-    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = df_left)
-    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = df_right)
-    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = .data)
+  lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    stats::lm(data = df_left)
+  lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    stats::lm(data = df_right)
+  lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    stats::lm(data = .data)
 
-    pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
-    list2env(pw_stats, envir = environment())
+  pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
+  list2env(pw_stats, envir = environment())
 
-    pct_slope_change <- 100*(lm_right$coefficients[2] -
-                                 lm_left$coefficients[2]) /
-        abs(lm_left$coefficients[2])
+  pct_slope_change <- 100 * (lm_right$coefficients[2] -
+    lm_left$coefficients[2]) /
+    abs(lm_left$coefficients[2])
 
-    y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
-                                 "{.y}" := lm_left$fitted.values,
-                                 algorithm = "orr")
-    y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
-                                  "{.y}" := lm_right$fitted.values,
-                                  algorithm = "orr")
-    pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
+  y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
+    "{.y}" := lm_left$fitted.values,
+    algorithm = "orr"
+  )
+  y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
+    "{.y}" := lm_right$fitted.values,
+    algorithm = "orr"
+  )
+  pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
 
-    int_point <- intersection_point(lm_left, lm_right)
+  int_point <- intersection_point(lm_left, lm_right)
 
-    determinant_bp <- and(check_if_determinant_bp(
-        p = pf_two,
-        pct_slope_change = pct_slope_change,
-        pos_change = pos_change,
-        pos_slope_after_bp = pos_slope_after_bp,
-        slope_after_bp = stats::coef(lm_right)[2],
-        alpha = alpha_linearity),
-        dplyr::between(int_point["x"],
-                       range(.data[[.x]])[1],
-                       range(.data[[.x]])[2]))
+  determinant_bp <- and(
+    check_if_determinant_bp(
+      p = pf_two,
+      pct_slope_change = pct_slope_change,
+      pos_change = pos_change,
+      pos_slope_after_bp = pos_slope_after_bp,
+      slope_after_bp = stats::coef(lm_right)[2],
+      alpha = alpha_linearity
+    ),
+    dplyr::between(
+      int_point["x"],
+      range(.data[[.x]])[1],
+      range(.data[[.x]])[2]
+    )
+  )
 
-    bp_dat <- find_threshold_vals(.data = .data,
-                                  thr_x = int_point["x"],
-                                  thr_y = int_point["y"],
-                                  .x = .x,
-                                  .y = .y,
-                                  ...)
+  bp_dat <- find_threshold_vals(
+    .data = .data,
+    thr_x = int_point["x"],
+    thr_y = int_point["y"],
+    .x = .x,
+    .y = .y,
+    ...
+  )
 
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(algorithm = "orr",
-                      est_ci = est_ci,
-                      x_var = .x,
-                      y_var = .y,
-                      determinant_bp = determinant_bp,
-                      bp = bp,
-                      pct_slope_change = pct_slope_change,
-                      f_stat = f_stat,
-                      p_val_f = pf_two) %>%
-        dplyr::relocate(bp, algorithm, determinant_bp, est_ci,
-                        pct_slope_change, f_stat, p_val_f)
+  bp_dat <- bp_dat %>%
+    dplyr::mutate(
+      algorithm = "orr",
+      est_ci = est_ci,
+      x_var = .x,
+      y_var = .y,
+      determinant_bp = determinant_bp,
+      bp = bp,
+      pct_slope_change = pct_slope_change,
+      f_stat = f_stat,
+      p_val_f = pf_two
+    ) %>%
+    dplyr::relocate(
+      bp, algorithm, determinant_bp, est_ci,
+      pct_slope_change, f_stat, p_val_f
+    )
 
-    list(bp_dat = bp_dat,
-         fitted_vals = pred,
-         lm_left = lm_left,
-         lm_right = lm_right,
-         lm_simple = lm_simple)
+  list(
+    bp_dat = bp_dat,
+    fitted_vals = pred,
+    lm_left = lm_left,
+    lm_right = lm_right,
+    lm_simple = lm_simple
+  )
 }

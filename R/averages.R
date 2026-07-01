@@ -52,69 +52,69 @@
 #'
 #' # Load breath-by-breath graded exercise testing file
 #' cpet_bbb <- utils::read.csv(
-#'     system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
 #' )
 #'
 #' # 10-second (time bin) average
 #' cpet_10s_bin <- avg_exercise_test(
-#'     cpet_bbb,
-#'     method = "time",
-#'     calc_type = "bin",
-#'     time_col = "time",
-#'     window = 10
+#'   cpet_bbb,
+#'   method = "time",
+#'   calc_type = "bin",
+#'   time_col = "time",
+#'   window = 10
 #' )
 #'
 #' # 15-breath (breath bin) average
 #' cpet_15b_bin <- avg_exercise_test(
-#'     cpet_bbb,
-#'     method = "breath",
-#'     calc_type = "bin",
-#'     time_col = "time",
-#'     window = 15
+#'   cpet_bbb,
+#'   method = "breath",
+#'   calc_type = "bin",
+#'   time_col = "time",
+#'   window = 15
 #' )
 #'
 #' # 20-second (rolling time) average
 #' cpet_20s_roll <- avg_exercise_test(
-#'     cpet_bbb,
-#'     method = "time",
-#'     calc_type = "rolling",
-#'     time_col = "time",
-#'     window = 20,
-#'     align = "center",
-#'     mos = "mean"
+#'   cpet_bbb,
+#'   method = "time",
+#'   calc_type = "rolling",
+#'   time_col = "time",
+#'   window = 20,
+#'   align = "center",
+#'   mos = "mean"
 #' )
 #'
 #' # 15-breath (rolling breath) average
 #' cpet_15b_roll <- avg_exercise_test(
-#'     cpet_bbb,
-#'     method = "breath",
-#'     calc_type = "rolling",
-#'     time_col = "time",
-#'     window = 15,
-#'     align = "center",
-#'     mos = "mean"
+#'   cpet_bbb,
+#'   method = "breath",
+#'   calc_type = "rolling",
+#'   time_col = "time",
+#'   window = 15,
+#'   align = "center",
+#'   mos = "mean"
 #' )
 #'
 #' # 3rd-order Butterworth low-pass filter using recommendations from
 #' # Robergs et al. (2010). time_col excludes time columns from filtering.
 #' cpet_dbf <- avg_exercise_test(
-#'     cpet_bbb,
-#'     method = "digital",
-#'     time_col = c("time", "clock_time"),
-#'     cutoff = 0.04,
-#'     fs = 1,
-#'     order = 3
+#'   cpet_bbb,
+#'   method = "digital",
+#'   time_col = c("time", "clock_time"),
+#'   cutoff = 0.04,
+#'   fs = 1,
+#'   order = 3
 #' )
 #'
 #' # Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath
 #' # average). trim = 2 removes the highest and lowest values before averaging.
 #' cpet_m5o7 <- avg_exercise_test(
-#'     cpet_bbb,
-#'     method = "breath",
-#'     calc_type = "rolling",
-#'     time_col = "time",
-#'     window = 7,
-#'     trim = 2
+#'   cpet_bbb,
+#'   method = "breath",
+#'   calc_type = "rolling",
+#'   time_col = "time",
+#'   window = 7,
+#'   trim = 2
 #' )
 #'
 avg_exercise_test <- function(.data,
@@ -128,23 +128,27 @@ avg_exercise_test <- function(.data,
                               cutoff = 0.04,
                               fs = 1,
                               order = 3) {
-    rlang::check_required(.data)
-    if (window < 1 || window %% 1 != 0) {
-        rlang::abort("`window` must be a positive integer.")
-    }
-    if (trim < 0 || trim %% 2 != 0) {
-        rlang::abort("`trim` must be a non-negative, even integer.")
-    }
+  rlang::check_required(.data)
+  if (window < 1 || window %% 1 != 0) {
+    rlang::abort("`window` must be a positive integer.")
+  }
+  if (trim < 0 || trim %% 2 != 0) {
+    rlang::abort("`trim` must be a non-negative, even integer.")
+  }
 
-    method <- rlang::arg_match(method, values = c("breath", "time", "digital"))
+  method <- rlang::arg_match(method, values = c("breath", "time", "digital"))
 
-    switch(method,
-        breath  = avg_breath(.data, calc_type, time_col, window,
-                             align, mos, trim),
-        time    = avg_time(.data, calc_type, time_col, window,
-                           align, mos, trim),
-        digital = avg_digital(.data, time_col, cutoff, fs, order)
-    )
+  switch(method,
+    breath = avg_breath(
+      .data, calc_type, time_col, window,
+      align, mos, trim
+    ),
+    time = avg_time(
+      .data, calc_type, time_col, window,
+      align, mos, trim
+    ),
+    digital = avg_digital(.data, time_col, cutoff, fs, order)
+  )
 }
 
 # -- Helpers -------------------------------------------------------------------
@@ -161,29 +165,34 @@ avg_exercise_test <- function(.data,
 #' @keywords internal
 #' @noRd
 separate_char_cols <- function(.data) {
-    all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
-    if (ncol(all_chars) > 0) {
-        constant <- vapply(all_chars,
-                           function(x) length(unique(x)) == 1,
-                           logical(1))
-        char_cols <- all_chars[1, constant, drop = FALSE]
-        .data <- .data[, !colnames(.data) %in% colnames(all_chars),
-                       drop = FALSE]
-    } else {
-        char_cols <- NULL
-    }
-    list(data = .data, char_cols = char_cols)
+  all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
+  if (ncol(all_chars) > 0) {
+    constant <- vapply(
+      all_chars,
+      function(x) length(unique(x)) == 1,
+      logical(1)
+    )
+    char_cols <- all_chars[1, constant, drop = FALSE]
+    .data <- .data[, !colnames(.data) %in% colnames(all_chars),
+      drop = FALSE
+    ]
+  } else {
+    char_cols <- NULL
+  }
+  list(data = .data, char_cols = char_cols)
 }
 
 #' Coerce all non-character columns to numeric.
 #' @keywords internal
 #' @noRd
 coerce_numeric <- function(.data) {
-    .data %>%
-        dplyr::mutate(
-            dplyr::across(
-                tidyselect::where(purrr::negate(is.character)),
-                as.numeric))
+  .data %>%
+    dplyr::mutate(
+      dplyr::across(
+        tidyselect::where(purrr::negate(is.character)),
+        as.numeric
+      )
+    )
 }
 
 # -- Method implementations ---------------------------------------------------
@@ -192,122 +201,135 @@ coerce_numeric <- function(.data) {
 #' @noRd
 avg_breath <- function(.data, calc_type, time_col, window,
                        align, mos, trim) {
-    calc_type <- rlang::arg_match(calc_type, values = c("rolling", "bin"))
+  calc_type <- rlang::arg_match(calc_type, values = c("rolling", "bin"))
 
-    separated <- separate_char_cols(.data)
-    char_cols <- separated$char_cols
-    data_num <- coerce_numeric(separated$data)
+  separated <- separate_char_cols(.data)
+  char_cols <- separated$char_cols
+  data_num <- coerce_numeric(separated$data)
 
-    switch(calc_type,
-        rolling = {
-            align <- rlang::arg_match(align, values = c("left", "right", "center"))
-            mos <- rlang::arg_match(mos, values = c("mean", "median"))
+  switch(calc_type,
+    rolling = {
+      align <- rlang::arg_match(align, values = c("left", "right", "center"))
+      mos <- rlang::arg_match(mos, values = c("mean", "median"))
 
-            out <- data_num %>%
-                zoo::rollapply(data = .,
-                               width = window,
-                               align = align,
-                               FUN = mos,
-                               trim = trim / window / 2) %>%
-                dplyr::as_tibble()
+      out <- data_num %>%
+        zoo::rollapply(
+          data = .,
+          width = window,
+          align = align,
+          FUN = mos,
+          trim = trim / window / 2
+        ) %>%
+        dplyr::as_tibble()
 
-            dplyr::bind_cols(char_cols, out)
-        },
-        bin = {
-            out <- data_num %>%
-                dplyr::mutate(bin = (1:nrow(.) - 1) %/% window) %>%
-                dplyr::group_by(bin) %>%
-                dplyr::summarize_all(.funs = list(mos),
-                                     na.rm = TRUE,
-                                     trim = trim / window / 2) %>%
-                dplyr::select(-bin)
+      dplyr::bind_cols(char_cols, out)
+    },
+    bin = {
+      out <- data_num %>%
+        dplyr::mutate(bin = (1:nrow(.) - 1) %/% window) %>%
+        dplyr::group_by(bin) %>%
+        dplyr::summarize_all(
+          .funs = list(mos),
+          na.rm = TRUE,
+          trim = trim / window / 2
+        ) %>%
+        dplyr::select(-bin)
 
-            dplyr::bind_cols(char_cols, out)
-        }
-    )
+      dplyr::bind_cols(char_cols, out)
+    }
+  )
 }
 
 #' @keywords internal
 #' @noRd
 avg_time <- function(.data, calc_type, time_col, window,
                      align, mos, trim) {
-    calc_type <- rlang::arg_match(calc_type, values = c("rolling", "bin"))
+  calc_type <- rlang::arg_match(calc_type, values = c("rolling", "bin"))
 
-    separated <- separate_char_cols(.data)
-    char_cols <- separated$char_cols
-    data_num <- coerce_numeric(separated$data)
+  separated <- separate_char_cols(.data)
+  char_cols <- separated$char_cols
+  data_num <- coerce_numeric(separated$data)
 
-    switch(calc_type,
-        rolling = {
-            align <- rlang::arg_match(align, values = c("left", "right", "center"))
-            mos <- rlang::arg_match(mos, values = c("mean", "median"))
+  switch(calc_type,
+    rolling = {
+      align <- rlang::arg_match(align, values = c("left", "right", "center"))
+      mos <- rlang::arg_match(mos, values = c("mean", "median"))
 
-            if (align == "center") {
-                a <- window / 2
-                b <- window / 2
-            } else if (align == "right") {
-                a <- window
-                b <- 0
-            } else {
-                a <- 0
-                b <- window
-            }
+      if (align == "center") {
+        a <- window / 2
+        b <- window / 2
+      } else if (align == "right") {
+        a <- window
+        b <- 0
+      } else {
+        a <- 0
+        b <- window
+      }
 
-            data_num %>%
-                dplyr::mutate(
-                    dplyr::across(
-                        tidyselect::everything(),
-                        ~ slider::slide_index_dbl(
-                            .,
-                            .i = time,
-                            .f = mos,
-                            na.rm = TRUE,
-                            trim = trim / window / 2,
-                            .before = b,
-                            .after = a,
-                            .complete = FALSE
-                        ))) %>%
-                dplyr::filter(dplyr::if_any(tidyselect::everything(),
-                                            ~ !is.na(.)))
-        },
-        bin = {
-            out <- data_num %>%
-                dplyr::group_by_at(
-                    .vars = time_col,
-                    function(x) ceiling(x / window) * window) %>%
-                dplyr::summarise_all(.funs = mos,
-                                     na.rm = TRUE,
-                                     trim = trim / window / 2)
+      data_num %>%
+        dplyr::mutate(
+          dplyr::across(
+            tidyselect::everything(),
+            ~ slider::slide_index_dbl(
+              .,
+              .i = time,
+              .f = mos,
+              na.rm = TRUE,
+              trim = trim / window / 2,
+              .before = b,
+              .after = a,
+              .complete = FALSE
+            )
+          )
+        ) %>%
+        dplyr::filter(dplyr::if_any(
+          tidyselect::everything(),
+          ~ !is.na(.)
+        ))
+    },
+    bin = {
+      out <- data_num %>%
+        dplyr::group_by_at(
+          .vars = time_col,
+          function(x) ceiling(x / window) * window
+        ) %>%
+        dplyr::summarise_all(
+          .funs = mos,
+          na.rm = TRUE,
+          trim = trim / window / 2
+        )
 
-            dplyr::bind_cols(char_cols, out)
-        }
-    )
+      dplyr::bind_cols(char_cols, out)
+    }
+  )
 }
 
 #' @keywords internal
 #' @noRd
 avg_digital <- function(.data, time_col, cutoff, fs, order) {
-    exclude <- colnames(.data) %in% time_col
-    time_df <- .data[, exclude, drop = FALSE]
-    .data <- .data[, !exclude, drop = FALSE]
+  exclude <- colnames(.data) %in% time_col
+  time_df <- .data[, exclude, drop = FALSE]
+  .data <- .data[, !exclude, drop = FALSE]
 
-    separated <- separate_char_cols(.data)
-    char_cols <- separated$char_cols
-    data_num <- coerce_numeric(separated$data)
+  separated <- separate_char_cols(.data)
+  char_cols <- separated$char_cols
+  data_num <- coerce_numeric(separated$data)
 
-    bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)
+  bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)
 
-    out <- purrr::map(.x = data_num,
-                      .f = function(.x, bf) signal::filter(bf, .x),
-                      bf = bf)
+  out <- purrr::map(
+    .x = data_num,
+    .f = function(.x, bf) signal::filter(bf, .x),
+    bf = bf
+  )
 
-    dplyr::bind_cols(time_df, char_cols, out)
+  dplyr::bind_cols(time_df, char_cols, out)
 }
 
 #' @keywords internal
-butter_lowpass <- function(cutoff, fs, order = 3){
-    nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
-    # at a minimum two data points per wave in order to construct the wave
-    normal_cutoff <- cutoff / nyq
-    signal::butter(n = order, W = normal_cutoff, type = "low", plane = "z")
+butter_lowpass <- function(cutoff, fs, order = 3) {
+  nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
+  # at a minimum two data points per wave in order to construct the wave
+  normal_cutoff <- cutoff / nyq
+  signal::butter(n = order, W = normal_cutoff, type = "low", plane = "z")
 }

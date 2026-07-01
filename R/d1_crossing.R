@@ -47,197 +47,233 @@ d1_crossing <- function(.data,
                         # TODO ADD FRONT TRIM ARGUMENTS,
                         ci = FALSE,
                         conf_level = 0.95,
-                        plots = TRUE
-                        ) {
-    # check if there is crucial missing data
-    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+                        plots = TRUE) {
+  # check if there is crucial missing data
+  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
-    ordering <- match.arg(ordering, several.ok = FALSE)
-    .data <- order_cpet_df(.data, .x = .x , time = time,
-                           ordering = ordering)
+  ordering <- match.arg(ordering, several.ok = FALSE)
+  .data <- order_cpet_df(.data,
+    .x = .x, time = time,
+    ordering = ordering
+  )
 
-    plot_df <- .data
+  plot_df <- .data
 
-    # best-fit polynomial for vo2
-    lm_poly_vo2 <- loop_poly_d1_crossing(.data = .data, .x = time, .y = vo2,
-                                 degree = degree,
-                                 alpha_linearity = alpha_linearity)
+  # best-fit polynomial for vo2
+  lm_poly_vo2 <- loop_poly_d1_crossing(
+    .data = .data, .x = time, .y = vo2,
+    degree = degree,
+    alpha_linearity = alpha_linearity
+  )
 
-    # best-fit polynomial for vco2
-    lm_poly_vco2 <- loop_poly_d1_crossing(.data = .data, .x = time, .y = vco2,
-                                  degree = degree,
-                                  alpha_linearity = alpha_linearity)
+  # best-fit polynomial for vco2
+  lm_poly_vco2 <- loop_poly_d1_crossing(
+    .data = .data, .x = time, .y = vco2,
+    degree = degree,
+    alpha_linearity = alpha_linearity
+  )
 
-    # if creating the linear model fails, return a quick summary
-    if(is.null(lm_poly_vo2) |
-       is.null(lm_poly_vco2) |
-       any(is.na(lm_poly_vo2$coefficients),
-           is.na(lm_poly_vco2$coefficients))) {
-        bp_dat <- return_indeterminant_findings(
-            .data = plot_df, # change to plot_data later?
-            bp = bp,
-            algorithm = as.character(match.call()[[1]]),
-            .x = .x,
-            .y = .y,
-            est_ci = "estimate")
+  # if creating the linear model fails, return a quick summary
+  if (is.null(lm_poly_vo2) |
+    is.null(lm_poly_vco2) |
+    any(
+      is.na(lm_poly_vo2$coefficients),
+      is.na(lm_poly_vco2$coefficients)
+    )) {
+    bp_dat <- return_indeterminant_findings(
+      .data = plot_df, # change to plot_data later?
+      bp = bp,
+      algorithm = as.character(match.call()[[1]]),
+      .x = .x,
+      .y = .y,
+      est_ci = "estimate"
+    )
 
-        return(list(breakpoint_data = bp_dat))
-    }
+    return(list(breakpoint_data = bp_dat))
+  }
 
 
-    # 1st derivative for vo2
-    poly_expr_vo2 <- expr_from_coefs(lm_poly_vo2$coefficients)
-    deriv1_vo2 <- Deriv::Deriv(poly_expr_vo2, x = "x", nderiv = 1) # slope
+  # 1st derivative for vo2
+  poly_expr_vo2 <- expr_from_coefs(lm_poly_vo2$coefficients)
+  deriv1_vo2 <- Deriv::Deriv(poly_expr_vo2, x = "x", nderiv = 1) # slope
 
-    # 1st derivative for vco2
-    poly_expr_vco2 <- expr_from_coefs(lm_poly_vco2$coefficients)
-    deriv1_vco2 <- Deriv::Deriv(poly_expr_vco2, x = "x", nderiv = 1) # slope
+  # 1st derivative for vco2
+  poly_expr_vco2 <- expr_from_coefs(lm_poly_vco2$coefficients)
+  deriv1_vco2 <- Deriv::Deriv(poly_expr_vco2, x = "x", nderiv = 1) # slope
 
-    # turn derivative expressions into functions to use with uniroot.all()
-    deriv1_vo2_func <- expr_to_func(deriv1_vo2)
-    deriv1_vco2_func <- expr_to_func(deriv1_vco2)
+  # turn derivative expressions into functions to use with uniroot.all()
+  deriv1_vo2_func <- expr_to_func(deriv1_vo2)
+  deriv1_vco2_func <- expr_to_func(deriv1_vco2)
 
-    # calculate derivative of difference in 1st derivative functions
-    # this lets us know if vco2 was surpassing vo2 or the other way around
-    deriv_diff_deriv1 <- paste0(deriv1_vo2 %>%
-                                    Ryacas::y_fn("Simplify") %>%
-                                    Ryacas::yac_str(),
-                                " - (",
-                                deriv1_vco2 %>%
-                                    Ryacas::y_fn("Simplify") %>%
-                                    Ryacas::yac_str(),
-                                ")") %>%
-        parse(text = .) %>%
-        Deriv::Deriv(x = "x", nderiv = 1)
+  # calculate derivative of difference in 1st derivative functions
+  # this lets us know if vco2 was surpassing vo2 or the other way around
+  deriv_diff_deriv1 <- paste0(
+    deriv1_vo2 %>%
+      Ryacas::y_fn("Simplify") %>%
+      Ryacas::yac_str(),
+    " - (",
+    deriv1_vco2 %>%
+      Ryacas::y_fn("Simplify") %>%
+      Ryacas::yac_str(),
+    ")"
+  ) %>%
+    parse(text = .) %>%
+    Deriv::Deriv(x = "x", nderiv = 1)
 
-    roots <- rootSolve::uniroot.all(
-        function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
-        interval = c(min(.data[[.x]]), max(.data[[.x]])))
+  roots <- rootSolve::uniroot.all(
+    function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
+    interval = c(min(.data[[.x]]), max(.data[[.x]]))
+  )
 
-    # filter by roots within range of x values
-    roots <- roots[roots >= min(.data[[.x]]) &
-                       roots <= max(.data[[.x]])]
+  # filter by roots within range of x values
+  roots <- roots[roots >= min(.data[[.x]]) &
+    roots <= max(.data[[.x]])]
 
-    # filter by which roots have a negative derivative. This indicates that
-    # co2 is rising above o2. Finding max finds the last time this occurs.
-    final_crossing <- roots[eval(deriv_diff_deriv1,
-                                 envir = list(x = roots)) < 0] %>%
-        max()
+  # filter by which roots have a negative derivative. This indicates that
+  # co2 is rising above o2. Finding max finds the last time this occurs.
+  final_crossing <- roots[eval(deriv_diff_deriv1,
+    envir = list(x = roots)
+  ) < 0] %>%
+    max()
 
-    # find the fitted VO2 value and use that to find threshold values.
-    # You could use VCO2 or somehow integrate both VO2 & VCO2, but that might be a future update
+  # find the fitted VO2 value and use that to find threshold values.
+  # You could use VCO2 or somehow integrate both VO2 & VCO2, but that might be a future update
 
-    if(length(final_crossing) > 0) {
-        y_hat_threshold <- eval(poly_expr_vo2,
-                                envir = list(x = final_crossing))
-        # get values at threshold
-        bp_dat <- find_threshold_vals(.data = .data, thr_x = final_crossing,
-                                      thr_y = y_hat_threshold, .x = .x,
-                                      .y = .y, ...)
+  if (length(final_crossing) > 0) {
+    y_hat_threshold <- eval(poly_expr_vo2,
+      envir = list(x = final_crossing)
+    )
+    # get values at threshold
+    bp_dat <- find_threshold_vals(
+      .data = .data, thr_x = final_crossing,
+      thr_y = y_hat_threshold, .x = .x,
+      .y = .y, ...
+    )
 
-        bp_dat <- bp_dat %>%
-            dplyr::mutate(bp = bp,
-                          algorithm = "d1_crossing",
-                          x_var = .x,
-                          y_var = .y,
-            )
-    } else {
-        bp_dat <- tibble::tibble()
-    }
-
-    if(nrow(bp_dat) == 0) { # no breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::add_row() %>%
-            dplyr::mutate(determinant_bp = FALSE)
-    } else { # breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::mutate(determinant_bp = TRUE)
-    }
     bp_dat <- bp_dat %>%
-        dplyr::mutate(algorithm = "d1_crossing",
-                      x_var = .x,
-                      y_var = .y,
-                      bp = bp) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+      dplyr::mutate(
+        bp = bp,
+        algorithm = "d1_crossing",
+        x_var = .x,
+        y_var = .y,
+      )
+  } else {
+    bp_dat <- tibble::tibble()
+  }
 
-    if(plots) {
-        bp_plot <- ggplot2::ggplot(data = .data,
-                                   ggplot2::aes(x = .data[[.x]],
-                                                y = .data[[.y]])) +
-            ggplot2::geom_point(ggplot2::aes(y = vo2, color = "vo2"),
-                                alpha = 0.5) +
-            ggplot2::geom_point(ggplot2::aes(y = vco2, color = "vco2"),
-                                alpha = 0.5) +
-            ggplot2::geom_line(ggplot2::aes(y = eval(
-                poly_expr_vo2,
-                envir = list(x = .data[[.x]])))) +
-            ggplot2::geom_line(ggplot2::aes(y = eval(
-                poly_expr_vco2,
-                envir = list(x = .data[[.x]])))) +
-            ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
-            ggplot2::scale_color_manual(values = c(
-                "vo2" = "red", "vco2" = "blue")) +
-            ggplot2::guides(color = ggplot2::guide_legend(title = NULL)) +
-            ggplot2::theme_minimal()
-    } else {
-        bp_plot <- NULL
-    }
+  if (nrow(bp_dat) == 0) { # no breakpoint found
+    bp_dat <- bp_dat %>%
+      dplyr::add_row() %>%
+      dplyr::mutate(determinant_bp = FALSE)
+  } else { # breakpoint found
+    bp_dat <- bp_dat %>%
+      dplyr::mutate(determinant_bp = TRUE)
+  }
+  bp_dat <- bp_dat %>%
+    dplyr::mutate(
+      algorithm = "d1_crossing",
+      x_var = .x,
+      y_var = .y,
+      bp = bp
+    ) %>%
+    dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
-    return(list(breakpoint_data = bp_dat,
-                lm_poly_vo2 = lm_poly_vo2,
-                deriv1_vo2 = deriv1_vo2,
-                lm_poly_vco2 = lm_poly_vco2,
-                deriv1_vco2 = deriv1_vco2,
-                bp_plot = bp_plot))
+  if (plots) {
+    bp_plot <- ggplot2::ggplot(
+      data = .data,
+      ggplot2::aes(
+        x = .data[[.x]],
+        y = .data[[.y]]
+      )
+    ) +
+      ggplot2::geom_point(ggplot2::aes(y = vo2, color = "vo2"),
+        alpha = 0.5
+      ) +
+      ggplot2::geom_point(ggplot2::aes(y = vco2, color = "vco2"),
+        alpha = 0.5
+      ) +
+      ggplot2::geom_line(ggplot2::aes(y = eval(
+        poly_expr_vo2,
+        envir = list(x = .data[[.x]])
+      ))) +
+      ggplot2::geom_line(ggplot2::aes(y = eval(
+        poly_expr_vco2,
+        envir = list(x = .data[[.x]])
+      ))) +
+      ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+      ggplot2::scale_color_manual(values = c(
+        "vo2" = "red", "vco2" = "blue"
+      )) +
+      ggplot2::guides(color = ggplot2::guide_legend(title = NULL)) +
+      ggplot2::theme_minimal()
+  } else {
+    bp_plot <- NULL
+  }
 
+  return(list(
+    breakpoint_data = bp_dat,
+    lm_poly_vo2 = lm_poly_vo2,
+    deriv1_vo2 = deriv1_vo2,
+    lm_poly_vco2 = lm_poly_vco2,
+    deriv1_vco2 = deriv1_vco2,
+    bp_plot = bp_plot
+  ))
 }
 
 #' @keywords internal
 loop_poly_d1_crossing <- function(.data, .x, .y,
-                          degree = NULL, alpha_linearity = 0.05) {
-    # you can't fit a model if you don't have any data
-    if(nrow(.data) == 0) return(NULL)
-    # if the user specifies a degree, find that and be done with it
-    if (!is.null(degree)) {
-        lm_poly <- paste0(.y, " ~ ", "1 + ",
-                          "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            stats::lm(data = .data)
-        # if the user does NOT specify a degree, find the best degree using
-        # likelihood ratio test
-    } else {
-        degree = 5 # from testing and previous papers it seems like you need to
-        # force a higher derivative if you want a local maxima within the
-        # range of x values. That doesn't feel wonderful.
-        lm_list = vector(mode = "list", length = 0) # hold lm data
-        # keep raw = TRUE for now b/c it's way easier for me to test
-        # if the derivative expressions are working
-        # starting with degree = 5 b/c that's the minimum I've seen in
-        # other papers that seemed to use polynomial fits
+                                  degree = NULL, alpha_linearity = 0.05) {
+  # you can't fit a model if you don't have any data
+  if (nrow(.data) == 0) {
+    return(NULL)
+  }
+  # if the user specifies a degree, find that and be done with it
+  if (!is.null(degree)) {
+    lm_poly <- paste0(
+      .y, " ~ ", "1 + ",
+      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
+    ) %>%
+      stats::lm(data = .data)
+    # if the user does NOT specify a degree, find the best degree using
+    # likelihood ratio test
+  } else {
+    degree <- 5 # from testing and previous papers it seems like you need to
+    # force a higher derivative if you want a local maxima within the
+    # range of x values. That doesn't feel wonderful.
+    lm_list <- vector(mode = "list", length = 0) # hold lm data
+    # keep raw = TRUE for now b/c it's way easier for me to test
+    # if the derivative expressions are working
+    # starting with degree = 5 b/c that's the minimum I've seen in
+    # other papers that seemed to use polynomial fits
 
-        lm_poly <- paste0(.y, " ~ ", "1 + ",
-                          "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            stats::lm(data = .data)
+    lm_poly <- paste0(
+      .y, " ~ ", "1 + ",
+      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
+    ) %>%
+      stats::lm(data = .data)
 
-        lm_list <- append(lm_list, list(lm_poly))
+    lm_list <- append(lm_list, list(lm_poly))
 
-        cont <- TRUE
-        i <- 1 # start at 2 b/c we already made linear (degree = 1) model
-        while(cont == TRUE) {
-            lm_poly <- paste0(.y, " ~ ", "1 + ",
-                              "poly(", .x, ", degree = ",
-                              degree + i, ", raw = TRUE)") %>%
-                stats::lm(data = .data)
-            lm_list <- append(lm_list, list(lm_poly))
-            lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
-            if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-                cont = FALSE
-                lm_poly <- lm_list[[i]] # take the previous model
-            }
-            i <- i + 1
-        }
+    cont <- TRUE
+    i <- 1 # start at 2 b/c we already made linear (degree = 1) model
+    while (cont == TRUE) {
+      lm_poly <- paste0(
+        .y, " ~ ", "1 + ",
+        "poly(", .x, ", degree = ",
+        degree + i, ", raw = TRUE)"
+      ) %>%
+        stats::lm(data = .data)
+      lm_list <- append(lm_list, list(lm_poly))
+      lrt <- stats::anova(lm_list[[i]], lm_list[[i + 1]])
+      if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
+        cont <- FALSE
+        lm_poly <- lm_list[[i]] # take the previous model
+      }
+      i <- i + 1
     }
+  }
 
-    lm_poly
+  lm_poly
 }
 
 

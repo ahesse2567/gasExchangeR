@@ -46,146 +46,165 @@ d2_inflection <- function(.data,
                           # TODO ADD FROM TRIM ARGUMENTS,
                           ci = FALSE,
                           conf_level = 0.95,
-                          plots = TRUE
-                          ) {
+                          plots = TRUE) {
+  # check if there is crucial missing data
+  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
-    # check if there is crucial missing data
-    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+  .data <- .data %>% # rearrange by x variable. Use time var to break ties.
+    dplyr::arrange(.data[[.x]], .data[[time]])
 
-    .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-        dplyr::arrange(.data[[.x]], .data[[time]])
+  lm_poly <- loop_d2_inflection(
+    .data = .data, .x = .x, .y = .y,
+    degree = degree,
+    alpha_linearity = alpha_linearity
+  )
 
-    lm_poly <- loop_d2_inflection(.data = .data, .x = .x, .y = .y,
-                                  degree = degree,
-                                  alpha_linearity = alpha_linearity)
+  poly_expr <- expr_from_coefs(lm_poly$coefficients)
+  deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
+  deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
 
-    poly_expr <- expr_from_coefs(lm_poly$coefficients)
-    deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
-    deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
+  # find x-values of roots of second derivative (inflection points)
+  inflection_points_x <- deriv2 %>%
+    Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
+    Ryacas::yac_str() %>%
+    stringr::str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
+    purrr::map(as.numeric) %>%
+    unlist() %>%
+    rev() %>% # reverse order for polyroot()
+    polyroot() %>%
+    find_real()
 
-    # find x-values of roots of second derivative (inflection points)
-    inflection_points_x <- deriv2 %>%
-        Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
-        Ryacas::yac_str() %>%
-        stringr::str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
-        purrr::map(as.numeric) %>%
-        unlist() %>%
-        rev() %>% # reverse order for polyroot()
-        polyroot() %>%
-        find_real()
+  # filter by roots within range of x values
+  inflection_points_x <- inflection_points_x[inflection_points_x >=
+    min(.data[[.x]]) &
+    inflection_points_x <=
+      max(.data[[.x]])]
 
-    # filter by roots within range of x values
-    inflection_points_x <- inflection_points_x[inflection_points_x >=
-                                                   min(.data[[.x]]) &
-                                               inflection_points_x <=
-                                                   max(.data[[.x]])]
+  concavity_chgs <- concavity_changes(poly_expr,
+    inflection_points = inflection_points_x
+  )
+  # filter by concave up to concave down
+  inflection_points_x <- inflection_points_x[concavity_chgs == "up to down"]
+  # if there's more than one up to down inflection point, choose whichever
+  # point has the higher slope
+  inflection_points_x <- inflection_points_x[which.max(
+    eval(deriv1, envir = list(x = inflection_points_x))
+  )]
 
-    concavity_chgs <- concavity_changes(poly_expr,
-                                        inflection_points = inflection_points_x)
-    # filter by concave up to concave down
-    inflection_points_x <- inflection_points_x[concavity_chgs == "up to down"]
-    # if there's more than one up to down inflection point, choose whichever
-    # point has the higher slope
-    inflection_points_x <- inflection_points_x[which.max(
-        eval(deriv1, envir = list(x = inflection_points_x)))]
+  inflection_points_y <- eval(poly_expr, envir = list(x = inflection_points_x))
 
-    inflection_points_y <- eval(poly_expr, envir = list(x = inflection_points_x))
+  if (length(inflection_points_x) > 0 & length(inflection_points_y) > 0) {
+    bp_dat <- find_threshold_vals(
+      .data = .data, thr_x = inflection_points_x,
+      thr_y = inflection_points_y, .x = .x,
+      .y = .y, ...
+    )
+  } else {
+    bp_dat <- tibble::tibble()
+  }
 
-    if(length(inflection_points_x) > 0 & length(inflection_points_y) > 0) {
-        bp_dat <- find_threshold_vals(.data = .data, thr_x = inflection_points_x,
-                                      thr_y = inflection_points_y, .x = .x,
-                                      .y = .y, ...)
-    } else {
-        bp_dat <- tibble::tibble()
-    }
+  # get values at threshold. Make this a deriv helpers function to prep bp_dat?
 
-    # get values at threshold. Make this a deriv helpers function to prep bp_dat?
-
-    if(nrow(bp_dat) == 0) { # no breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::add_row() %>%
-            dplyr::mutate(determinant_bp = FALSE)
-        # add character or factor columns that are all the same value (e.g. ids)
-        non_numeric_df <- .data %>%
-            dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
-                             all(x == x[1]))) %>%
-            dplyr::slice(1)
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
-    } else { # breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::mutate(determinant_bp = TRUE)
-    }
+  if (nrow(bp_dat) == 0) { # no breakpoint found
     bp_dat <- bp_dat %>%
-        dplyr::mutate(bp = bp,
-                      algorithm = "d2_inflection",
-                      x_var = .x,
-                      y_var = .y) %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+      dplyr::add_row() %>%
+      dplyr::mutate(determinant_bp = FALSE)
+    # add character or factor columns that are all the same value (e.g. ids)
+    non_numeric_df <- .data %>%
+      dplyr::select(tidyselect::where(function(x) {
+        is.character(x) | is.factor(x) &
+          all(x == x[1])
+      })) %>%
+      dplyr::slice(1)
+    bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
+  } else { # breakpoint found
+    bp_dat <- bp_dat %>%
+      dplyr::mutate(determinant_bp = TRUE)
+  }
+  bp_dat <- bp_dat %>%
+    dplyr::mutate(
+      bp = bp,
+      algorithm = "d2_inflection",
+      x_var = .x,
+      y_var = .y
+    ) %>%
+    dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
 
-    # make plot for output
-    if(plots) {
-        bp_plot <- ggplot2::ggplot(data = .data,
-                                   ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
-            ggplot2::geom_point(alpha = 0.5) +
-            ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr,
-                                                     envir = list(x = .data[[.x]])))) +
-            ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
-            ggplot2::theme_minimal()
-    } else {
-        bp_plot <- NULL
-    }
+  # make plot for output
+  if (plots) {
+    bp_plot <- ggplot2::ggplot(
+      data = .data,
+      ggplot2::aes(x = .data[[.x]], y = .data[[.y]])
+    ) +
+      ggplot2::geom_point(alpha = 0.5) +
+      ggplot2::geom_line(ggplot2::aes(y = eval(poly_expr,
+        envir = list(x = .data[[.x]])
+      ))) +
+      ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+      ggplot2::theme_minimal()
+  } else {
+    bp_plot <- NULL
+  }
 
-    return(list(breakpoint_data = bp_dat,
-                lm_poly_reg = lm_poly,
-                deriv1_expr = deriv1,
-                deriv2_expr = deriv2,
-                bp_plot = bp_plot))
+  return(list(
+    breakpoint_data = bp_dat,
+    lm_poly_reg = lm_poly,
+    deriv1_expr = deriv1,
+    deriv2_expr = deriv2,
+    bp_plot = bp_plot
+  ))
 }
 
 #' @keywords internal
 loop_d2_inflection <- function(.data, .x, .y,
                                degree = NULL, alpha_linearity = 0.05) {
-    # if the user specifies a degree, find that and be done with it
-    if (!is.null(degree)) {
-        lm_poly <- paste0(.y, " ~ ", "1 + ",
-                          "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            stats::lm(data = .data)
-        # if the user does NOT specify a degree, find the best degree using
-        # likelihood ratio test
-    } else {
-        degree = 5 # from testing and previous papers it seems like you need to
-        # force a higher derivative if you want a local maxima within the
-        # range of x values. That doesn't feel wonderful.
-        lm_list = vector(mode = "list", length = 0) # hold lm data
-        # keep raw = TRUE for now b/c it's way easier for me to test
-        # if the derivative expressions are working
-        # starting with degree = 5 b/c that's the minimum I've seen in
-        # other papers that seemed to use polynomial fits
+  # if the user specifies a degree, find that and be done with it
+  if (!is.null(degree)) {
+    lm_poly <- paste0(
+      .y, " ~ ", "1 + ",
+      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
+    ) %>%
+      stats::lm(data = .data)
+    # if the user does NOT specify a degree, find the best degree using
+    # likelihood ratio test
+  } else {
+    degree <- 5 # from testing and previous papers it seems like you need to
+    # force a higher derivative if you want a local maxima within the
+    # range of x values. That doesn't feel wonderful.
+    lm_list <- vector(mode = "list", length = 0) # hold lm data
+    # keep raw = TRUE for now b/c it's way easier for me to test
+    # if the derivative expressions are working
+    # starting with degree = 5 b/c that's the minimum I've seen in
+    # other papers that seemed to use polynomial fits
 
-        lm_poly <- paste0(.y, " ~ ", "1 + ",
-                          "poly(", .x, ", degree = ", degree, ", raw = TRUE)") %>%
-            stats::lm(data = .data)
+    lm_poly <- paste0(
+      .y, " ~ ", "1 + ",
+      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
+    ) %>%
+      stats::lm(data = .data)
 
-        lm_list <- append(lm_list, list(lm_poly))
+    lm_list <- append(lm_list, list(lm_poly))
 
-        cont <- TRUE
-        i <- 1 # start at 2 b/c we already made linear (degree = 1) model
-        while(cont == TRUE) {
-            lm_poly <- paste0(.y, " ~ ", "1 + ",
-                              "poly(", .x, ", degree = ",
-                              degree + i, ", raw = TRUE)") %>%
-                stats::lm(data = .data)
-            lm_list <- append(lm_list, list(lm_poly))
-            lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
-            if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-                cont = FALSE
-                lm_poly <- lm_list[[i]] # take the previous model
-            }
-            i <- i + 1
-        }
+    cont <- TRUE
+    i <- 1 # start at 2 b/c we already made linear (degree = 1) model
+    while (cont == TRUE) {
+      lm_poly <- paste0(
+        .y, " ~ ", "1 + ",
+        "poly(", .x, ", degree = ",
+        degree + i, ", raw = TRUE)"
+      ) %>%
+        stats::lm(data = .data)
+      lm_list <- append(lm_list, list(lm_poly))
+      lrt <- stats::anova(lm_list[[i]], lm_list[[i + 1]])
+      if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
+        cont <- FALSE
+        lm_poly <- lm_list[[i]] # take the previous model
+      }
+      i <- i + 1
     }
+  }
 
-    lm_poly
+  lm_poly
 }
 
 #' Find when a function changes from concave up to concave down or vice versa
@@ -193,14 +212,15 @@ loop_d2_inflection <- function(.data, .x, .y,
 #' @noRd
 #'
 concavity_changes <- function(f, inflection_points, tol = 0.1) {
-    # find second derivative
-    f_dd <- Deriv::Deriv(f, x = "x", nderiv = 2)
-    if (is.expression(f_dd)) { # change expression to function if needed
-        f_dd <- expr_to_func(f_dd)
-    }
-    left_sign <- sign(f_dd(inflection_points - tol))
-    right_sign <- sign(f_dd(inflection_points + tol))
-    conc_changes <- dplyr::if_else(left_sign > 0 & right_sign < 0,
-                            "up to down", "down to up")
-    conc_changes
+  # find second derivative
+  f_dd <- Deriv::Deriv(f, x = "x", nderiv = 2)
+  if (is.expression(f_dd)) { # change expression to function if needed
+    f_dd <- expr_to_func(f_dd)
+  }
+  left_sign <- sign(f_dd(inflection_points - tol))
+  right_sign <- sign(f_dd(inflection_points + tol))
+  conc_changes <- dplyr::if_else(left_sign > 0 & right_sign < 0,
+    "up to down", "down to up"
+  )
+  conc_changes
 }

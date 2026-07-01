@@ -26,67 +26,84 @@
 #' @returns A tibble
 #' @keywords internal
 find_threshold_vals <- function(.data, thr_x, thr_y, .x = .x, .y = .y,
-                                thr_calc_method = c("inv_dist_knn",
-                                           "dist_x_y",
-                                           "dist_x"),
+                                thr_calc_method = c(
+                                  "inv_dist_knn",
+                                  "dist_x_y",
+                                  "dist_x"
+                                ),
                                 k = 5,
                                 ...) {
-    thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
-    class(.data) <- append(class(.data), thr_calc_method)
-    UseMethod("find_threshold_vals", .data)
+  thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
+  class(.data) <- append(class(.data), thr_calc_method)
+  UseMethod("find_threshold_vals", .data)
 }
 
 #' @export
 #' @keywords internal
 find_threshold_vals.inv_dist_knn <- function(.data,
-                                         thr_x,
-                                         thr_y,
-                                         .x = .x,
-                                         .y = .y,
-                                         thr_calc_method = c("inv_dist_knn",
-                                                             "dist_x-y",
-                                                             "dist_x"),
-                                         k = 5,
-                                         ...) {
-    thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
+                                             thr_x,
+                                             thr_y,
+                                             .x = .x,
+                                             .y = .y,
+                                             thr_calc_method = c(
+                                               "inv_dist_knn",
+                                               "dist_x-y",
+                                               "dist_x"
+                                             ),
+                                             k = 5,
+                                             ...) {
+  thr_calc_method <- match.arg(thr_calc_method, several.ok = FALSE)
 
-    # save columns with entirely unique character or factor variables for later
-    non_numeric_df <- .data %>%
-        dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
-                                            all(x == x[1]))) %>%
-        dplyr::slice(1)
+  # save columns with entirely unique character or factor variables for later
+  non_numeric_df <- .data %>%
+    dplyr::select(tidyselect::where(function(x) {
+      is.character(x) | is.factor(x) &
+        all(x == x[1])
+    })) %>%
+    dplyr::slice(1)
 
-    # calculate distance between observed x-y threshold coordinate
-    d <- dplyr::bind_rows(tibble::tibble("{.x}" := thr_x, "{.y}" := thr_y),
-                   .data %>%
-                       dplyr::select(as.name(.x), as.name(.y))) %>%
-        dplyr::mutate(dplyr::across(tidyselect::everything(), normalize01)) %>%
-        stats::dist()
+  # calculate distance between observed x-y threshold coordinate
+  d <- dplyr::bind_rows(
+    tibble::tibble("{.x}" := thr_x, "{.y}" := thr_y),
+    .data %>%
+      dplyr::select(as.name(.x), as.name(.y))
+  ) %>%
+    dplyr::mutate(dplyr::across(tidyselect::everything(), normalize01)) %>%
+    stats::dist()
 
-    threshold_data <- .data %>%
-        dplyr::select(-c(.x, .y, names(non_numeric_df))) %>%
-        # add distances between threshold and corresponding variables
-        dplyr::mutate(
-            normalized_dist = d[dist_idx_conv(2:attr(d, "Size"), 1, d)]) %>%
-        # subset by k nearest neighbors
-        dplyr::slice_min(normalized_dist, n = k) %>%
-        # calculate contribution of each variable to the final value
-        dplyr::mutate(inv_weight = (normalized_dist/max(normalized_dist))^-1,
-                      pct_tot_weight = inv_weight/sum(inv_weight)) %>%
-        # calculate threshold values
-        dplyr::summarize(dplyr::across(!c(normalized_dist,
-                                   inv_weight,
-                                   pct_tot_weight),
-                         ~ sum(. * pct_tot_weight))) %>%
-        # add back variables used to calculate the threshold
-        dplyr::mutate("{.x}" := thr_x,
-                      "{.y}" := thr_y) %>%
-        # reorder by original column ordering
-        dplyr::relocate(colnames(.data)[colnames(.data) %in%
-                                            colnames(.)]) %>%
-        dplyr::bind_cols(non_numeric_df) # add back unique, non-numeric columns
+  threshold_data <- .data %>%
+    dplyr::select(-c(.x, .y, names(non_numeric_df))) %>%
+    # add distances between threshold and corresponding variables
+    dplyr::mutate(
+      normalized_dist = d[dist_idx_conv(2:attr(d, "Size"), 1, d)]
+    ) %>%
+    # subset by k nearest neighbors
+    dplyr::slice_min(normalized_dist, n = k) %>%
+    # calculate contribution of each variable to the final value
+    dplyr::mutate(
+      inv_weight = (normalized_dist / max(normalized_dist))^-1,
+      pct_tot_weight = inv_weight / sum(inv_weight)
+    ) %>%
+    # calculate threshold values
+    dplyr::summarize(dplyr::across(
+      !c(
+        normalized_dist,
+        inv_weight,
+        pct_tot_weight
+      ),
+      ~ sum(. * pct_tot_weight)
+    )) %>%
+    # add back variables used to calculate the threshold
+    dplyr::mutate(
+      "{.x}" := thr_x,
+      "{.y}" := thr_y
+    ) %>%
+    # reorder by original column ordering
+    dplyr::relocate(colnames(.data)[colnames(.data) %in%
+      colnames(.)]) %>%
+    dplyr::bind_cols(non_numeric_df) # add back unique, non-numeric columns
 
-    threshold_data
+  threshold_data
 }
 
 #' @export
@@ -96,24 +113,30 @@ find_threshold_vals.dist_x_y <- function(.data,
                                          thr_y,
                                          .x = .x,
                                          .y = .y,
-                                         thr_calc_method = c("inv_dist_knn",
-                                                             "dist_x-y",
-                                                             "dist_x"),
+                                         thr_calc_method = c(
+                                           "inv_dist_knn",
+                                           "dist_x-y",
+                                           "dist_x"
+                                         ),
                                          k = 5,
                                          ...) {
-    # calculate distance between observed x-y threshold coordinate
-    d <- dplyr::bind_rows(tibble::tibble("{.x}" := thr_x, "{.y}" := thr_y),
-                   .data %>%
-                       dplyr::select(as.name(.x), as.name(.y))) %>%
-        dplyr::mutate(dplyr::across(tidyselect::everything(), normalize01)) %>%
-        stats::dist()
-    # select row of data closest to the x-y threshold coordiante
-    threshold_data <- .data %>%
-        dplyr::mutate(normalized_dist =
-                d[dist_idx_conv(2:attr(d, "Size"), 1, d)]) %>%
-        dplyr::slice_min(normalized_dist, n = 1)
+  # calculate distance between observed x-y threshold coordinate
+  d <- dplyr::bind_rows(
+    tibble::tibble("{.x}" := thr_x, "{.y}" := thr_y),
+    .data %>%
+      dplyr::select(as.name(.x), as.name(.y))
+  ) %>%
+    dplyr::mutate(dplyr::across(tidyselect::everything(), normalize01)) %>%
+    stats::dist()
+  # select row of data closest to the x-y threshold coordiante
+  threshold_data <- .data %>%
+    dplyr::mutate(
+      normalized_dist =
+        d[dist_idx_conv(2:attr(d, "Size"), 1, d)]
+    ) %>%
+    dplyr::slice_min(normalized_dist, n = 1)
 
-    threshold_data
+  threshold_data
 }
 
 #' @export
@@ -123,27 +146,28 @@ find_threshold_vals.dist_x <- function(.data,
                                        thr_y,
                                        .x = .x,
                                        .y = .y,
-                                       thr_calc_method = c("inv_dist_knn",
-                                                           "dist_x-y",
-                                                           "dist_x"),
+                                       thr_calc_method = c(
+                                         "inv_dist_knn",
+                                         "dist_x-y",
+                                         "dist_x"
+                                       ),
                                        k = 5,
                                        ...) {
-
-    threshold_idx <- which.min(abs(.data[[.x]] - thr_x))
-    .data[threshold_idx,]
+  threshold_idx <- which.min(abs(.data[[.x]] - thr_x))
+  .data[threshold_idx, ]
 }
 
 #' Convert a 2d index to a 1d index to subset dist objects
 #'
 #' @keywords internal
 #' @noRd
-dist_idx_conv <- function (i, j, dist_obj) {
-    # convert a 2D to a 1D index
-    # i = row (remember this starts at 2), j = column
-    if (!inherits(dist_obj, "dist")) stop("please provide a 'dist' object")
-    n <- attr(dist_obj, "Size")
-    valid <- (i >= 1) & (j >= 1) & (i > j) & (i <= n) & (j <= n)
-    k <- (2 * n - j) * (j - 1) / 2 + (i - j)
-    k[!valid] <- NA_real_
-    k
+dist_idx_conv <- function(i, j, dist_obj) {
+  # convert a 2D to a 1D index
+  # i = row (remember this starts at 2), j = column
+  if (!inherits(dist_obj, "dist")) stop("please provide a 'dist' object")
+  n <- attr(dist_obj, "Size")
+  valid <- (i >= 1) & (j >= 1) & (i > j) & (i <= n) & (j <= n)
+  k <- (2 * n - j) * (j - 1) / 2 + (i - j)
+  k[!valid] <- NA_real_
+  k
 }

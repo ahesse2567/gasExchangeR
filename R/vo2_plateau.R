@@ -37,30 +37,36 @@
 #' @examples
 #' # write example later
 vo2_plateau <- function(.data,
-                        method = c("slope_eot",
-                                   "vo2max_neighbor",
-                                   "zero_slope"),
+                        method = c(
+                          "slope_eot",
+                          "vo2max_neighbor",
+                          "zero_slope"
+                        ),
                         vo2_col = "vo2",
                         time_col = "time",
                         units = "mL",
                         last_x_s = 30,
                         delta_vo2 = 50,
                         alpha = 0.05) {
+  stopifnot(
+    !missing(.data),
+    # !missing(vo2_col),
+    !missing(method),
+    last_x_s > 0,
+    delta_vo2 > 0
+  )
 
-    stopifnot(!missing(.data),
-              # !missing(vo2_col),
-              !missing(method),
-              last_x_s > 0,
-              delta_vo2 > 0)
+  method <- match.arg(method,
+    choices = c(
+      "slope_eot",
+      "vo2max_neighbor",
+      "zero_slope"
+    ),
+    several.ok = FALSE
+  )
 
-    method = match.arg(method,
-                       choices = c("slope_eot",
-                                   "vo2max_neighbor",
-                                   "zero_slope"),
-                       several.ok = FALSE)
-
-    class(.data) <- append(class(.data), method)
-    UseMethod("vo2_plateau", .data)
+  class(.data) <- append(class(.data), method)
+  UseMethod("vo2_plateau", .data)
 }
 
 #' @export
@@ -72,28 +78,29 @@ vo2_plateau.slope_eot <- function(.data,
                                   last_x_s = 30,
                                   delta_vo2 = 50,
                                   alpha = 0.05) {
+  units <- match.arg(units, choices = c("mL", "L"))
+  if (units == "L") {
+    .data <- .data %>%
+      dplyr::mutate(vo2_col = .data[[vo2_col]] / 1000)
+  }
 
-    units <- match.arg(units, choices = c("mL", "L"))
-    if(units == "L") {
-        .data <- .data %>%
-            dplyr::mutate(vo2_col = .data[[vo2_col]]/1000)
-    }
+  eot_idx <- which((.data[[time_col]] - max(.data[[time_col]]) + last_x_s) >= 0)
+  eot <- .data[eot_idx, ]
 
-    eot_idx <- which((.data[[time_col]] - max(.data[[time_col]]) + last_x_s) >= 0)
-    eot <- .data[eot_idx,]
-
-    form <- stats::as.formula(paste(vo2_col, "~ 1 +", time_col))
-    lm <- lm(form, data = eot)
-    if(stats::coef(lm)[2]*60 < delta_vo2) {
-        plateau <- TRUE
-    } else {
-        plateau <- FALSE
-    }
-    out <- tibble::tibble(method = method,
-                          plateau = plateau,
-                  vo2_time_slope_min = stats::coef(lm)[2]*60,
-                  p.value = broom::tidy(lm)[["p.value"]][2])
-    out
+  form <- stats::as.formula(paste(vo2_col, "~ 1 +", time_col))
+  lm <- lm(form, data = eot)
+  if (stats::coef(lm)[2] * 60 < delta_vo2) {
+    plateau <- TRUE
+  } else {
+    plateau <- FALSE
+  }
+  out <- tibble::tibble(
+    method = method,
+    plateau = plateau,
+    vo2_time_slope_min = stats::coef(lm)[2] * 60,
+    p.value = broom::tidy(lm)[["p.value"]][2]
+  )
+  out
 }
 
 #' @export
@@ -105,30 +112,31 @@ vo2_plateau.zero_slope <- function(.data,
                                    last_x_s = 30,
                                    delta_vo2 = 50,
                                    alpha = 0.05) {
+  if (units == "L") {
+    .data <- .data %>%
+      dplyr::mutate(vo2_col = .data[[vo2_col]] / 1000)
+  }
 
-    if(units == "L") {
-        .data <- .data %>%
-            dplyr::mutate(vo2_col = .data[[vo2_col]]/1000)
-    }
+  eot_idx <- which((.data[[time_col]] - max(.data[[time_col]]) + last_x_s) >= 0)
+  eot <- .data[eot_idx, ]
 
-    eot_idx <- which((.data[[time_col]] - max(.data[[time_col]]) + last_x_s) >= 0)
-    eot <- .data[eot_idx,]
+  form <- stats::as.formula(paste(vo2_col, "~ 1 +", time_col))
+  lm <- lm(form, data = eot)
 
-    form <- stats::as.formula(paste(vo2_col, "~ 1 +", time_col))
-    lm <- lm(form, data = eot)
-
-    if(broom::tidy(lm)[["p.value"]][2] > alpha) {
-        plateau <- TRUE
-    } else if(broom::tidy(lm)[["p.value"]][2] < alpha & stats::coef(lm)[2]*60 < 0){
-        plateau <- TRUE
-    } else {
-        plateau <- FALSE
-    }
-    out <- tibble::tibble(method = method,
-                          plateau = plateau,
-                  vo2_time_slope_min = stats::coef(lm)[2]*60,
-                  p.value = broom::tidy(lm)[["p.value"]][2])
-    out
+  if (broom::tidy(lm)[["p.value"]][2] > alpha) {
+    plateau <- TRUE
+  } else if (broom::tidy(lm)[["p.value"]][2] < alpha & stats::coef(lm)[2] * 60 < 0) {
+    plateau <- TRUE
+  } else {
+    plateau <- FALSE
+  }
+  out <- tibble::tibble(
+    method = method,
+    plateau = plateau,
+    vo2_time_slope_min = stats::coef(lm)[2] * 60,
+    p.value = broom::tidy(lm)[["p.value"]][2]
+  )
+  out
 }
 
 #' @export
@@ -140,64 +148,69 @@ vo2_plateau.vo2max_neighbor <- function(.data,
                                         last_x_s = 30,
                                         delta_vo2 = 50,
                                         alpha = 0.05) {
+  if (units == "L") {
+    .data <- .data %>%
+      dplyr::mutate(vo2_col = .data[[vo2_col]] / 1000)
+  }
 
-    if(units == "L") {
-        .data <- .data %>%
-            dplyr::mutate(vo2_col = .data[[vo2_col]]/1000)
-    }
+  vo2max_idx <- which.max(.data[[vo2_col]])
+  vo2max <- max(.data[[vo2_col]])
 
-    vo2max_idx <- which.max(.data[[vo2_col]])
-    vo2max <- max(.data[[vo2_col]])
+  if (vo2max_idx == nrow(.data)) {
+    # this is a special case when the VO2max index is the last data point
+    vo2max_neighbor_diff <- vo2max -
+      .data[[vo2_col]][vo2max_idx - 1]
+  } else {
+    # find the neighbors, i.e. data points on either side of VO2max
+    t_diffs <- abs(c(
+      .data[[time_col]][vo2max_idx - 1],
+      .data[[time_col]][vo2max_idx + 1]
+    ) - .data[[time_col]][vo2max_idx])
 
-    if(vo2max_idx == nrow(.data)) {
-        # this is a special case when the VO2max index is the last data point
+    # don't use which.min() for this b/c that only returns 1 value, and with
+    # time averages there will often be ties
+    min_t_diff_idx <- which(t_diffs == min(t_diffs))
+
+    if (length(min_t_diff_idx) > 1) {
+      # there's a tie for the nearest data point with respect to time,
+      # so find the VO2 (y-value) at each index and use the one closest
+      # to VO2max as the comparison
+      closer_neighbor_idx <- which.max(c(
+        .data[[vo2_col]][vo2max_idx - 1],
+        .data[[vo2_col]][vo2max_idx + 1]
+      ))
+      # higher VO2 value is to the left
+      if (closer_neighbor_idx == 1) {
         vo2max_neighbor_diff <- vo2max -
-            .data[[vo2_col]][vo2max_idx - 1]
+          .data[[vo2_col]][vo2max_idx - 1]
+      } else { # higher VO2 value is to the right
+        vo2max_neighbor_diff <- vo2max -
+          .data[[vo2_col]][vo2max_idx + 1]
+      }
     } else {
-        # find the neighbors, i.e. data points on either side of VO2max
-        t_diffs <- abs(c(.data[[time_col]][vo2max_idx - 1],
-                         .data[[time_col]][vo2max_idx + 1]) - .data[[time_col]][vo2max_idx])
-
-        # don't use which.min() for this b/c that only returns 1 value, and with
-        # time averages there will often be ties
-        min_t_diff_idx <- which(t_diffs == min(t_diffs))
-
-        if(length(min_t_diff_idx) > 1) {
-            # there's a tie for the nearest data point with respect to time,
-            # so find the VO2 (y-value) at each index and use the one closest
-            # to VO2max as the comparison
-            closer_neighbor_idx <- which.max(c(.data[[vo2_col]][vo2max_idx - 1],
-                                               .data[[vo2_col]][vo2max_idx + 1]))
-            # higher VO2 value is to the left
-            if(closer_neighbor_idx == 1) {
-                vo2max_neighbor_diff <- vo2max -
-                    .data[[vo2_col]][vo2max_idx - 1]
-            } else { # higher VO2 value is to the right
-                vo2max_neighbor_diff <- vo2max -
-                    .data[[vo2_col]][vo2max_idx + 1]
-            }
-        } else {
-            if(min_t_diff_idx == 1) {
-                # closer point is to the left
-                vo2max_neighbor_diff <- vo2max -
-                    .data[[vo2_col]][vo2max_idx - 1]
-            } else {
-                # closer point is to the right
-                vo2max_neighbor_diff <- vo2max -
-                    .data[[vo2_col]][vo2max_idx + 1]
-            }
-        }
+      if (min_t_diff_idx == 1) {
+        # closer point is to the left
+        vo2max_neighbor_diff <- vo2max -
+          .data[[vo2_col]][vo2max_idx - 1]
+      } else {
+        # closer point is to the right
+        vo2max_neighbor_diff <- vo2max -
+          .data[[vo2_col]][vo2max_idx + 1]
+      }
     }
+  }
 
-    if(vo2max_neighbor_diff < delta_vo2) {
-        plateau <- TRUE
-    } else {
-        plateau <- FALSE
-    }
+  if (vo2max_neighbor_diff < delta_vo2) {
+    plateau <- TRUE
+  } else {
+    plateau <- FALSE
+  }
 
-    out <- tibble::tibble(method = method,
-                          plateau = plateau,
-                          delta_vo2 = delta_vo2,
-                          vo2max_neighbor_diff = vo2max_neighbor_diff)
-    out
+  out <- tibble::tibble(
+    method = method,
+    plateau = plateau,
+    delta_vo2 = delta_vo2,
+    vo2max_neighbor_diff = vo2max_neighbor_diff
+  )
+  out
 }

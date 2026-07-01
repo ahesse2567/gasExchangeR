@@ -28,8 +28,10 @@ Delete any 'resting/pre-exercise' and 'recovery/post-exercise' portions from a g
 }
 \examples{
 \dontrun{
-df <- data.frame(time = c(14, 18, 61, 78, 88, 100, 120, 150, 220, 231),
-speed = c(0, 0, 0, 0, 3, 3, 3, 7.4, 7.4, 0))
+df <- data.frame(
+  time = c(14, 18, 61, 78, 88, 100, 120, 150, 220, 231),
+  speed = c(0, 0, 0, 0, 3, 3, 3, 7.4, 7.4, 0)
+)
 trim_pre_post(.data = df, intensity_col = "speed")
 }
 }

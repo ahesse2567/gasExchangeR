@@ -22,63 +22,78 @@
 #' # For an example with real data
 #'
 #' cpet_raw <- utils::read.csv(
-#'     system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
 #' )
 #'
 #' cpet_lin_1s <- interpolate(
-#'     cpet_raw,
-#'     time_col = "time",
-#'     method = "linear",
-#'     every_s = 1
+#'   cpet_raw,
+#'   time_col = "time",
+#'   method = "linear",
+#'   every_s = 1
 #' )
-
 interpolate <- function(.data,
                         time_col,
                         method = "linear",
                         every_s = 1) {
-    # TODO add stopifnot()
-    method <- match.arg(method,
-                        choices = c("linear", "cubic"),
-                        several.ok = FALSE)
-    # turn this into a method later
-    # class(.data) <- method
-    # UseMethod("interpolate", .data)
+  # TODO add stopifnot()
+  method <- match.arg(method,
+    choices = c("linear", "cubic"),
+    several.ok = FALSE
+  )
+  # turn this into a method later
+  # class(.data) <- method
+  # UseMethod("interpolate", .data)
 
-    non_numeric_df <- .data %>%
-        dplyr::select(
-            tidyselect::where(
-                function(x) is.character(x) | is.factor(x) &
-                                            all(x == x[1]))) %>%
-        dplyr::slice(1)
+  non_numeric_df <- .data %>%
+    dplyr::select(
+      tidyselect::where(
+        function(x) {
+          is.character(x) | is.factor(x) &
+            all(x == x[1])
+        }
+      )
+    ) %>%
+    dplyr::slice(1)
 
-    data_num <- .data %>%
-        dplyr::select(tidyselect::where(~ all(!is.na(.)))) %>% # this breaks w/ all NA cols
-        dplyr::select(-names(non_numeric_df)) %>%
-        dplyr::mutate(
-            dplyr::across(tidyselect::where(purrr::negate(is.character)),
-                                    as.numeric))
-    # add removal of NA vals to the numeric coercion above?
+  data_num <- .data %>%
+    dplyr::select(tidyselect::where(~ all(!is.na(.)))) %>% # this breaks w/ all NA cols
+    dplyr::select(-names(non_numeric_df)) %>%
+    dplyr::mutate(
+      dplyr::across(
+        tidyselect::where(purrr::negate(is.character)),
+        as.numeric
+      )
+    )
+  # add removal of NA vals to the numeric coercion above?
 
-    per_every <- seq(from = min(as.integer(.data[[time_col]])),
-                     to = as.integer(max(.data[[time_col]])), by = every_s)
+  per_every <- seq(
+    from = min(as.integer(.data[[time_col]])),
+    to = as.integer(max(.data[[time_col]])), by = every_s
+  )
 
-    # do we need to coerce everything to numeric and save the character cols?
+  # do we need to coerce everything to numeric and save the character cols?
 
-    if(method == "linear") {
-        out <- purrr::map(.x = data_num, .f = function(i) stats::approx(
-            x = data_num[[time_col]],
-            y = i,
-            xout = per_every)$y)
-        out <- dplyr::as_tibble(out)
-    } else {
-        out <- purrr::map(.x = data_num, .f = function(i) stats::spline(
-            x = data_num[[time_col]],
-            y = i,
-            xout = per_every)$y)
-        out <- dplyr::as_tibble(out)
-    }
+  if (method == "linear") {
+    out <- purrr::map(.x = data_num, .f = function(i) {
+      stats::approx(
+        x = data_num[[time_col]],
+        y = i,
+        xout = per_every
+      )$y
+    })
+    out <- dplyr::as_tibble(out)
+  } else {
+    out <- purrr::map(.x = data_num, .f = function(i) {
+      stats::spline(
+        x = data_num[[time_col]],
+        y = i,
+        xout = per_every
+      )$y
+    })
+    out <- dplyr::as_tibble(out)
+  }
 
-    out <- out %>%
-        dplyr::bind_cols(non_numeric_df)
-    out
+  out <- out %>%
+    dplyr::bind_cols(non_numeric_df)
+  out
 }

@@ -49,114 +49,496 @@
 #' # TODO write an example
 #'
 d2_poly_reg_maxima <- function(.data,
-                            .x,
-                            .y,
-                            bp,
-                            ...,
-                            degree = NULL,
-                            vo2 = "vo2",
-                            vco2 = "vco2",
-                            ve = "ve",
-                            time = "time",
-                            alpha_linearity = 0.05,
-                            pos_change = TRUE,
-                            ordering = c("by_x", "time"),
-                            front_trim_vt1 = 60,
-                            front_trim_vt2 = 60,
-                            ci = FALSE,
-                            conf_level = 0.95,
-                            plots = TRUE
-                            ) {
+                               .x,
+                               .y,
+                               bp,
+                               ...,
+                               degree = NULL,
+                               vo2 = "vo2",
+                               vco2 = "vco2",
+                               ve = "ve",
+                               time = "time",
+                               alpha_linearity = 0.05,
+                               pos_change = TRUE,
+                               ordering = c("by_x", "time"),
+                               front_trim_vt1 = 60,
+                               front_trim_vt2 = 60,
+                               ci = FALSE,
+                               conf_level = 0.95,
+                               plots = TRUE) {
+  # check if there is crucial missing data
+  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
 
-    # check if there is crucial missing data
-    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+  ordering <- match.arg(ordering, several.ok = FALSE)
+  .data <- order_cpet_df(.data,
+    .x = .x, time = time,
+    ordering = ordering
+  )
 
-    ordering <- match.arg(ordering, several.ok = FALSE)
-    .data <- order_cpet_df(.data, .x = .x , time = time,
-                           ordering = ordering)
+  plot_df <- .data
 
-    plot_df <- .data
+  front_trim <- set_front_trim(
+    bp = bp,
+    front_trim_vt1 = front_trim_vt1,
+    front_trim_vt2 = front_trim_vt2
+  )
+  .data <- .data %>%
+    dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-    front_trim <- set_front_trim(bp = bp,
-                                 front_trim_vt1 = front_trim_vt1,
-                                 front_trim_vt2 = front_trim_vt2)
-    .data <- .data %>%
-        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
+  lm_poly <- loop_d2_poly_reg_maxima(
+    .data = .data, .x = .x, .y = .y,
+    degree = degree,
+    alpha_linearity = alpha_linearity
+  )
 
-    lm_poly <- loop_d2_poly_reg_maxima(.data = .data, .x = .x, .y = .y,
-                             degree = degree,
-                             alpha_linearity = alpha_linearity)
+  # return quick summary if generating models fails
+  if (is.null(lm_poly) | any(is.na(lm_poly$coefficients))) {
+    bp_dat <- return_indeterminant_findings(
+      .data = plot_df,
+      bp = bp,
+      algorithm = as.character(match.call()[[1]]),
+      .x = .x,
+      .y = .y,
+      est_ci = "estimate"
+    )
 
-    # return quick summary if generating models fails
-    if(is.null(lm_poly)| any(is.na(lm_poly$coefficients))) {
-        bp_dat <- return_indeterminant_findings(
-            .data = plot_df,
-            bp = bp,
-            algorithm = as.character(match.call()[[1]]),
-            .x = .x,
-            .y = .y,
-            est_ci = "estimate")
+    return(list(breakpoint_data = bp_dat))
+  }
 
-        return(list(breakpoint_data = bp_dat))
+  equi_spaced_x <- seq(
+    from = min(.data[[.x]]), to = max(.data[[.x]]),
+    length.out = range(.data[[.x]]) %>%
+      diff() %>%
+      round()
+  )
+
+  pred <- stats::predict(
+    lm_poly,
+    newdata = tibble::tibble("{.x}" := equi_spaced_x)
+  )
+
+  spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
+
+  # find number of maxima
+  if (pos_change) {
+    sign_change_idx <- slope_sign_changes(
+      y = spline_func(
+        x = equi_spaced_x,
+        deriv = 2
+      ),
+      change = "pos_to_neg"
+    )
+
+    # filter by expected slope (usually positive)
+    # there can be a spike in accel during the initial drop in vent eqs
+    # however, only remove these thresholds with a negative derivative
+    # if there is more than one value with a negative slope
+    if (length(sign_change_idx) > 1) {
+      # see which derivatives at the sign changes are negative
+      neg_slope_idx <- which(spline_func(
+        x = equi_spaced_x[sign_change_idx],
+        deriv = 1
+      ) < 0)
+      while (length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
+        # remove one value with a negative slope at a time in case
+        # all are negative. If the derivative is negative but it's
+        # right befor a clear upturn, that's probably the threshold
+        sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
+        # find which values have negative signs to exit loop
+        neg_slope_idx <- which(spline_func(
+          x = equi_spaced_x[sign_change_idx],
+          deriv = 1
+        ) < 0)
+      }
     }
+  } else { # this only applies when y var = petco2
+    sign_change_idx <- slope_sign_changes(
+      y = spline_func(
+        x = equi_spaced_x,
+        deriv = 2
+      ),
+      change = "neg_to_pos"
+    )
 
-    equi_spaced_x <- seq(from = min(.data[[.x]]), to = max(.data[[.x]]),
-                         length.out = range(.data[[.x]]) %>%
-                             diff() %>%
-                             round())
+    # filter by expected slope (in this case negative)
+    if (length(sign_change_idx) > 1) {
+      # see which derivatives at the sign changes are positive
+      pos_slope_idx <- which(spline_func(
+        x = equi_spaced_x[sign_change_idx],
+        deriv = 1
+      ) > 0)
+      while (length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
+        # remove values with a positive slope by logical indexing
+        sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
+        # find values with positive slope again to exit loop
+        pos_slope_idx <- which(spline_func(
+          x = equi_spaced_x[sign_change_idx],
+          deriv = 1
+        ) > 0)
+      }
+    }
+  }
 
-    pred <- stats::predict(
-        lm_poly,
-        newdata = tibble::tibble("{.x}" := equi_spaced_x))
+  # there can be multiple local extrema. Choose the extrema closer to the
+  # nadir or peak because this often represents the beginning of a systematic
+  # rise
+
+  # choosing closest to the nadir/peak probably isn't a good idea when
+  # the graph is NOT a ventilatory equivalents graph b/c the nadir will
+  # be super close to the beginning of the test
+  # At least for now, for better or for worse, I'd say choose the extrema
+  # with the largest y-magnitude
+
+  y_val_sign_change <- spline_func(
+    x = equi_spaced_x[sign_change_idx],
+    deriv = 1
+  )
+
+  if (length(sign_change_idx) > 1) {
+    if (pos_change) {
+      sign_change_idx <- sign_change_idx[which.max(
+        spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
+      )]
+      # OLD code
+      # find nadir of y values
+      # nadir <- min(pred)
+      # sign_change_idx <- sign_change_idx[which.min(abs(
+      #     nadir - equi_spaced_x[sign_change_idx]))]
+    } else {
+      sign_change_idx <- sign_change_idx[which.min(
+        spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
+      )]
+      # OLD code
+      # find peak (when using petco2 basically)
+      # peak <- max(pred)
+      # sign_change_idx <- sign_change_idx[which.min(abs(
+      #     peak - equi_spaced_x[sign_change_idx]))]
+    }
+  }
+
+  # OLD CODE, KEEP FOR A BIT
+  # there are often two local maxima. Choose the higher x-axis value
+  # for VT2/RC, and the lower for VT1. This is similar to
+  # Sherril et al. (1990) and Cross et al. (2012)
+  # if(length(sign_change_idx) > 1) {
+  #     if(bp == "vt1") {
+  #         sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
+  #     }
+  #     if(bp == "vt2") {
+  #         sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
+  #     }
+  # }
+
+  # get values at threshold
+  if (length(sign_change_idx) > 0) {
+    x_threshold <- equi_spaced_x[sign_change_idx]
+    y_hat_threshold <- stats::predict(
+      lm_poly,
+      tibble::tibble("{.x}" := x_threshold)
+    )
+
+    bp_dat <- find_threshold_vals(
+      .data = .data, thr_x = x_threshold,
+      thr_y = y_hat_threshold, .x = .x,
+      .y = .y, ...
+    )
+
+    # get values at threshold
+    bp_dat <- bp_dat %>%
+      dplyr::mutate(
+        bp = bp,
+        algorithm = "d2_reg_spline_maxima",
+        x_var = .x,
+        y_var = .y,
+      )
+  } else {
+    bp_dat <- tibble::tibble()
+  }
+
+  if (nrow(bp_dat) == 0) { # no breakpoint found
+    bp_dat <- bp_dat %>%
+      dplyr::add_row() %>%
+      dplyr::mutate(determinant_bp = FALSE)
+    # add character or factor columns that are all the same value (e.g. ids)
+    non_numeric_df <- .data %>%
+      dplyr::select(tidyselect::where(function(x) {
+        is.character(x) | is.factor(x) &
+          all(x == x[1])
+      })) %>%
+      dplyr::slice(1)
+    bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
+  } else { # breakpoint found
+    bp_dat <- bp_dat %>%
+      dplyr::mutate(determinant_bp = TRUE)
+  }
+
+  bp_dat <- bp_dat %>%
+    dplyr::mutate(
+      algorithm = "d2_poly_reg_maxima",
+      est_ci = "estimate",
+      x_var = .x,
+      y_var = .y,
+      bp = bp
+    )
+
+  if (ci) {
+    # nonparametric bootstrapping
+    boot_res <- boot::boot(
+      data = .data,
+      statistic = boot_ci_d2_poly_reg,
+      R = 100,
+      sim = "ordinary",
+      .x = .x,
+      .y = .y,
+      degree = degree,
+      pos_change = pos_change,
+      alpha_linearity = alpha_linearity,
+      parallel = "multicore"
+    )
+    # calculate percentile CI's
+    # is there a problem with this not dealing with NA values?
+    # I may need to use the boot.ci() funtion
+    boot_ci <- broom::tidy(boot_res,
+      conf.int = TRUE,
+      conf.method = "perc"
+    )
+    # calculate new values at threshold
+    ci_lower_x <- boot_ci$conf.low
+    ci_lower_y <- stats::predict(
+      lm_poly,
+      tibble::tibble("{.x}" := ci_lower_x)
+    )
+
+    lower_ci_res <- find_threshold_vals(
+      .data = .data,
+      thr_x = ci_lower_x,
+      thr_y = ci_lower_y,
+      .x = .x,
+      .y = .y,
+      ...
+    ) %>%
+      dplyr::mutate(
+        bp = bp,
+        algorithm = "d2_reg_spline_maxima",
+        x_var = .x,
+        y_var = .y,
+        est_ci = "lower_ci"
+      )
+
+    ci_upper_x <- boot_ci$conf.high
+    ci_upper_y <- stats::predict(
+      lm_poly,
+      tibble::tibble("{.x}" := ci_upper_x)
+    )
+
+    upper_ci_res <- find_threshold_vals(
+      .data = .data,
+      thr_x = ci_upper_x,
+      thr_y = ci_upper_y,
+      .x = .x,
+      .y = .y,
+      ...
+    ) %>%
+      dplyr::mutate(
+        bp = bp,
+        algorithm = "d2_reg_spline_maxima",
+        x_var = .x,
+        y_var = .y,
+        est_ci = "upper_ci"
+      )
+
+    bp_dat <- dplyr::bind_rows(
+      lower_ci_res,
+      bp_dat,
+      upper_ci_res
+    )
+    # if the estimate was true, set the others to TRUE
+    if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
+      bp_dat[["determinant_bp"]] <- TRUE
+    }
+  }
+
+  bp_dat <- bp_dat %>%
+    dplyr::relocate(bp, algorithm, x_var, y_var, est_ci, determinant_bp)
+
+  if (plots) {
+    bp_plot <- ggplot2::ggplot(
+      data = plot_df,
+      ggplot2::aes(x = .data[[.x]], y = .data[[.y]])
+    ) +
+      ggplot2::geom_point(alpha = 0.5) +
+      ggplot2::geom_line(
+        data = tibble::tibble(
+          x = equi_spaced_x,
+          y = pred
+        ),
+        ggplot2::aes(x = equi_spaced_x, y = pred)
+      ) +
+      ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
+      ggplot2::theme_minimal()
+  } else {
+    bp_plot <- NULL
+  }
+
+  return(list(
+    breakpoint_data = bp_dat,
+    lm_poly_reg = lm_poly,
+    deriv_func = spline_func,
+    # deriv2_expr = deriv2,
+    bp_plot = bp_plot
+  ))
+}
+
+#' @keywords internal
+loop_d2_poly_reg_maxima <- function(.data, .x, .y,
+                                    degree = NULL, alpha_linearity = 0.05) {
+  if (nrow(.data) == 0) {
+    return(NULL)
+  }
+
+  if (!is.null(degree)) {
+    # if the user specifies a degree, find that and be done with it
+    lm_poly <- paste0(
+      .y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
+      degree, ", raw = TRUE)"
+    ) %>%
+      stats::lm(data = .data)
+  } else {
+    # if the user does NOT specify a degree (default),
+    # find the best degree using likelihood ratio test
+    degree <- 5 # start at degree = 5 so you can take 4 derivatives
+    lm_list <- vector(mode = "list", length = 0) # hold lm data
+    # keep raw = TRUE for now b/c it's way easier for me to test
+    # if the derivative expressions are working
+    # starting with degree = 5 b/c that's the minimum I've seen in
+    # other papers that seemed to use polynomial fits
+    lm_poly <- paste0(
+      .y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
+      degree, ", raw = TRUE)"
+    ) %>%
+      stats::lm(data = .data)
+    lm_list <- append(lm_list, list(lm_poly))
+
+    cont <- TRUE
+    i <- 1 # start at 2 b/c we already made linear (degree = 1) model
+    while (cont == TRUE) {
+      lm_poly <- paste0(
+        .y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
+        degree + i, ", raw = TRUE)"
+      ) %>%
+        stats::lm(data = .data)
+      lm_list <- append(lm_list, list(lm_poly))
+      lrt <- stats::anova(lm_list[[i]], lm_list[[i + 1]])
+      if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
+        cont <- FALSE
+        lm_poly <- lm_list[[i]] # take the previous model
+      }
+      i <- i + 1
+    }
+  }
+
+  lm_poly
+}
+
+
+boot_ci_d2_poly_reg <- #' @keywords internal
+  bootstrap_ci_d2_reg_spline <- function(.data,
+                                         i,
+                                         .x,
+                                         .y,
+                                         degree,
+                                         pos_change,
+                                         alpha_linearity) {
+    # find best number of knots
+    lm_poly <- loop_d2_poly_reg_maxima(
+      .data = .data[i, ],
+      .x = .x,
+      .y = .y,
+      degree = degree,
+      alpha_linearity = alpha_linearity
+    )
+
+    # It feels like there's a better way than splinefun to find a more exact
+    # 2nd derivative, but I don't know it
+
+    # find maxima in 2nd derivative. This is accomplished by making
+    # a spline interpolation function. Use this with optimize() function.
+
+    # get new values at equal spacing for a smoother splinefun result
+    equi_spaced_x <- seq(
+      from = min(.data[i, ][[.x]]),
+      to = max(.data[i, ][[.x]]),
+      length.out = range(.data[i, ][[.x]]) %>%
+        diff() %>%
+        round()
+    )
+    pred <- stats::predict(lm_poly,
+      newdata = tibble::tibble("{.x}" := equi_spaced_x)
+    )
 
     spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
 
     # find number of maxima
-    if(pos_change) {
-        sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
-                                                              deriv = 2),
-                                              change = "pos_to_neg")
-
-        # filter by expected slope (usually positive)
-        # there can be a spike in accel during the initial drop in vent eqs
-        # however, only remove these thresholds with a negative derivative
-        # if there is more than one value with a negative slope
-        if(length(sign_change_idx) > 1) {
-            # see which derivatives at the sign changes are negative
-            neg_slope_idx <- which(spline_func(
-                x = equi_spaced_x[sign_change_idx],
-                deriv = 1) < 0)
-            while(length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                # remove one value with a negative slope at a time in case
-                # all are negative. If the derivative is negative but it's
-                # right befor a clear upturn, that's probably the threshold
-                sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
-                # find which values have negative signs to exit loop
-                neg_slope_idx <- which(spline_func(
-                    x = equi_spaced_x[sign_change_idx],
-                    deriv = 1) < 0)
-            }
+    if (pos_change) {
+      sign_change_idx <- slope_sign_changes(
+        y = spline_func(
+          x = equi_spaced_x,
+          deriv = 2
+        ),
+        change = "pos_to_neg"
+      )
+      # filter by expected slope (usually positive)
+      # there can be a spike in accel during the initial drop in vent eqs
+      # however, only remove these thresholds with a negative derivative
+      # if there is more than one value with a negative slope
+      if (length(sign_change_idx) > 1) {
+        # see which derivatives at the sign changes are negative
+        neg_slope_idx <- which(spline_func(
+          x = equi_spaced_x[sign_change_idx],
+          deriv = 1
+        ) < 0)
+        while (length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
+          # remove one value with a negative slope at a time in case
+          # all are negative. If the derivative is negative but it's
+          # right befor a clear upturn, that's probably the threshold
+          sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
+          # find which values have negative signs to exit loop
+          neg_slope_idx <- which(spline_func(
+            x = equi_spaced_x[sign_change_idx],
+            deriv = 1
+          ) < 0)
         }
+      }
     } else { # this only applies when y var = petco2
-        sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
-                                                              deriv = 2),
-                                              change = "neg_to_pos")
-
-        # filter by expected slope (in this case negative)
-        if(length(sign_change_idx) > 1) {
-            # see which derivatives at the sign changes are positive
-            pos_slope_idx <- which(spline_func(
-                x = equi_spaced_x[sign_change_idx],
-                deriv = 1) > 0)
-            while(length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                # remove values with a positive slope by logical indexing
-                sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
-                # find values with positive slope again to exit loop
-                pos_slope_idx <- which(spline_func(
-                    x = equi_spaced_x[sign_change_idx],
-                    deriv = 1) > 0)
-            }
+      sign_change_idx <- slope_sign_changes(
+        y = spline_func(
+          x = equi_spaced_x,
+          deriv = 2
+        ),
+        change = "neg_to_pos"
+      )
+      # filter by expected slope (in this case negative)
+      if (length(sign_change_idx) > 1) {
+        # see which derivatives at the sign changes are positive
+        pos_slope_idx <- which(spline_func(
+          x = equi_spaced_x[sign_change_idx],
+          deriv = 1
+        ) > 0)
+        while (length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
+          # remove values with a positive slope by logical indexing
+          # should I still be removing these incrementally? in case the
+          # nadir isocapnic buffering period is VERY short-lived?
+          # I could see how the deriv could be negative, but the
+          # accel could be very positive. this would be okay if
+          # it were the only maxima (I think)
+          sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
+          # find values with positive slope again to exit loop
+          pos_slope_idx <- which(spline_func(
+            x = equi_spaced_x[sign_change_idx],
+            deriv = 1
+          ) > 0)
         }
+      }
     }
 
     # there can be multiple local extrema. Choose the extrema closer to the
@@ -169,347 +551,39 @@ d2_poly_reg_maxima <- function(.data,
     # At least for now, for better or for worse, I'd say choose the extrema
     # with the largest y-magnitude
 
-    y_val_sign_change <- spline_func(x = equi_spaced_x[sign_change_idx],
-                                     deriv = 1)
+    y_val_sign_change <- spline_func(
+      x = equi_spaced_x[sign_change_idx],
+      deriv = 1
+    )
 
-    if(length(sign_change_idx) > 1) {
-        if(pos_change) {
-
-            sign_change_idx <- sign_change_idx[which.max(
-                spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-                )]
-            # OLD code
-            # find nadir of y values
-            # nadir <- min(pred)
-            # sign_change_idx <- sign_change_idx[which.min(abs(
-            #     nadir - equi_spaced_x[sign_change_idx]))]
-        } else {
-            sign_change_idx <- sign_change_idx[which.min(
-                spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-            )]
-            # OLD code
-            # find peak (when using petco2 basically)
-            # peak <- max(pred)
-            # sign_change_idx <- sign_change_idx[which.min(abs(
-            #     peak - equi_spaced_x[sign_change_idx]))]
-        }
+    if (length(sign_change_idx) > 1) {
+      if (pos_change) {
+        sign_change_idx <- sign_change_idx[which.max(
+          spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
+        )]
+        # OLD code
+        # find nadir of y values
+        # nadir <- min(pred)
+        # sign_change_idx <- sign_change_idx[which.min(abs(
+        #     nadir - equi_spaced_x[sign_change_idx]))]
+      } else {
+        sign_change_idx <- sign_change_idx[which.min(
+          spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
+        )]
+        # OLD code
+        # find peak (when using petco2 basically)
+        # peak <- max(pred)
+        # sign_change_idx <- sign_change_idx[which.min(abs(
+        #     peak - equi_spaced_x[sign_change_idx]))]
+      }
     }
 
-    # OLD CODE, KEEP FOR A BIT
-    # there are often two local maxima. Choose the higher x-axis value
-    # for VT2/RC, and the lower for VT1. This is similar to
-    # Sherril et al. (1990) and Cross et al. (2012)
-    # if(length(sign_change_idx) > 1) {
-    #     if(bp == "vt1") {
-    #         sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
-    #     }
-    #     if(bp == "vt2") {
-    #         sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
-    #     }
-    # }
-
-    # get values at threshold
-    if(length(sign_change_idx) > 0) {
-        x_threshold <- equi_spaced_x[sign_change_idx]
-        y_hat_threshold <- stats::predict(lm_poly,
-                                          tibble::tibble("{.x}" := x_threshold))
-
-        bp_dat <- find_threshold_vals(.data = .data, thr_x = x_threshold,
-                                      thr_y = y_hat_threshold, .x = .x,
-                                      .y = .y, ...)
-
-        # get values at threshold
-        bp_dat <- bp_dat %>%
-            dplyr::mutate(bp = bp,
-                          algorithm = "d2_reg_spline_maxima",
-                          x_var = .x,
-                          y_var = .y,
-            )
+    if (length(sign_change_idx) > 0) {
+      return(equi_spaced_x[sign_change_idx])
     } else {
-        bp_dat <- tibble::tibble()
+      return(NA)
     }
-
-    if(nrow(bp_dat) == 0) { # no breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::add_row() %>%
-            dplyr::mutate(determinant_bp = FALSE)
-        # add character or factor columns that are all the same value (e.g. ids)
-        non_numeric_df <- .data %>%
-            dplyr::select(tidyselect::where(function(x) is.character(x) | is.factor(x) &
-                                                all(x == x[1]))) %>%
-            dplyr::slice(1)
-        bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
-    } else { # breakpoint found
-        bp_dat <- bp_dat %>%
-            dplyr::mutate(determinant_bp = TRUE)
-    }
-
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(algorithm = "d2_poly_reg_maxima",
-                      est_ci = "estimate",
-                      x_var = .x,
-                      y_var = .y,
-                      bp = bp)
-
-    if(ci) {
-        # nonparametric bootstrapping
-        boot_res <- boot::boot(data = .data,
-                               statistic = boot_ci_d2_poly_reg,
-                               R = 100,
-                               sim = "ordinary",
-                               .x = .x,
-                               .y = .y,
-                               degree = degree,
-                               pos_change = pos_change,
-                               alpha_linearity = alpha_linearity,
-                               parallel = "multicore")
-        # calculate percentile CI's
-        # is there a problem with this not dealing with NA values?
-        # I may need to use the boot.ci() funtion
-        boot_ci <- broom::tidy(boot_res,
-                               conf.int = TRUE,
-                               conf.method = "perc")
-        # calculate new values at threshold
-        ci_lower_x <- boot_ci$conf.low
-        ci_lower_y <- stats::predict(
-            lm_poly,
-            tibble::tibble("{.x}" := ci_lower_x))
-
-        lower_ci_res <- find_threshold_vals(.data = .data,
-                                            thr_x = ci_lower_x,
-                                            thr_y = ci_lower_y,
-                                            .x = .x,
-                                            .y = .y,
-                                            ...) %>%
-            dplyr::mutate(bp = bp,
-                          algorithm = "d2_reg_spline_maxima",
-                          x_var = .x,
-                          y_var = .y,
-                          est_ci = "lower_ci"
-            )
-
-        ci_upper_x <- boot_ci$conf.high
-        ci_upper_y <- stats::predict(lm_poly,
-                                     tibble::tibble("{.x}" := ci_upper_x))
-
-        upper_ci_res <- find_threshold_vals(.data = .data,
-                                            thr_x = ci_upper_x,
-                                            thr_y = ci_upper_y,
-                                            .x = .x,
-                                            .y = .y,
-                                            ...) %>%
-            dplyr::mutate(bp = bp,
-                          algorithm = "d2_reg_spline_maxima",
-                          x_var = .x,
-                          y_var = .y,
-                          est_ci = "upper_ci"
-            )
-
-        bp_dat <- dplyr::bind_rows(lower_ci_res,
-                                   bp_dat,
-                                   upper_ci_res)
-        # if the estimate was true, set the others to TRUE
-        if(any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
-            bp_dat[["determinant_bp"]] <- TRUE
-        }
-    }
-
-    bp_dat <- bp_dat %>%
-        dplyr::relocate(bp, algorithm, x_var, y_var, est_ci, determinant_bp)
-
-    if(plots) {
-        bp_plot <- ggplot2::ggplot(
-            data = plot_df,
-            ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
-            ggplot2::geom_point(alpha = 0.5) +
-            ggplot2::geom_line(
-                data = tibble::tibble(x = equi_spaced_x,
-                                      y = pred),
-                ggplot2::aes(x = equi_spaced_x, y = pred)) +
-            ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
-            ggplot2::theme_minimal()
-    } else {
-        bp_plot <- NULL
-    }
-
-    return(list(breakpoint_data = bp_dat,
-                lm_poly_reg = lm_poly,
-                deriv_func = spline_func,
-                # deriv2_expr = deriv2,
-                bp_plot = bp_plot))
-}
-
-#' @keywords internal
-loop_d2_poly_reg_maxima <- function(.data, .x, .y,
-                          degree = NULL, alpha_linearity = 0.05) {
-
-    if(nrow(.data) == 0) return(NULL)
-
-    if (!is.null(degree)) {
-        # if the user specifies a degree, find that and be done with it
-        lm_poly <- paste0(.y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
-                          degree, ", raw = TRUE)") %>%
-            stats::lm(data = .data)
-    } else {
-        # if the user does NOT specify a degree (default),
-        # find the best degree using likelihood ratio test
-        degree = 5 # start at degree = 5 so you can take 4 derivatives
-        lm_list = vector(mode = "list", length = 0) # hold lm data
-        # keep raw = TRUE for now b/c it's way easier for me to test
-        # if the derivative expressions are working
-        # starting with degree = 5 b/c that's the minimum I've seen in
-        # other papers that seemed to use polynomial fits
-        lm_poly <- paste0(.y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
-                          degree, ", raw = TRUE)") %>%
-            stats::lm(data = .data)
-        lm_list <- append(lm_list, list(lm_poly))
-
-        cont <- TRUE
-        i <- 1 # start at 2 b/c we already made linear (degree = 1) model
-        while(cont == TRUE) {
-            lm_poly <- paste0(.y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
-                              degree + i, ", raw = TRUE)") %>%
-                stats::lm(data = .data)
-            lm_list <- append(lm_list, list(lm_poly))
-            lrt <- stats::anova(lm_list[[i]], lm_list[[i+1]])
-            if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-                cont = FALSE
-                lm_poly <- lm_list[[i]] # take the previous model
-            }
-            i <- i + 1
-        }
-    }
-
-    lm_poly
-}
-
-
-boot_ci_d2_poly_reg <- #' @keywords internal
-    bootstrap_ci_d2_reg_spline <- function(.data,
-                                           i,
-                                           .x,
-                                           .y,
-                                           degree,
-                                           pos_change,
-                                           alpha_linearity) {
-        # find best number of knots
-        lm_poly <- loop_d2_poly_reg_maxima(.data = .data[i,],
-                                             .x = .x,
-                                             .y = .y,
-                                             degree = degree,
-                                             alpha_linearity = alpha_linearity)
-
-        # It feels like there's a better way than splinefun to find a more exact
-        # 2nd derivative, but I don't know it
-
-        # find maxima in 2nd derivative. This is accomplished by making
-        # a spline interpolation function. Use this with optimize() function.
-
-        # get new values at equal spacing for a smoother splinefun result
-        equi_spaced_x <- seq(from = min(.data[i,][[.x]]),
-                             to = max(.data[i,][[.x]]),
-                             length.out = range(.data[i,][[.x]]) %>%
-                                 diff() %>%
-                                 round())
-        pred <- stats::predict(lm_poly,
-                               newdata = tibble::tibble("{.x}" := equi_spaced_x))
-
-        spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
-
-        # find number of maxima
-        if(pos_change) {
-            sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
-                                                                  deriv = 2),
-                                                  change = "pos_to_neg")
-            # filter by expected slope (usually positive)
-            # there can be a spike in accel during the initial drop in vent eqs
-            # however, only remove these thresholds with a negative derivative
-            # if there is more than one value with a negative slope
-            if(length(sign_change_idx) > 1) {
-                # see which derivatives at the sign changes are negative
-                neg_slope_idx <- which(spline_func(
-                    x = equi_spaced_x[sign_change_idx],
-                    deriv = 1) < 0)
-                while(length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                    # remove one value with a negative slope at a time in case
-                    # all are negative. If the derivative is negative but it's
-                    # right befor a clear upturn, that's probably the threshold
-                    sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
-                    # find which values have negative signs to exit loop
-                    neg_slope_idx <- which(spline_func(
-                        x = equi_spaced_x[sign_change_idx],
-                        deriv = 1) < 0)
-                }
-            }
-        } else { # this only applies when y var = petco2
-            sign_change_idx <- slope_sign_changes(y = spline_func(x = equi_spaced_x,
-                                                                  deriv = 2),
-                                                  change = "neg_to_pos")
-            # filter by expected slope (in this case negative)
-            if(length(sign_change_idx) > 1) {
-                # see which derivatives at the sign changes are positive
-                pos_slope_idx <- which(spline_func(
-                    x = equi_spaced_x[sign_change_idx],
-                    deriv = 1) > 0)
-                while(length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
-                    # remove values with a positive slope by logical indexing
-                    # should I still be removing these incrementally? in case the
-                    # nadir isocapnic buffering period is VERY short-lived?
-                    # I could see how the deriv could be negative, but the
-                    # accel could be very positive. this would be okay if
-                    # it were the only maxima (I think)
-                    sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
-                    # find values with positive slope again to exit loop
-                    pos_slope_idx <- which(spline_func(
-                        x = equi_spaced_x[sign_change_idx],
-                        deriv = 1) > 0)
-                }
-            }
-        }
-
-        # there can be multiple local extrema. Choose the extrema closer to the
-        # nadir or peak because this often represents the beginning of a systematic
-        # rise
-
-        # choosing closest to the nadir/peak probably isn't a good idea when
-        # the graph is NOT a ventilatory equivalents graph b/c the nadir will
-        # be super close to the beginning of the test
-        # At least for now, for better or for worse, I'd say choose the extrema
-        # with the largest y-magnitude
-
-        y_val_sign_change <- spline_func(x = equi_spaced_x[sign_change_idx],
-                                         deriv = 1)
-
-        if(length(sign_change_idx) > 1) {
-            if(pos_change) {
-
-                sign_change_idx <- sign_change_idx[which.max(
-                    spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-                )]
-                # OLD code
-                # find nadir of y values
-                # nadir <- min(pred)
-                # sign_change_idx <- sign_change_idx[which.min(abs(
-                #     nadir - equi_spaced_x[sign_change_idx]))]
-            } else {
-                sign_change_idx <- sign_change_idx[which.min(
-                    spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-                )]
-                # OLD code
-                # find peak (when using petco2 basically)
-                # peak <- max(pred)
-                # sign_change_idx <- sign_change_idx[which.min(abs(
-                #     peak - equi_spaced_x[sign_change_idx]))]
-            }
-        }
-
-        if(length(sign_change_idx) > 0) {
-            return(equi_spaced_x[sign_change_idx])
-        } else {
-            return(NA)
-        }
-
-    }
+  }
 
 
 
@@ -553,7 +627,7 @@ boot_ci_d2_poly_reg <- #' @keywords internal
 #     # use 4th derivative to find which are minima (y @ roots > 0)
 #     local_maxima_x <- roots_deriv3[grad(expr_to_func(deriv3),
 #                                         roots_deriv3) > 0]
-    # local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
+# local_maxima_y <- eval(deriv2, envir = list(x = local_maxima_x))
 # }
 
 

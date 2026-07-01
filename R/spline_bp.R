@@ -46,205 +46,235 @@ spline_bp <- function(.data,
                       ordering = c("by_x", "time"),
                       ci = FALSE,
                       conf_level = 0.95,
-                      plots = TRUE
-                      ) {
-    stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
-    bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
-    ordering <- match.arg(ordering, several.ok = FALSE)
+                      plots = TRUE) {
+  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+  bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
+  ordering <- match.arg(ordering, several.ok = FALSE)
 
-    .data <- order_cpet_df(.data, .x = .x , time = time,
-                           ordering = ordering)
-    plot_df <- .data
+  .data <- order_cpet_df(.data,
+    .x = .x, time = time,
+    ordering = ordering
+  )
+  plot_df <- .data
 
-    front_trim <- set_front_trim(bp = bp,
-                                 front_trim_vt1 = front_trim_vt1,
-                                 front_trim_vt2 = front_trim_vt2)
-    .data <- .data %>%
-        dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
+  front_trim <- set_front_trim(
+    bp = bp,
+    front_trim_vt1 = front_trim_vt1,
+    front_trim_vt2 = front_trim_vt2
+  )
+  .data <- .data %>%
+    dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-    loop_res <- loop_spline_bp(.data = .data, .x, .y,
-                         alpha_linearity = alpha_linearity,
-                         conf_level = conf_level)
+  loop_res <- loop_spline_bp(
+    .data = .data, .x, .y,
+    alpha_linearity = alpha_linearity,
+    conf_level = conf_level
+  )
 
-    if(!is.null(loop_res)) {
-        best_idx <- get_best_piecewise_idx(
-            loop_res,
-            range(.data[[.x]]),
-            alpha_linearity = alpha_linearity,
-            pos_change = pos_change,
-            pos_slope_after_bp = pos_slope_after_bp)
-    } else {
-        best_idx <- numeric()
-    }
+  if (!is.null(loop_res)) {
+    best_idx <- get_best_piecewise_idx(
+      loop_res,
+      range(.data[[.x]]),
+      alpha_linearity = alpha_linearity,
+      pos_change = pos_change,
+      pos_slope_after_bp = pos_slope_after_bp
+    )
+  } else {
+    best_idx <- numeric()
+  }
 
-    # return quick summary if generating models fails
-    if(is.null(loop_res) | length(best_idx) == 0) {
-        bp_dat <- return_indeterminant_findings(
-            .data = plot_df,
-            bp = bp,
-            algorithm = as.character(match.call()[[1]]),
-            .x = .x,
-            .y = .y,
-            est_ci = "estimate")
+  # return quick summary if generating models fails
+  if (is.null(loop_res) | length(best_idx) == 0) {
+    bp_dat <- return_indeterminant_findings(
+      .data = plot_df,
+      bp = bp,
+      algorithm = as.character(match.call()[[1]]),
+      .x = .x,
+      .y = .y,
+      est_ci = "estimate"
+    )
 
-        return(list(breakpoint_data = bp_dat))
-    }
+    return(list(breakpoint_data = bp_dat))
+  }
 
-    estimate_res <- get_spline_bp_res(.data = .data,
-                                      bp_idx = best_idx,
-                                      .x = .x,
-                                      .y = .y,
-                                      bp = bp,
-                                      alpha_linearity = alpha_linearity,
-                                      pos_change = pos_change,
-                                      pos_slope_after_bp = pos_slope_after_bp,
-                                      est_ci = "estimate")
-    # create indicator variable value
+  estimate_res <- get_spline_bp_res(
+    .data = .data,
+    bp_idx = best_idx,
+    .x = .x,
+    .y = .y,
+    bp = bp,
+    alpha_linearity = alpha_linearity,
+    pos_change = pos_change,
+    pos_slope_after_bp = pos_slope_after_bp,
+    est_ci = "estimate"
+  )
+  # create indicator variable value
+  threshold_x <- estimate_res$bp_dat[[.x]]
+  # add indicator variable to plotting data frame
+  plot_df <- plot_df %>%
+    dplyr::mutate(s1 = dplyr::if_else(get(.x) <= threshold_x,
+      0,
+      get(.x) - threshold_x
+    ))
+
+  pred <- tibble::tibble("{.x}" := plot_df[[.x]],
+    "{.y}" := stats::predict(estimate_res$lm_spline,
+      newdata = plot_df
+    ),
+    algorithm = "spline_bp"
+  )
+
+  if (ci) {
+    ci_lower_idx <- loop_res %>%
+      dplyr::filter(inside_ci) %>%
+      dplyr::filter(int_point_x == min(int_point_x)) %>%
+      dplyr::filter(p == min(p)) %>% # for breaking ties
+      dplyr::select(idx) %>%
+      dplyr::pull()
+
+    lower_ci_res <- get_spline_bp_res(
+      .data = .data,
+      bp_idx = ci_lower_idx,
+      .x = .x,
+      .y = .y,
+      bp = bp,
+      alpha_linearity = alpha_linearity,
+      pos_change = pos_change,
+      pos_slope_after_bp = pos_slope_after_bp,
+      est_ci = "lower"
+    )
+
+    ci_upper_idx <- loop_res %>%
+      dplyr::filter(inside_ci) %>%
+      dplyr::filter(int_point_x == max(int_point_x)) %>%
+      dplyr::filter(p == min(p)) %>% # for breaking ties
+      dplyr::select(idx) %>%
+      dplyr::pull()
+
+    upper_ci_res <- get_spline_bp_res(
+      .data = .data,
+      bp_idx = ci_upper_idx,
+      .x = .x,
+      .y = .y,
+      bp = bp,
+      alpha_linearity = alpha_linearity,
+      pos_change = pos_change,
+      pos_slope_after_bp = pos_slope_after_bp,
+      est_ci = "upper"
+    )
+
+    # combine estimate and both CI breakpoint res into one tibble
+    estimate_res$bp_dat <- dplyr::bind_rows(
+      lower_ci_res$bp_dat,
+      estimate_res$bp_dat,
+      upper_ci_res$bp_dat
+    )
+  }
+
+  if (plots) {
     threshold_x <- estimate_res$bp_dat[[.x]]
-    # add indicator variable to plotting data frame
-    plot_df <- plot_df %>%
-        dplyr::mutate(s1 = dplyr::if_else(get(.x) <= threshold_x,
-                                          0,
-                                          get(.x) - threshold_x))
 
-    pred <- tibble::tibble("{.x}" := plot_df[[.x]],
-                           "{.y}" := stats::predict(estimate_res$lm_spline,
-                                                    newdata = plot_df),
-                           algorithm = "spline_bp")
+    bp_plot <- ggplot2::ggplot(
+      data = plot_df,
+      ggplot2::aes(x = .data[[.x]], y = .data[[.y]])
+    ) +
+      ggplot2::geom_point(alpha = 0.5) +
+      ggplot2::geom_line(ggplot2::aes(y = pred[[.y]])) +
+      ggplot2::geom_vline(xintercept = threshold_x) +
+      ggplot2::theme_minimal()
+  } else {
+    bp_plot <- NULL
+  }
 
-    if(ci) {
-        ci_lower_idx <- loop_res %>%
-            dplyr::filter(inside_ci) %>%
-            dplyr::filter(int_point_x == min(int_point_x)) %>%
-            dplyr::filter(p == min(p)) %>% # for breaking ties
-            dplyr::select(idx) %>%
-            dplyr::pull()
-
-        lower_ci_res <- get_spline_bp_res(.data = .data,
-                                          bp_idx = ci_lower_idx,
-                                          .x = .x,
-                                          .y = .y,
-                                          bp = bp,
-                                          alpha_linearity = alpha_linearity,
-                                          pos_change = pos_change,
-                                          pos_slope_after_bp = pos_slope_after_bp,
-                                          est_ci = "lower")
-
-        ci_upper_idx <- loop_res %>%
-            dplyr::filter(inside_ci) %>%
-            dplyr::filter(int_point_x == max(int_point_x)) %>%
-            dplyr::filter(p == min(p)) %>% # for breaking ties
-            dplyr::select(idx) %>%
-            dplyr::pull()
-
-        upper_ci_res <- get_spline_bp_res(.data = .data,
-                                          bp_idx = ci_upper_idx,
-                                          .x = .x,
-                                          .y = .y,
-                                          bp = bp,
-                                          alpha_linearity = alpha_linearity,
-                                          pos_change = pos_change,
-                                          pos_slope_after_bp = pos_slope_after_bp,
-                                          est_ci = "upper")
-
-        # combine estimate and both CI breakpoint res into one tibble
-        estimate_res$bp_dat <- dplyr::bind_rows(lower_ci_res$bp_dat,
-                                     estimate_res$bp_dat,
-                                     upper_ci_res$bp_dat)
-    }
-
-    if(plots){
-
-        threshold_x <- estimate_res$bp_dat[[.x]]
-
-        bp_plot <- ggplot2::ggplot(data = plot_df,
-                                   ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
-            ggplot2::geom_point(alpha = 0.5) +
-            ggplot2::geom_line(ggplot2::aes(y = pred[[.y]])) +
-            ggplot2::geom_vline(xintercept = threshold_x) +
-            ggplot2::theme_minimal()
-    } else {
-        bp_plot <- NULL
-    }
-
-    return(list(breakpoint_data = estimate_res$bp_dat,
-                fitted_vals = pred,
-                lm_spline = estimate_res$lm_spline,
-                lm_simple = estimate_res$lm_simple,
-                bp_plot = bp_plot))
+  return(list(
+    breakpoint_data = estimate_res$bp_dat,
+    fitted_vals = pred,
+    lm_spline = estimate_res$lm_spline,
+    lm_simple = estimate_res$lm_simple,
+    bp_plot = bp_plot
+  ))
 }
 
 #' @keywords internal
 loop_spline_bp <- function(.data, .x, .y, alpha_linearity = 0.05,
                            conf_level = 0.95) {
-    # you can't fit a model if you don't have any data
-    if(nrow(.data) == 0) return(NULL)
-    # perhaps later let people specify a degree, but for now, it'll be a sharp
-    # turn
-    n_rows <- nrow(.data)
+  # you can't fit a model if you don't have any data
+  if (nrow(.data) == 0) {
+    return(NULL)
+  }
+  # perhaps later let people specify a degree, but for now, it'll be a sharp
+  # turn
+  n_rows <- nrow(.data)
 
-    # initialize empty vectors
-    ss_models <- MSE_two <- f_stat <- pf_two <-
-        pct_slope_change <- int_point_x <- numeric(n_rows)
-    pos_change <- pos_slope_after_bp <- logical(n_rows)
+  # initialize empty vectors
+  ss_models <- MSE_two <- f_stat <- pf_two <-
+    pct_slope_change <- int_point_x <- numeric(n_rows)
+  pos_change <- pos_slope_after_bp <- logical(n_rows)
 
-    # create simple linear model and calculate its RSS
-    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = .data)
-    RSS_simple <- sum(stats::resid(lm_simple)^2)
+  # create simple linear model and calculate its RSS
+  lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    stats::lm(data = .data)
+  RSS_simple <- sum(stats::resid(lm_simple)^2)
 
-    for(i in 1:nrow(.data)) {
-        if(i == 1 | i == nrow(.data)) {
-            ss_models[i] <- MSE_two[i] <- f_stat[i] <-
-                pf_two[i] <- pos_change[i] <- pos_slope_after_bp[i] <-
-                int_point_x[i] <- NA
-            next
-        }
-
-        int_point_x[i] <- .data[[.x]][i]
-        temp <- .data %>% # Generate data with indicator variable (knot)
-            dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][i], 0,
-                                .data[[.x]] - .data[[.x]][i]))
-        # (.data[[.x]] - .data[[.x]][i])^degree
-        # create linear model
-        lm_spline <- paste0(.y, " ~ ", "1 + poly(", .x, # add back degree here
-                            ", raw = TRUE) + s1") %>%
-            stats::lm(data = temp)
-
-        slope_left <- lm_spline$coefficients[2]
-        slope_right <- lm_spline$coefficients[2]+lm_spline$coefficients[3]
-        pct_slope_change[i] <- (slope_right - slope_left)/abs(slope_left) * 100
-        pos_change[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
-        pos_slope_after_bp[i] <- dplyr::if_else(slope_right > 0, TRUE, FALSE)
-
-        # record residual sums of squares for later comparison
-        ss_models[i] <- sum((lm_spline$residuals)^2)
-        MSE_two[i] <- ss_models[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
-        f_stat[i] <- (RSS_simple - ss_models[i]) / (2 * MSE_two[i])
-        pf_two[i] <- stats::pf(f_stat[i], df1 = 2,
-                               df2 = nrow(lm_simple$model) - 4,
-                               lower.tail = FALSE)
+  for (i in 1:nrow(.data)) {
+    if (i == 1 | i == nrow(.data)) {
+      ss_models[i] <- MSE_two[i] <- f_stat[i] <-
+        pf_two[i] <- pos_change[i] <- pos_slope_after_bp[i] <-
+        int_point_x[i] <- NA
+      next
     }
-    # calculate cutoff for finding approximate confidence interval
-    crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
-    # using min(MSE_two) and min(RSS_two) based on JM paper
-    inside_ci <- dplyr::if_else(
-        (ss_models - min(ss_models, na.rm = TRUE)) /
-            min(MSE_two, na.rm =TRUE) < crit_F,
-        TRUE, FALSE)
-    # for debugging purposes, plot breakpoints inside 95% CI
-    # plot((ss_models - min(ss_models, na.rm = TRUE)) / MSE_two)
-    # abline(h = crit_F)
 
-    loop_stats <- tibble::tibble(p = pf_two,
-                                 pos_change = pos_change,
-                                 pos_slope_after_bp = pos_slope_after_bp,
-                                 int_point_x = int_point_x,
-                                 inside_ci = inside_ci
+    int_point_x[i] <- .data[[.x]][i]
+    temp <- .data %>% # Generate data with indicator variable (knot)
+      dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][i], 0,
+        .data[[.x]] - .data[[.x]][i]
+      ))
+    # (.data[[.x]] - .data[[.x]][i])^degree
+    # create linear model
+    lm_spline <- paste0(
+      .y, " ~ ", "1 + poly(", .x, # add back degree here
+      ", raw = TRUE) + s1"
     ) %>%
-        dplyr::mutate(idx = dplyr::row_number())
+      stats::lm(data = temp)
 
-    loop_stats
+    slope_left <- lm_spline$coefficients[2]
+    slope_right <- lm_spline$coefficients[2] + lm_spline$coefficients[3]
+    pct_slope_change[i] <- (slope_right - slope_left) / abs(slope_left) * 100
+    pos_change[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
+    pos_slope_after_bp[i] <- dplyr::if_else(slope_right > 0, TRUE, FALSE)
+
+    # record residual sums of squares for later comparison
+    ss_models[i] <- sum((lm_spline$residuals)^2)
+    MSE_two[i] <- ss_models[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
+    f_stat[i] <- (RSS_simple - ss_models[i]) / (2 * MSE_two[i])
+    pf_two[i] <- stats::pf(f_stat[i],
+      df1 = 2,
+      df2 = nrow(lm_simple$model) - 4,
+      lower.tail = FALSE
+    )
+  }
+  # calculate cutoff for finding approximate confidence interval
+  crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
+  # using min(MSE_two) and min(RSS_two) based on JM paper
+  inside_ci <- dplyr::if_else(
+    (ss_models - min(ss_models, na.rm = TRUE)) /
+      min(MSE_two, na.rm = TRUE) < crit_F,
+    TRUE, FALSE
+  )
+  # for debugging purposes, plot breakpoints inside 95% CI
+  # plot((ss_models - min(ss_models, na.rm = TRUE)) / MSE_two)
+  # abline(h = crit_F)
+
+  loop_stats <- tibble::tibble(
+    p = pf_two,
+    pos_change = pos_change,
+    pos_slope_after_bp = pos_slope_after_bp,
+    int_point_x = int_point_x,
+    inside_ci = inside_ci
+  ) %>%
+    dplyr::mutate(idx = dplyr::row_number())
+
+  loop_stats
 }
 
 get_spline_bp_res <- function(.data, bp_idx, .x, .y, bp,
@@ -252,67 +282,79 @@ get_spline_bp_res <- function(.data, bp_idx, .x, .y, bp,
                               pos_slope_after_bp,
                               est_ci = c("estimate", "lower_ci", "upper_ci"),
                               ...) {
-    est_ci <- match.arg(est_ci, several.ok = FALSE)
+  est_ci <- match.arg(est_ci, several.ok = FALSE)
 
-    .data <- .data %>% # Generate data with indicator variable (knot)
-        dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][bp_idx],
-                                          0,
-                                          .data[[.x]] - .data[[.x]][bp_idx]))
-    # (.data[[.x]] - .data[[.x]][i])^degree
-    # create linear model
+  .data <- .data %>% # Generate data with indicator variable (knot)
+    dplyr::mutate(s1 = dplyr::if_else(.data[[.x]] <= .data[[.x]][bp_idx],
+      0,
+      .data[[.x]] - .data[[.x]][bp_idx]
+    ))
+  # (.data[[.x]] - .data[[.x]][i])^degree
+  # create linear model
 
-    lm_spline <- paste0(.y, " ~ ", "1 + ", .x, # add back degree here
-                        " + s1") %>%
-        stats::lm(data = .data)
-    lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-        stats::lm(data = .data)
+  lm_spline <- paste0(
+    .y, " ~ ", "1 + ", .x, # add back degree here
+    " + s1"
+  ) %>%
+    stats::lm(data = .data)
+  lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
+    stats::lm(data = .data)
 
-    n_rows <- nrow(.data)
+  n_rows <- nrow(.data)
 
-    RSS_simple <- sum(stats::resid(lm_simple)^2)
-    RSS_two <- sum(stats::resid(lm_spline)^2)
-    MSE_two <- RSS_two / (n_rows - 4) # -4 b/c estimating 4 parameters
-    f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
-    pf_two <- stats::pf(f_stat, df1 = 2, df2 = n_rows - 4, lower.tail = FALSE)
+  RSS_simple <- sum(stats::resid(lm_simple)^2)
+  RSS_two <- sum(stats::resid(lm_spline)^2)
+  MSE_two <- RSS_two / (n_rows - 4) # -4 b/c estimating 4 parameters
+  f_stat <- (RSS_simple - RSS_two) / (2 * MSE_two)
+  pf_two <- stats::pf(f_stat, df1 = 2, df2 = n_rows - 4, lower.tail = FALSE)
 
-    # slope BEFORE breakpoint = b1
-    # slope AFTER breakpoint = b1 + b2
-    # this is wrong if degree > 1
-    slope_left <- lm_spline$coefficients[2]
-    slope_right <- lm_spline$coefficients[2]+lm_spline$coefficients[3]
-    pct_slope_change <- (slope_right - slope_left)/abs(slope_left) * 100
+  # slope BEFORE breakpoint = b1
+  # slope AFTER breakpoint = b1 + b2
+  # this is wrong if degree > 1
+  slope_left <- lm_spline$coefficients[2]
+  slope_right <- lm_spline$coefficients[2] + lm_spline$coefficients[3]
+  pct_slope_change <- (slope_right - slope_left) / abs(slope_left) * 100
 
-    determinant_bp <- check_if_determinant_bp(
-        p = pf_two,
-        pct_slope_change = pct_slope_change,
-        pos_change = pos_change,
-        pos_slope_after_bp =
-            pos_slope_after_bp,
-        slope_after_bp = slope_right,
-        alpha = alpha_linearity)
+  determinant_bp <- check_if_determinant_bp(
+    p = pf_two,
+    pct_slope_change = pct_slope_change,
+    pos_change = pos_change,
+    pos_slope_after_bp =
+      pos_slope_after_bp,
+    slope_after_bp = slope_right,
+    alpha = alpha_linearity
+  )
 
-    # find last time the indicator variable == 0
-    threshold_idx <- which(.data[["s1"]] != 0) %>% min() - 1
-    threshold_x <- .data[[.x]][threshold_idx]
-    threshold_y <- lm_spline$fitted.values[threshold_idx]
+  # find last time the indicator variable == 0
+  threshold_idx <- which(.data[["s1"]] != 0) %>% min() - 1
+  threshold_x <- .data[[.x]][threshold_idx]
+  threshold_y <- lm_spline$fitted.values[threshold_idx]
 
-    bp_dat <- find_threshold_vals(.data = .data, thr_x = threshold_x,
-                                  thr_y = threshold_y, .x = .x,
-                                  .y = .y, ...)
-    bp_dat <- bp_dat %>%
-        dplyr::mutate(algorithm = "spline_bp",
-                      est_ci = est_ci,
-                      x_var = .x,
-                      y_var = .y,
-                      determinant_bp = determinant_bp,
-                      bp = bp,
-                      pct_slope_change = pct_slope_change,
-                      f_stat = f_stat,
-                      p_val_f = pf_two) %>%
-        dplyr::relocate(bp, algorithm, determinant_bp, est_ci,
-                        pct_slope_change, f_stat, p_val_f)
+  bp_dat <- find_threshold_vals(
+    .data = .data, thr_x = threshold_x,
+    thr_y = threshold_y, .x = .x,
+    .y = .y, ...
+  )
+  bp_dat <- bp_dat %>%
+    dplyr::mutate(
+      algorithm = "spline_bp",
+      est_ci = est_ci,
+      x_var = .x,
+      y_var = .y,
+      determinant_bp = determinant_bp,
+      bp = bp,
+      pct_slope_change = pct_slope_change,
+      f_stat = f_stat,
+      p_val_f = pf_two
+    ) %>%
+    dplyr::relocate(
+      bp, algorithm, determinant_bp, est_ci,
+      pct_slope_change, f_stat, p_val_f
+    )
 
-    list(bp_dat = bp_dat,
-         lm_spline = lm_spline,
-         lm_simple = lm_simple)
+  list(
+    bp_dat = bp_dat,
+    lm_spline = lm_spline,
+    lm_simple = lm_simple
+  )
 }

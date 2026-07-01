@@ -74,69 +74,69 @@ To combine bin and rolling averages, call this function twice: first with
 
 # Load breath-by-breath graded exercise testing file
 cpet_bbb <- utils::read.csv(
-    system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
 )
 
 # 10-second (time bin) average
 cpet_10s_bin <- avg_exercise_test(
-    cpet_bbb,
-    method = "time",
-    calc_type = "bin",
-    time_col = "time",
-    window = 10
+  cpet_bbb,
+  method = "time",
+  calc_type = "bin",
+  time_col = "time",
+  window = 10
 )
 
 # 15-breath (breath bin) average
 cpet_15b_bin <- avg_exercise_test(
-    cpet_bbb,
-    method = "breath",
-    calc_type = "bin",
-    time_col = "time",
-    window = 15
+  cpet_bbb,
+  method = "breath",
+  calc_type = "bin",
+  time_col = "time",
+  window = 15
 )
 
 # 20-second (rolling time) average
 cpet_20s_roll <- avg_exercise_test(
-    cpet_bbb,
-    method = "time",
-    calc_type = "rolling",
-    time_col = "time",
-    window = 20,
-    align = "center",
-    mos = "mean"
+  cpet_bbb,
+  method = "time",
+  calc_type = "rolling",
+  time_col = "time",
+  window = 20,
+  align = "center",
+  mos = "mean"
 )
 
 # 15-breath (rolling breath) average
 cpet_15b_roll <- avg_exercise_test(
-    cpet_bbb,
-    method = "breath",
-    calc_type = "rolling",
-    time_col = "time",
-    window = 15,
-    align = "center",
-    mos = "mean"
+  cpet_bbb,
+  method = "breath",
+  calc_type = "rolling",
+  time_col = "time",
+  window = 15,
+  align = "center",
+  mos = "mean"
 )
 
 # 3rd-order Butterworth low-pass filter using recommendations from
 # Robergs et al. (2010). time_col excludes time columns from filtering.
 cpet_dbf <- avg_exercise_test(
-    cpet_bbb,
-    method = "digital",
-    time_col = c("time", "clock_time"),
-    cutoff = 0.04,
-    fs = 1,
-    order = 3
+  cpet_bbb,
+  method = "digital",
+  time_col = c("time", "clock_time"),
+  cutoff = 0.04,
+  fs = 1,
+  order = 3
 )
 
 # Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath
 # average). trim = 2 removes the highest and lowest values before averaging.
 cpet_m5o7 <- avg_exercise_test(
-    cpet_bbb,
-    method = "breath",
-    calc_type = "rolling",
-    time_col = "time",
-    window = 7,
-    trim = 2
+  cpet_bbb,
+  method = "breath",
+  calc_type = "rolling",
+  time_col = "time",
+  window = 7,
+  trim = 2
 )
 
 }
