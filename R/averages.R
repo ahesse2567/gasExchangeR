@@ -1,21 +1,40 @@
 #' Average gas exchange data from an exercise test
 #'
-#' This function averages first by either breath, time, or digital filtering
-#' If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
+#' Averages breath-by-breath gas exchange data using breath-based averages,
+#' time-based averages, or digital (Butterworth) filtering. For breath and time
+#' methods, choose between rolling or bin averages.
+#'
+#' To combine bin and rolling averages, call this function twice: first with
+#' \code{calc_type = "bin"}, then pass the result into a second call with
+#' \code{calc_type = "rolling"} (or vice versa).
 #'
 #' @param .data Breath-by-breath gas exchange data.
-#' @param method Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.
-#' @param time_col The name of the column with time.
-#' @param calc_type Choose \code{rolling}, \code{bin}, or \code{bin-roll}.
-#' @param roll_window How many seconds or breaths to include if rolling.
-#' @param bin_w Bin size of breaths or time.
-#' @param align If using a rolling method, how to align the rolling average. Default is \code{"center"} Other choices include \code{"left"}, and \code{"right"}.
-#' @param mos 'Measure of center'. Choices include \code{"mean"} (default) or \code{"median"}.
-#' @param roll_trim Indicate if you want a trimmed mean. Roll_trim removes a number of data points equal to \code{roll_trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{roll_trim} must be a positive, even integer.
-#' @param bin_trim See \code{roll_trim}.
+#' @param method Choose between \code{breath} averages, \code{time} averages,
+#'   or \code{digital} filtering.
+#' @param time_col The name of the column(s) with time. For
+#'   \code{method = "digital"}, these columns are excluded from filtering and
+#'   passed through unchanged. Accepts a character vector to exclude multiple
+#'   columns (e.g. \code{c("time", "clock_time")}).
+#' @param calc_type Choose \code{rolling} or \code{bin}. Ignored when
+#'   \code{method = "digital"}.
+#' @param window How many breaths or seconds to include in each rolling window
+#'   or bin. For example, \code{window = 15} with \code{method = "breath"} and
+#'   \code{calc_type = "rolling"} gives a 15-breath rolling average;
+#'   \code{window = 10} with \code{method = "time"} and \code{calc_type = "bin"}
+#'   gives 10-second bin averages.
+#' @param align If using a rolling method, how to align the rolling average.
+#'   Default is \code{"center"}. Other choices include \code{"left"} and
+#'   \code{"right"}.
+#' @param mos 'Measure of center'. Choices include \code{"mean"} (default) or
+#'   \code{"median"}.
+#' @param trim Number of extreme values to remove before averaging. Must be a
+#'   non-negative, even integer. For example, \code{trim = 2} with
+#'   \code{window = 7} gives a "mid-5-of-7" trimmed average (removes the
+#'   highest and lowest values).
 #' @param cutoff The cutoff frequency in Hz. Only used by digital filter.
 #' @param fs The sampling frequency in Hz. Only used by digital filter.
-#' @param order The Butterworth low-pass filter order. Only used by digital filter.
+#' @param order The Butterworth low-pass filter order. Only used by digital
+#'   filter.
 #'
 #' @import magrittr
 #'
@@ -23,19 +42,18 @@
 #'
 #' @export
 #'
-#' @details
-#' If you combine rolling and bin averages with \code{calc_type = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{method} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
-#'
-#' \code{roll_window} must be evenly divisible by \code{bin_w}
-#'
 #' @references
-#' Robergs, R. A., Dwyer, D., & Astorino, T. (2010). Recommendations for improved data processing from expired gas analysis indirect calorimetry. Sports Medicine, 40(2), 95–111. https://doi.org/10.2165/11319670-000000000-00000
+#' Robergs, R. A., Dwyer, D., & Astorino, T. (2010). Recommendations for
+#' improved data processing from expired gas analysis indirect calorimetry.
+#' Sports Medicine, 40(2), 95-111.
+#' https://doi.org/10.2165/11319670-000000000-00000
 #'
 #' @examples
 #'
-#' # Load breath-by-breaht graded exercise testing file
+#' # Load breath-by-breath graded exercise testing file
 #' cpet_bbb <- utils::read.csv(
-#' system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR"))
+#'     system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
 #'
 #' # 10-second (time bin) average
 #' cpet_10s_bin <- avg_exercise_test(
@@ -43,7 +61,7 @@
 #'     method = "time",
 #'     calc_type = "bin",
 #'     time_col = "time",
-#'     bin_w = 10
+#'     window = 10
 #' )
 #'
 #' # 15-breath (breath bin) average
@@ -52,105 +70,97 @@
 #'     method = "breath",
 #'     calc_type = "bin",
 #'     time_col = "time",
-#'     bin_w = 15
+#'     window = 15
 #' )
 #'
 #' # 20-second (rolling time) average
-#'
 #' cpet_20s_roll <- avg_exercise_test(
-#'     cpet_bbb, method = "time",
+#'     cpet_bbb,
+#'     method = "time",
 #'     calc_type = "rolling",
 #'     time_col = "time",
-#'     roll_window = 20,
+#'     window = 20,
 #'     align = "center",
 #'     mos = "mean"
 #' )
 #'
-#' # 15 breath (rolling breath) average
-#'
+#' # 15-breath (rolling breath) average
 #' cpet_15b_roll <- avg_exercise_test(
 #'     cpet_bbb,
 #'     method = "breath",
 #'     calc_type = "rolling",
 #'     time_col = "time",
-#'     roll_window = 15,
+#'     window = 15,
 #'     align = "center",
 #'     mos = "mean"
-#'     )
+#' )
 #'
-#' # 3rd-order Butterworth low-pass filter using recommendations from Robergs et al. (2010)
-#'
+#' # 3rd-order Butterworth low-pass filter using recommendations from
+#' # Robergs et al. (2010). time_col excludes time columns from filtering.
 #' cpet_dbf <- avg_exercise_test(
-#'  cpet_bbb,
-#'  method = "digital",
-#'  time_col = c("time", "clock_time"),
-#'  cutoff = 0.04,
-#'  fs = 1,
-#'  order = 3)
+#'     cpet_bbb,
+#'     method = "digital",
+#'     time_col = c("time", "clock_time"),
+#'     cutoff = 0.04,
+#'     fs = 1,
+#'     order = 3
+#' )
 #'
-#' # Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath average).
-#' # This removes the highest and lowest VO2 values (roll_trim = 2) before calculating average.
-#'
+#' # Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath
+#' # average). trim = 2 removes the highest and lowest values before averaging.
 #' cpet_m5o7 <- avg_exercise_test(
-#'  cpet_bbb,
-#'  method = "breath",
-#'  calc_type = "rolling",
-#'  time_col = "time",
-#'  roll_window = 7,
-#'  roll_trim = 2
-#'  )
-#'
-#' # Force people to use this function twice if doing bin-roll or rolling-bin?
+#'     cpet_bbb,
+#'     method = "breath",
+#'     calc_type = "rolling",
+#'     time_col = "time",
+#'     window = 7,
+#'     trim = 2
+#' )
 #'
 avg_exercise_test <- function(.data,
                               method = "breath",
                               calc_type = "rolling",
                               time_col = "time",
-                              roll_window = 15,
-                              bin_w = 15,
+                              window = 15,
                               align = "center",
                               mos = "mean",
-                              roll_trim = 0,
-                              bin_trim = 0,
+                              trim = 0,
                               cutoff = 0.04,
                               fs = 1,
                               order = 3) {
-    stopifnot(!missing(.data),
-              roll_window >= 1,
-              bin_w >= 1,
-              roll_window %% 1 == 0,
-              bin_w %% 1 == 0,
-              roll_trim >= 0 & roll_trim %% 2 == 0,
-              bin_trim >= 0 & bin_trim %% 2 == 0)
+    rlang::check_required(.data)
+    if (window < 1 || window %% 1 != 0) {
+        rlang::abort("`window` must be a positive integer.")
+    }
+    if (trim < 0 || trim %% 2 != 0) {
+        rlang::abort("`trim` must be a non-negative, even integer.")
+    }
 
-    method <- match.arg(method, choices = c("breath", "time", "digital"))
-    class(.data) <- append(class(.data), method)
-    UseMethod("avg_exercise_test", .data)
+    method <- rlang::arg_match(method, values = c("breath", "time", "digital"))
+
+    switch(method,
+        breath  = avg_breath(.data, calc_type, time_col, window,
+                             align, mos, trim),
+        time    = avg_time(.data, calc_type, time_col, window,
+                           align, mos, trim),
+        digital = avg_digital(.data, time_col, cutoff, fs, order)
+    )
 }
 
-#' @export
-avg_exercise_test.breath <- function(.data,
-                                     method = "breath",
-                                     calc_type = "rolling",
-                                     time_col = "time",
-                                     roll_window = 15,
-                                     bin_w = 15,
-                                     align = "center",
-                                     mos = "mean",
-                                     roll_trim = 0,
-                                     bin_trim = 0,
-                                     cutoff = 0.04,
-                                     fs = 1,
-                                     order = 3) {
-    calc_type <- match.arg(calc_type, choices = c("rolling", "bin", "bin_roll"))
+# -- Helpers -------------------------------------------------------------------
 
-    # save character cols for later
-    # I'm beginning to think this is less important and may cause issues
-    # Drop character columns from .data before aggregation (they don't play
-    # well with rollapply/summarise_all). Keep constant character columns
-    # (e.g. subject_id) as a one-row tibble to reattach after aggregation;
-    # non-constant character columns (e.g. a clock-time string) can't survive
-    # aggregation and are dropped.
+#' Separate character columns from numeric data before aggregation.
+#'
+#' Character columns break rollapply/summarise_all. This helper removes them
+#' from .data and returns constant-valued character columns (e.g. subject_id)
+#' as a one-row data frame to reattach after aggregation. Non-constant character
+#' columns (e.g. time columns read in as characters) are dropped entirely.
+#'
+#' @returns A list with `data` (character columns removed) and `char_cols`
+#'   (one-row data frame of constant character columns, or NULL).
+#' @keywords internal
+#' @noRd
+separate_char_cols <- function(.data) {
     all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
     if (ncol(all_chars) > 0) {
         constant <- vapply(all_chars,
@@ -162,230 +172,136 @@ avg_exercise_test.breath <- function(.data,
     } else {
         char_cols <- NULL
     }
-
-    data_num <- .data %>% # coerce to numeric b/c time may not be of another class
-        dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
-                                    as.numeric))
-    if(calc_type == "rolling") {
-        # rm comments if you want to exactly replicate how breeze does rolling avgs
-        # roll_i <- tibble::tibble()
-        # for(i in 1:(roll_window-1)) {
-        #     # calc rolling average for each row including up to the ith row
-        #     # this is how breeze does this
-        #     temp <- purrr::map(data_num, function(data_num) {sum(data_num[1:i])/i})
-        #     roll_i <- dplyr::bind_rows(roll_i, temp)
-        # }
-
-        align <- match.arg(align, choices = c("left", "right", "center"))
-        mos <- match.arg(mos, choices = c("mean", "median"))
-
-        out <- data_num %>%
-            zoo::rollapply(data = .,
-                           width = roll_window,
-                           align = align,
-                           FUN = mos,
-                           trim = roll_trim / roll_window / 2) %>%
-            dplyr::as_tibble()
-
-        # out <- rbind(roll_i, out) # if using breeze rolling
-        out <- dplyr::bind_cols(char_cols, out)
-        return(out)
-    } else if (calc_type == "bin") {
-        # because of piping, group_by_at(1, ...) means group by the first column.
-        # that's probably okay b/c we need to group by breath. For time averaging
-        # we should actually find the time_col
-        out <- data_num %>%
-            dplyr::mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
-            dplyr::group_by(bin) %>%
-            dplyr::summarize_all(.funs = list(mos),
-                          na.rm = TRUE,
-                          trim = bin_trim / bin_w / 2) %>%
-            dplyr::select(-bin)
-        out <- dplyr::bind_cols(char_cols, out)
-        return(out)
-    } else {
-        # bin-roll section. Will probably drop this and suggest users
-        # use a rolling average after bin averaging.
-        if(roll_window %% bin_w != 0) {
-            stop("roll_window is not evenly divisible by bin_w")
-        }
-        align <- match.arg(align, choices = c("left", "right", "center"))
-        mos <- match.arg(mos, choices = c("mean", "median"))
-
-        block <- data_num %>%
-            dplyr::mutate(bin = (1:nrow(.) - 1) %/% bin_w) %>%
-            dplyr::group_by(bin) %>%
-            dplyr::summarize_all(.funs = list(mos),
-                          na.rm = TRUE,
-                          trim = bin_trim / bin_w / 2) %>%
-            dplyr::select(-bin)
-        rolled_block <- block %>%
-            zoo::rollapply(data = .,
-                           width = roll_window / bin_w,
-                           align = align,
-                           FUN = mos,
-                           trim = roll_trim / roll_window / 2) %>%
-            dplyr::as_tibble()
-        out <- dplyr::bind_cols(char_cols, rolled_block)
-        return(out)
-    }
+    list(data = .data, char_cols = char_cols)
 }
 
-#' @export
-avg_exercise_test.time <- function(.data,
-                                   method = "breath",
-                                   calc_type = "rolling",
-                                   time_col = "time",
-                                   roll_window = 15,
-                                   bin_w = 15,
-                                   align = "center",
-                                   mos = "mean",
-                                   roll_trim = 0,
-                                   bin_trim = 0,
-                                   cutoff = 0.04,
-                                   fs = 1,
-                                   order = 3) {
-    # browser()
-    calc_type <- match.arg(calc_type, choices = c("rolling", "bin", "bin_roll"))
+#' Coerce all non-character columns to numeric.
+#' @keywords internal
+#' @noRd
+coerce_numeric <- function(.data) {
+    .data %>%
+        dplyr::mutate(
+            dplyr::across(
+                tidyselect::where(purrr::negate(is.character)),
+                as.numeric))
+}
 
-    # Drop character columns from .data before aggregation (they don't play
-    # well with rollapply/summarise_all). Keep constant character columns
-    # (e.g. subject_id) as a one-row tibble to reattach after aggregation;
-    # non-constant character columns (e.g. a clock-time string) can't survive
-    # aggregation and are dropped.
-    all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
-    if (ncol(all_chars) > 0) {
-        constant <- vapply(all_chars,
-                           function(x) length(unique(x)) == 1,
-                           logical(1))
-        char_cols <- all_chars[1, constant, drop = FALSE]
-        .data <- .data[, !colnames(.data) %in% colnames(all_chars),
-                       drop = FALSE]
-    } else {
-        char_cols <- NULL
-    }
+# -- Method implementations ---------------------------------------------------
 
-    data_num <- .data %>% # coerce to numeric b/c time may not be of another class
-        dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
-                                    as.numeric))
-    if(calc_type == "rolling") {
-        align <- match.arg(align, choices = c("left", "right", "center"))
-        mos <- match.arg(mos, choices = c("mean", "median"))
+#' @keywords internal
+#' @noRd
+avg_breath <- function(.data, calc_type, time_col, window,
+                       align, mos, trim) {
+    calc_type <- rlang::arg_match(calc_type, values = c("rolling", "bin"))
 
-        if(align == "center") {
-            a <- roll_window / 2
-            b <- roll_window / 2
-        } else if (align == "right") {
-            a <- roll_window
-            b <- 0
-        } else if (align == "left") {
-            a <- 0
-            b <- roll_window
+    separated <- separate_char_cols(.data)
+    char_cols <- separated$char_cols
+    data_num <- coerce_numeric(separated$data)
+
+    switch(calc_type,
+        rolling = {
+            align <- rlang::arg_match(align, values = c("left", "right", "center"))
+            mos <- rlang::arg_match(mos, values = c("mean", "median"))
+
+            out <- data_num %>%
+                zoo::rollapply(data = .,
+                               width = window,
+                               align = align,
+                               FUN = mos,
+                               trim = trim / window / 2) %>%
+                dplyr::as_tibble()
+
+            dplyr::bind_cols(char_cols, out)
+        },
+        bin = {
+            out <- data_num %>%
+                dplyr::mutate(bin = (1:nrow(.) - 1) %/% window) %>%
+                dplyr::group_by(bin) %>%
+                dplyr::summarize_all(.funs = list(mos),
+                                     na.rm = TRUE,
+                                     trim = trim / window / 2) %>%
+                dplyr::select(-bin)
+
+            dplyr::bind_cols(char_cols, out)
         }
-        # see https://www.tidyverse.org/blog/2020/02/slider-0-1-0/#index-sliding
-        # for details on irregular time series rolling averages
+    )
+}
 
-        out <- data_num %>%
-            dplyr::mutate(
-                dplyr::across(
-                    tidyselect::everything(),
-                    ~ slider::slide_index_dbl(
+#' @keywords internal
+#' @noRd
+avg_time <- function(.data, calc_type, time_col, window,
+                     align, mos, trim) {
+    calc_type <- rlang::arg_match(calc_type, values = c("rolling", "bin"))
+
+    separated <- separate_char_cols(.data)
+    char_cols <- separated$char_cols
+    data_num <- coerce_numeric(separated$data)
+
+    switch(calc_type,
+        rolling = {
+            align <- rlang::arg_match(align, values = c("left", "right", "center"))
+            mos <- rlang::arg_match(mos, values = c("mean", "median"))
+
+            if (align == "center") {
+                a <- window / 2
+                b <- window / 2
+            } else if (align == "right") {
+                a <- window
+                b <- 0
+            } else {
+                a <- 0
+                b <- window
+            }
+
+            data_num %>%
+                dplyr::mutate(
+                    dplyr::across(
+                        tidyselect::everything(),
+                        ~ slider::slide_index_dbl(
                             .,
                             .i = time,
                             .f = mos,
                             na.rm = TRUE,
-                            trim = roll_trim / roll_window / 2,
+                            trim = trim / window / 2,
                             .before = b,
                             .after = a,
                             .complete = FALSE
                         ))) %>%
-            dplyr::filter(dplyr::if_any(tidyselect::everything(),
-                                        ~ !is.na(.)))
+                dplyr::filter(dplyr::if_any(tidyselect::everything(),
+                                            ~ !is.na(.)))
+        },
+        bin = {
+            out <- data_num %>%
+                dplyr::group_by_at(
+                    .vars = time_col,
+                    function(x) ceiling(x / window) * window) %>%
+                dplyr::summarise_all(.funs = mos,
+                                     na.rm = TRUE,
+                                     trim = trim / window / 2)
 
-        return(out)
-
-    } else if (calc_type == "bin") {
-        out <- data_num %>%
-            dplyr::group_by_at(.vars = time_col,
-                               function(x) ceiling(x / bin_w) * bin_w) %>%
-            dplyr::summarise_all(.funs = mos,
-                                 na.rm = TRUE,
-                                 trim = bin_trim / bin_w / 2)
-        # ceiling(x / roll_window) puts the values into groups. * roll_window
-        # scales it back to the original time values.
-        out <- dplyr::bind_cols(char_cols, out)
-        return(out)
-    } else {
-        if(roll_window %% bin_w != 0) {
-            stop("roll_window is not evenly divisible by bin_w")
+            dplyr::bind_cols(char_cols, out)
         }
-        align <- match.arg(align, choices = c("left", "right", "center"))
-        mos <- match.arg(mos, choices = c("mean", "median"))
-
-        block <- data_num %>%
-            dplyr::group_by_at(.vars = time_col,
-                               function(x) ceiling(x / bin_w) * bin_w) %>%
-            dplyr::summarise_all(.funs = mos,
-                                 na.rm = TRUE,
-                                 trim = bin_trim / bin_w / 2)
-        rolled_block <- block %>%
-            zoo::rollapply(data = .,
-                           width = roll_window / bin_w,
-                           align = align,
-                           FUN = mos,
-                           trim = roll_trim / roll_window / 2) %>%
-            dplyr::as_tibble()
-        out <- dplyr::bind_cols(char_cols, rolled_block)
-        return(out)
-    }
+    )
 }
 
-#' @export
-avg_exercise_test.digital <- function(.data,
-                                      method = "breath",
-                                      calc_type = "rolling",
-                                      time_col = "time",
-                                      roll_window = 15,
-                                      bin_w = 15,
-                                      align = "center",
-                                      mos = "mean",
-                                      roll_trim = 0,
-                                      bin_trim = 0,
-                                      cutoff = 0.04,
-                                      fs = 1,
-                                      order = 3) {
-    # browser()
+#' @keywords internal
+#' @noRd
+avg_digital <- function(.data, time_col, cutoff, fs, order) {
+    exclude <- colnames(.data) %in% time_col
+    time_df <- .data[, exclude, drop = FALSE]
+    .data <- .data[, !exclude, drop = FALSE]
 
-    # Drop character columns from .data before aggregation (they don't play
-    # well with rollapply/summarise_all). Keep constant character columns
-    # (e.g. subject_id) as a one-row tibble to reattach after aggregation;
-    # non-constant character columns (e.g. a clock-time string) can't survive
-    # aggregation and are dropped.
-    all_chars <- .data[, purrr::map(.data, class) == "character", drop = FALSE]
-    if (ncol(all_chars) > 0) {
-        constant <- vapply(all_chars,
-                           function(x) length(unique(x)) == 1,
-                           logical(1))
-        char_cols <- all_chars[1, constant, drop = FALSE]
-        .data <- .data[, !colnames(.data) %in% colnames(all_chars),
-                       drop = FALSE]
-    } else {
-        char_cols <- NULL
-    }
-
-    data_num <- .data %>% # coerce to numeric b/c time may not be of another class
-        dplyr::mutate(dplyr::across(tidyselect::where(purrr::negate(is.character)),
-                                    as.numeric))
+    separated <- separate_char_cols(.data)
+    char_cols <- separated$char_cols
+    data_num <- coerce_numeric(separated$data)
 
     bf <- butter_lowpass(cutoff = cutoff, fs = fs, order = order)
 
-    # should this exclude the time column?
     out <- purrr::map(.x = data_num,
                       .f = function(.x, bf) signal::filter(bf, .x),
                       bf = bf)
 
-    out <- dplyr::bind_cols(char_cols, out)
-    return(out)
+    dplyr::bind_cols(time_df, char_cols, out)
 }
 
 #' @keywords internal
@@ -393,6 +309,5 @@ butter_lowpass <- function(cutoff, fs, order = 3){
     nyq <- 0.5 * fs # nyquist frequency is half the sampling rate (fs) b/c you need
     # at a minimum two data points per wave in order to construct the wave
     normal_cutoff <- cutoff / nyq
-    bf <- signal::butter(n = order, W = normal_cutoff, type = "low", plane = "z")
-    bf
+    signal::butter(n = order, W = normal_cutoff, type = "low", plane = "z")
 }

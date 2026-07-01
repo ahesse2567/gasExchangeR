@@ -9,12 +9,10 @@ avg_exercise_test(
   method = "breath",
   calc_type = "rolling",
   time_col = "time",
-  roll_window = 15,
-  bin_w = 15,
+  window = 15,
   align = "center",
   mos = "mean",
-  roll_trim = 0,
-  bin_trim = 0,
+  trim = 0,
   cutoff = 0.04,
   fs = 1,
   order = 3
@@ -23,47 +21,61 @@ avg_exercise_test(
 \arguments{
 \item{.data}{Breath-by-breath gas exchange data.}
 
-\item{method}{Choose between \code{breath} averages, \code{time} averages, or \code{digital} filtering.}
+\item{method}{Choose between \code{breath} averages, \code{time} averages,
+or \code{digital} filtering.}
 
-\item{calc_type}{Choose \code{rolling}, \code{bin}, or \code{bin-roll}.}
+\item{calc_type}{Choose \code{rolling} or \code{bin}. Ignored when
+\code{method = "digital"}.}
 
-\item{time_col}{The name of the column with time.}
+\item{time_col}{The name of the column(s) with time. For
+\code{method = "digital"}, these columns are excluded from filtering and
+passed through unchanged. Accepts a character vector to exclude multiple
+columns (e.g. \code{c("time", "clock_time")}).}
 
-\item{roll_window}{How many seconds or breaths to include if rolling.}
+\item{window}{How many breaths or seconds to include in each rolling window
+or bin. For example, \code{window = 15} with \code{method = "breath"} and
+\code{calc_type = "rolling"} gives a 15-breath rolling average;
+\code{window = 10} with \code{method = "time"} and \code{calc_type = "bin"}
+gives 10-second bin averages.}
 
-\item{bin_w}{Bin size of breaths or time.}
+\item{align}{If using a rolling method, how to align the rolling average.
+Default is \code{"center"}. Other choices include \code{"left"} and
+\code{"right"}.}
 
-\item{align}{If using a rolling method, how to align the rolling average. Default is \code{"center"} Other choices include \code{"left"}, and \code{"right"}.}
+\item{mos}{'Measure of center'. Choices include \code{"mean"} (default) or
+\code{"median"}.}
 
-\item{mos}{'Measure of center'. Choices include \code{"mean"} (default) or \code{"median"}.}
-
-\item{roll_trim}{Indicate if you want a trimmed mean. Roll_trim removes a number of data points equal to \code{roll_trim} This is used to emulate MCG's "mid-5-of-7" averaging method. \code{roll_trim} must be a positive, even integer.}
-
-\item{bin_trim}{See \code{roll_trim}.}
+\item{trim}{Number of extreme values to remove before averaging. Must be a
+non-negative, even integer. For example, \code{trim = 2} with
+\code{window = 7} gives a "mid-5-of-7" trimmed average (removes the
+highest and lowest values).}
 
 \item{cutoff}{The cutoff frequency in Hz. Only used by digital filter.}
 
 \item{fs}{The sampling frequency in Hz. Only used by digital filter.}
 
-\item{order}{The Butterworth low-pass filter order. Only used by digital filter.}
+\item{order}{The Butterworth low-pass filter order. Only used by digital
+filter.}
 }
 \value{
 A data frame.
 }
 \description{
-This function averages first by either breath, time, or digital filtering
-If averaging by breath or time averages, it can also perform rolling or bin averages. Furthermore, you can specify if you want a whole or trimmed mean.
+Averages breath-by-breath gas exchange data using breath-based averages,
+time-based averages, or digital (Butterworth) filtering. For breath and time
+methods, choose between rolling or bin averages.
 }
 \details{
-If you combine rolling and bin averages with \code{calc_type = bin_roll} it is important to note how \code{roll_window} and \code{bin_w} interact. This first creates bin averages that are evenly divisible by the \code{roll_window}. For example, if your bin_w is 5, the function first computes bin averages every 5 breaths or seconds, depending on the \code{method} parameter. Then, if the roll_window was \code{15}, the rolling average would include 3 points in that average because 15 ÷ 5 = 3.
-
-\code{roll_window} must be evenly divisible by \code{bin_w}
+To combine bin and rolling averages, call this function twice: first with
+\code{calc_type = "bin"}, then pass the result into a second call with
+\code{calc_type = "rolling"} (or vice versa).
 }
 \examples{
 
-# Load breath-by-breaht graded exercise testing file
+# Load breath-by-breath graded exercise testing file
 cpet_bbb <- utils::read.csv(
-system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR"))
+    system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
 
 # 10-second (time bin) average
 cpet_10s_bin <- avg_exercise_test(
@@ -71,7 +83,7 @@ cpet_10s_bin <- avg_exercise_test(
     method = "time",
     calc_type = "bin",
     time_col = "time",
-    bin_w = 10
+    window = 10
 )
 
 # 15-breath (breath bin) average
@@ -80,57 +92,57 @@ cpet_15b_bin <- avg_exercise_test(
     method = "breath",
     calc_type = "bin",
     time_col = "time",
-    bin_w = 15
+    window = 15
 )
 
 # 20-second (rolling time) average
-
 cpet_20s_roll <- avg_exercise_test(
-    cpet_bbb, method = "time",
+    cpet_bbb,
+    method = "time",
     calc_type = "rolling",
     time_col = "time",
-    roll_window = 20,
+    window = 20,
     align = "center",
     mos = "mean"
 )
 
-# 15 breath (rolling breath) average
-
+# 15-breath (rolling breath) average
 cpet_15b_roll <- avg_exercise_test(
     cpet_bbb,
     method = "breath",
     calc_type = "rolling",
     time_col = "time",
-    roll_window = 15,
+    window = 15,
     align = "center",
     mos = "mean"
-    )
+)
 
-# 3rd-order Butterworth low-pass filter using recommendations from Robergs et al. (2010)
-
+# 3rd-order Butterworth low-pass filter using recommendations from
+# Robergs et al. (2010). time_col excludes time columns from filtering.
 cpet_dbf <- avg_exercise_test(
- cpet_bbb,
- method = "digital",
- time_col = c("time", "clock_time"),
- cutoff = 0.04,
- fs = 1,
- order = 3)
+    cpet_bbb,
+    method = "digital",
+    time_col = c("time", "clock_time"),
+    cutoff = 0.04,
+    fs = 1,
+    order = 3
+)
 
-# Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath average).
-# This removes the highest and lowest VO2 values (roll_trim = 2) before calculating average.
-
+# Middle 5 of 7 breaths per MGC Diagnostics (trimmed, rolling breath
+# average). trim = 2 removes the highest and lowest values before averaging.
 cpet_m5o7 <- avg_exercise_test(
- cpet_bbb,
- method = "breath",
- calc_type = "rolling",
- time_col = "time",
- roll_window = 7,
- roll_trim = 2
- )
-
-# Force people to use this function twice if doing bin-roll or rolling-bin?
+    cpet_bbb,
+    method = "breath",
+    calc_type = "rolling",
+    time_col = "time",
+    window = 7,
+    trim = 2
+)
 
 }
 \references{
-Robergs, R. A., Dwyer, D., & Astorino, T. (2010). Recommendations for improved data processing from expired gas analysis indirect calorimetry. Sports Medicine, 40(2), 95–111. https://doi.org/10.2165/11319670-000000000-00000
+Robergs, R. A., Dwyer, D., & Astorino, T. (2010). Recommendations for
+improved data processing from expired gas analysis indirect calorimetry.
+Sports Medicine, 40(2), 95-111.
+https://doi.org/10.2165/11319670-000000000-00000
 }
