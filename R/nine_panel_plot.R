@@ -305,7 +305,7 @@ make_ve_vs_vco2_plot <- function(.data,
                                 ggplot2::aes(
                                     x = .data[[vco2]],
                                     y = .data[[ve]])) +
-        geom_point(color = "brown") +
+        ggplot2::geom_point(color = "brown") +
         ggplot2::xlab("VCO2") +
         ggplot2::ylab("VE (L/min)") +
         ggplot2::theme_bw()

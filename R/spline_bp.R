@@ -158,7 +158,7 @@ spline_bp <- function(.data,
         bp_plot <- ggplot2::ggplot(data = plot_df,
                                    ggplot2::aes(x = .data[[.x]], y = .data[[.y]])) +
             ggplot2::geom_point(alpha = 0.5) +
-            ggplot2::geom_line(aes(y = pred[[.y]])) +
+            ggplot2::geom_line(ggplot2::aes(y = pred[[.y]])) +
             ggplot2::geom_vline(xintercept = threshold_x) +
             ggplot2::theme_minimal()
     } else {
