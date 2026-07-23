@@ -1,3 +1,6 @@
+# Full disclosure, Claude suggested cumulative sufficient statistics and they're
+# pretty incredible. Claude led the way on most of this, and I followed along
+# getting its help writing the JM version.
 # =============================================================================
 # Cumulative sufficient statistics — the O(n) piecewise-regression search engine
 # =============================================================================
@@ -248,12 +251,10 @@ piecewise_metrics_cumsum_jm <- function(.data, .x, .y, conf_level = 0.95) {
   SyyR <- Pyy[n + 1] - Pyy[i + 1]
   SxyR <- Pxy[n + 1] - Pxy[i + 1]
 
-  # x0 per the JM paper is all the x values that you could split at, which is
-  # the same thing as xc.
-  x0 <- xc
-
-  u = xc - x0
-  v = yc - y0
+  # When fitting the right regression line, shift by x0 and y0 as if you were
+  # centering on the origin.
+  # u = xc - x0
+  # v = yc - y0
 
   # Suu = Σ(x − x0)² = SxxR − 2·x0·SxR + nR·x0² (Suu is shifted by x0)
   # Σ(x - x0)(x - x0)
@@ -268,8 +269,6 @@ piecewise_metrics_cumsum_jm <- function(.data, .x, .y, conf_level = 0.95) {
   # because we've centered through the origin, we won't use reg()
   # calculate slope of right regression line
   b3 <- Suv / Suu
-  # calculate (centered?) intercept of right regression line
-  b2 <- L$b0 + L$b1*x0
   RSS_right <- Svv - Suv^2 / Suu
 
   # --- single-line (simple) model over all n, for the F-test ----------------
@@ -291,19 +290,14 @@ piecewise_metrics_cumsum_jm <- function(.data, .x, .y, conf_level = 0.95) {
   pos_change <- pct_slope_change > 0
   pos_slope_after_bp <- b3 > 0
 
-  # intersection of the two lines, in CENTERED coordinates first.
-  # matches intersection_point(): x = (b0_right - b0_left) / (b1_left - b1_right)
-  int_x_c <- (b2 - L$b0) / (L$b1 - b3)
-  int_y_c <- L$b0 + L$b1 * int_x_c
-  int_point_x <- int_x_c + x_bar # shift x back to the original scale
+  int_point_x <- x0 + x_bar # shift x back to the original scale
 
   # the first and last splits leave a single point in one half -> no line
-  boundary <- i == 1 | i == n
+  boundary <- i %in% c(1, n - 1, n) # must include
   p[boundary] <- NA
   pos_change[boundary] <- NA
   pos_slope_after_bp[boundary] <- NA
   int_point_x[boundary] <- NA
-  dist_MSE_ratio[boundary] <- NA
   RSS_two[boundary] <- NA
   MSE_two[boundary] <- NA
 
@@ -321,7 +315,6 @@ piecewise_metrics_cumsum_jm <- function(.data, .x, .y, conf_level = 0.95) {
     pos_change = pos_change,
     pos_slope_after_bp = pos_slope_after_bp,
     int_point_x = int_point_x,
-    dist_MSE_ratio = dist_MSE_ratio,
     inside_ci = inside_ci
   )
 }

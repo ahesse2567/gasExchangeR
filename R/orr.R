@@ -33,7 +33,33 @@
 #' Orr, G. W., Green, H. J., Hughson, R. L., & Bennett, G. W. (1982). A computer linear regression model to determine ventilatory anaerobic threshold. Journal of Applied Physiology Respiratory Environmental and Exercise Physiology, 52(5), 1349–1352. https://doi.org/10.1152/jappl.1982.52.5.1349
 #'
 #' @examples
-#' # TODO write examples
+#'
+#' #' # Load breath-by-breath graded exercise testing file
+#' cpet_bbb <- utils::read.csv(
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
+#'
+#' # 15-breath (rolling breath) average
+#' cpet_15b_roll <- avg_exercise_test(
+#'   cpet_bbb,
+#'   method = "breath",
+#'   calc_type = "rolling",
+#'   time_col = "time",
+#'   window = 15,
+#'   align = "center",
+#'   mos = "mean"
+#' )
+#'
+#' # Find a specific breakpoint using the JM algorithm. Note: using breakpoint
+#' # algorithms directly does NOT perform best practices such as removing the
+#' # first 60 seconds of exercise.
+#' orr_res <- orr(.data = cpet_15b_roll,
+#'   .x = "vco2",
+#'   .y = "ve",
+#'   bp = "vt2"
+#' )
+#' orr_res
+#'
 orr <- function(.data,
                 .x,
                 .y,
@@ -189,97 +215,27 @@ orr <- function(.data,
 }
 
 #' @keywords internal
-#' This function loops through all possible divisions of the data and finds the
-#' best solution
+#' This function scores all possible divisions of the data into two contiguous
+#' groups. It delegates the O(n) search to piecewise_metrics_cumsum() (cumulative
+#' sufficient statistics), which is mathematically identical to fitting a fresh
+#' pair of OLS regressions at every split but far faster. Orr does not use the
+#' distance-to-MSE ratio, so that column is dropped here.
 loop_orr <- function(.data,
                      .x,
                      .y,
                      alpha_linearity = 0.05,
                      conf_level = 0.95) {
-  # you can't fit a model if you don't have any data
-  if (nrow(.data) == 0) {
+  loop_stats <- piecewise_metrics_cumsum(
+    .data = .data, .x = .x, .y = .y, conf_level = conf_level
+  )
+  if (is.null(loop_stats)) {
     return(NULL)
   }
 
-  n_rows <- nrow(.data)
-
-  # initialize empty vectors
-  RSS_two <- MSE_two <- f_stat <- pf_two <-
-    pct_slope_change <- int_point_x <- numeric(n_rows)
-  pos_change <- pos_slope_after_bp <- logical(n_rows)
-
-  # create simple linear model and calculate its RSS
-  lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-    stats::lm(data = .data)
-  RSS_simple <- sum(stats::resid(lm_simple)^2)
-
-  for (i in 1:n_rows) {
-    # setting first and last iteration to NA keeps the index lengths equal
-    if (i == 1 | i == n_rows) {
-      RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
-        pos_change[i] <- pos_slope_after_bp[i] <-
-        int_point_x[i] <- NA
-      next
-    }
-    # split data into left and right halves
-    # should these share the same point? Or should, they be different by 1 point?
-    # Ekkekakis said WB makes them differ by 1 pt
-    # I wonder exactly what the word 'contiguous' means in this context
-    df_left <- .data[1:i, ]
-    df_right <- .data[i:n_rows, ]
-    # NOTE: WB'S implementation of Orr does NOT share a point at i
-
-    # make linear models of the two halves
-    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-      stats::lm(data = df_left)
-    lm_right <- paste0(.y, " ~ ", "1 + ", .x) %>%
-      stats::lm(data = df_right)
-
-    # ss_left[i] <- sum((lm_left$residuals)^2)
-    # ss_right[i] <- sum((lm_right$residuals)^2)
-
-    RSS_two[i] <- sum(stats::resid(lm_left)^2) +
-      sum(stats::resid(lm_right)^2)
-    MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
-    f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
-    pf_two[i] <- stats::pf(f_stat[i],
-      df1 = 2,
-      df2 = nrow(lm_simple$model) - 4,
-      lower.tail = FALSE
+  loop_stats %>%
+    dplyr::select(
+      p, pos_change, pos_slope_after_bp, int_point_x, inside_ci, idx
     )
-
-    pct_slope_change[i] <- 100 * (lm_right$coefficients[2] -
-      lm_left$coefficients[2]) /
-      abs(lm_left$coefficients[2])
-    pos_change[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
-    pos_slope_after_bp[i] <- dplyr::if_else(lm_right$coefficients[2] > 0,
-      TRUE, FALSE
-    )
-
-    int_point_x[i] <- intersection_point(lm_left, lm_right)["x"]
-  }
-  # calculate cutoff for finding approximate confidence interval
-  crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
-  # using min(MSE_two) and min(RSS_two) based on JM paper
-  inside_ci <- dplyr::if_else(
-    (RSS_two - min(RSS_two, na.rm = TRUE)) /
-      min(MSE_two, na.rm = TRUE) < crit_F,
-    TRUE, FALSE
-  )
-  # for debugging purposes, plot breakpoints inside 95% CI
-  # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / MSE_two)
-  # abline(h = crit_F)
-
-  loop_stats <- tibble::tibble(
-    p = pf_two,
-    pos_change = pos_change,
-    pos_slope_after_bp = pos_slope_after_bp,
-    int_point_x = int_point_x,
-    inside_ci = inside_ci
-  ) %>%
-    dplyr::mutate(idx = dplyr::row_number())
-
-  loop_stats
 }
 
 #' @keywords internal
@@ -302,7 +258,7 @@ get_orr_res <- function(.data, bp_idx, .x, .y, bp,
     stats::lm(data = .data)
 
   pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
-  list2env(pw_stats, envir = environment())
+  # list2env(pw_stats, envir = environment())
 
   pct_slope_change <- 100 * (lm_right$coefficients[2] -
     lm_left$coefficients[2]) /
@@ -322,7 +278,7 @@ get_orr_res <- function(.data, bp_idx, .x, .y, bp,
 
   determinant_bp <- and(
     check_if_determinant_bp(
-      p = pf_two,
+      p = pw_stats$pf_two,
       pct_slope_change = pct_slope_change,
       pos_change = pos_change,
       pos_slope_after_bp = pos_slope_after_bp,
@@ -354,8 +310,8 @@ get_orr_res <- function(.data, bp_idx, .x, .y, bp,
       determinant_bp = determinant_bp,
       bp = bp,
       pct_slope_change = pct_slope_change,
-      f_stat = f_stat,
-      p_val_f = pf_two
+      f_stat = pw_stats$f_stat,
+      p_val_f = pw_stats$pf_two
     ) %>%
     dplyr::relocate(
       bp, algorithm, determinant_bp, est_ci,

@@ -74,7 +74,33 @@ According to the Orr et al. (1982, p. 1350) paper, the "anaerobic threshold is t
 The text of the original paper states that "Regression lines are calculated for all possible divisions of the data into two \emph{contiguous} groups." We interpret contiguous to mean "shares a boundary". That is, the left and right portions of the data each contain one identical data point at the division.
 }
 \examples{
-# TODO write examples
+
+#' # Load breath-by-breath graded exercise testing file
+cpet_bbb <- utils::read.csv(
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+# 15-breath (rolling breath) average
+cpet_15b_roll <- avg_exercise_test(
+  cpet_bbb,
+  method = "breath",
+  calc_type = "rolling",
+  time_col = "time",
+  window = 15,
+  align = "center",
+  mos = "mean"
+)
+
+# Find a specific breakpoint using the JM algorithm. Note: using breakpoint
+# algorithms directly does NOT perform best practices such as removing the
+# first 60 seconds of exercise.
+orr_res <- orr(.data = cpet_15b_roll,
+  .x = "vco2",
+  .y = "ve",
+  bp = "vt2"
+)
+orr_res
+
 }
 \references{
 Orr, G. W., Green, H. J., Hughson, R. L., & Bennett, G. W. (1982). A computer linear regression model to determine ventilatory anaerobic threshold. Journal of Applied Physiology Respiratory Environmental and Exercise Physiology, 52(5), 1349–1352. https://doi.org/10.1152/jappl.1982.52.5.1349

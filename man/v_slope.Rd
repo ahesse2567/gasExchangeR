@@ -88,7 +88,36 @@ Using the v-slope algorithm as originally described by Beaver et al. (1986) is o
 }
 
 \examples{
-# TODO write an example
+
+#' # Load breath-by-breath graded exercise testing file
+cpet_bbb <- utils::read.csv(
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+# 15-breath (rolling breath) average
+cpet_15b_roll <- avg_exercise_test(
+  cpet_bbb,
+  method = "breath",
+  calc_type = "rolling",
+  time_col = "time",
+  window = 15,
+  align = "center",
+  mos = "mean"
+)
+
+# Find a specific breakpoint using the V-slope algorithm. Note: using breakpoint
+# algorithms directly does NOT perform best practices such as removing the
+# first 60 seconds of exercise. This example uses the full test, and does
+# not truncate at VT2, per standard practice. The breakpoint() function
+# does all this for the user by default.
+v_slope_res <- v_slope(.data = cpet_15b_roll,
+  .x = "vo2",
+  .y = "vco2",
+  bp = "vt1"
+)
+v_slope_res
+
+
 }
 \references{
 Beaver, W. L., Wasserman, K., & Whipp, B. J. (1986). A new method for detecting anaerobic threshold by gas exchange. Journal of Applied Physiology, 121(6), 2020–2027.

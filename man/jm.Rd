@@ -69,7 +69,33 @@ A list including slice of the original data frame at the threshold index with ne
 Finding a breakpoint using the Jones-Molitoris algorithm.
 }
 \examples{
-# TODO write examples
+
+# Load breath-by-breath graded exercise testing file
+cpet_bbb <- utils::read.csv(
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+# 15-breath (rolling breath) average
+cpet_15b_roll <- avg_exercise_test(
+  cpet_bbb,
+  method = "breath",
+  calc_type = "rolling",
+  time_col = "time",
+  window = 15,
+  align = "center",
+  mos = "mean"
+)
+
+# Find a specific breakpoint using the JM algorithm. Note: using breakpoint
+# algorithms directly does NOT perform best practices such as removing the
+# first 60 seconds of exercise.
+jm_res <- jm(.data = cpet_15b_roll,
+  .x = "vco2",
+  .y = "ve",
+  bp = "vt2"
+)
+jm_res
+
 }
 \references{
 Jones, R. H., & Molitoris, B. A. (1984). A statistical method for determining the breakpoint of two lines. Analytical Biochemistry, 141(1), 287–290. https://doi.org/10.1016/0003-2697(84)90458-5

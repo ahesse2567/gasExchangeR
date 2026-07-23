@@ -29,7 +29,34 @@
 #' Jones, R. H., & Molitoris, B. A. (1984). A statistical method for determining the breakpoint of two lines. Analytical Biochemistry, 141(1), 287–290. https://doi.org/10.1016/0003-2697(84)90458-5
 #'
 #' @examples
-#' # TODO write examples
+#'
+#' # Load breath-by-breath graded exercise testing file
+#' cpet_bbb <- utils::read.csv(
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
+#'
+#' # 15-breath (rolling breath) average
+#' cpet_15b_roll <- avg_exercise_test(
+#'   cpet_bbb,
+#'   method = "breath",
+#'   calc_type = "rolling",
+#'   time_col = "time",
+#'   window = 15,
+#'   align = "center",
+#'   mos = "mean"
+#' )
+#'
+#' # Find a specific breakpoint using the JM algorithm. Note: using breakpoint
+#' # algorithms directly does NOT perform best practices such as removing the
+#' # first 60 seconds of exercise.
+#' jm_res <- jm(.data = cpet_15b_roll,
+#'   .x = "vco2",
+#'   .y = "ve",
+#'   bp = "vt2"
+#' )
+#' jm_res
+#'
+
 jm <- function(.data,
                .x,
                .y,
@@ -48,24 +75,26 @@ jm <- function(.data,
                ci = FALSE,
                conf_level = 0.95,
                plots = TRUE) {
+
   stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
   bp <- match.arg(bp, choices = c("vt1", "vt2"), several.ok = FALSE)
 
   .data <- order_cpet_df(.data,
-    .x = .x, time = time,
-    ordering = ordering
-  )
+                         .x = .x,
+                         time = time,
+                         ordering = ordering)
   plot_df <- .data
 
+  # determime how much data to remove
   front_trim <- set_front_trim(
     bp = bp,
     front_trim_vt1 = front_trim_vt1,
     front_trim_vt2 = front_trim_vt2
   )
 
+  # remove data from the start of the test
   .data <- .data %>%
     dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
-
   loop_res <- loop_jm(
     .data = .data,
     .x = .x,
@@ -204,113 +233,27 @@ jm <- function(.data,
 }
 
 #' @keywords internal
+#' Scores every division of the data into a left OLS segment and a right segment
+#' constrained to join it at the breakpoint (the Jones-Molitoris model). The
+#' O(n) search is delegated to piecewise_metrics_cumsum_jm() (cumulative
+#' sufficient statistics), which is mathematically identical to fitting a fresh
+#' left OLS and a through-join right regression at every split, but far faster.
 loop_jm <- function(.data,
                     .x,
                     .y,
                     alpha_linearity = 0.05,
                     conf_level = 0.95) {
-  # we're estimating 4 parameters, so we need to have at least 5 rows of
-  # data. If not, this breaks our critical F calculation, because
-  # df2 relies on the number of observations minus 4, and df2 needs
-  # to be greater than 0.
-  if (nrow(.data) < 5) {
+  loop_stats <- piecewise_metrics_cumsum_jm(
+    .data = .data, .x = .x, .y = .y, conf_level = conf_level
+  )
+  if (is.null(loop_stats)) {
     return(NULL)
   }
 
-  # calculate number of rows to reduce repeated calcs
-  n_rows <- nrow(.data)
-
-  # initialize empty vectors
-  RSS_two <- MSE_two <- f_stat <- pf_two <-
-    pct_slope_change <- int_point_x <- numeric(n_rows)
-  pos_change <- pos_slope_after_bp <- logical(n_rows)
-
-  # create simple linear model and calculate its RSS for finding conf ints
-  lm_simple <- paste0(.y, " ~ ", "1 + ", .x) %>%
-    stats::lm(data = .data)
-  RSS_simple <- sum(stats::resid(lm_simple)^2)
-
-  for (i in 1:n_rows) {
-    if (i %in% c(1, n_rows, n_rows - 1)) {
-      RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
-        pos_change[i] <- pos_slope_after_bp[i] <-
-        int_point_x[i] <- NA
-      next
-    }
-    # split data into left and right halves. x0 = .x at index i
-    df_left <- .data[1:i, ] # x <= x0
-    df_right <- .data[(i + 1):n_rows, ] # x > x0. i+1 correct?
-    # does this mean x0 is actually i+1?
-
-    lm_left <- paste0(.y, " ~ ", "1 + ", .x) %>%
-      stats::lm(data = df_left)
-    if (is.na(lm_left$coefficients[2])) {
-      # avoids a strange corner case when there are only a few
-      # data points (e.g. two) and they are both (nearly) identical
-      RSS_two[i] <- MSE_two[i] <- f_stat[i] <- pf_two[i] <-
-        pos_change[i] <- pos_slope_after_bp[i] <- int_point_x[i] <-
-        NA
-      next
-    }
-
-    # according to the JM algorithm, both the left and right regressions
-    # are constrained to pass through (x0, y), where x0 is the breakpoint
-
-    # get y value at point x0 with y = b0 + b1*x0,
-    b0_plus_b1x0 <- lm_left$coefficients[1] +
-      lm_left$coefficients[2] * .data[[.x]][i]
-    x0 <- int_point_x[i] <- .data[[.x]][i]
-    # big thanks to this Stack Overflow post
-    # https://stats.stackexchange.com/questions/12484/constrained-linear-regression-through-a-specified-point
-    # the JM formula of the right regression is y = b0 + b1*x0 + b3(x-x0)
-    # Therefore, we will subtract x0 from each value of x
-    # use I() function to force model through (x0, b0_plus_b1x0)
-    # This workaround requires forcing the intercept through zero, or at least using that notation
-    lm_right <- paste0(
-      "I(", .y, "-", b0_plus_b1x0, ")",
-      " ~ 0 + I(", .x, " - ", x0, ")"
-    ) %>%
-      stats::lm(data = df_right)
-
-    RSS_two[i] <- sum(stats::resid(lm_left)^2) + sum(stats::resid(lm_right)^2)
-    MSE_two[i] <- RSS_two[i] / (nrow(lm_simple$model) - 4) # -4 b/c estimating 4 parameters
-    f_stat[i] <- (RSS_simple - RSS_two[i]) / (2 * MSE_two[i])
-    pf_two[i] <- stats::pf(f_stat[i],
-      df1 = 2,
-      df2 = nrow(lm_simple$model) - 4,
-      lower.tail = FALSE
+  loop_stats %>%
+    dplyr::select(
+      idx, p, pos_change, pos_slope_after_bp, int_point_x, inside_ci
     )
-    # the slope coefficient index for JM is 1
-    pct_slope_change[i] <- 100 * (lm_right$coefficients[1] -
-      lm_left$coefficients[2]) /
-      abs(lm_left$coefficients[2])
-    pos_change[i] <- dplyr::if_else(pct_slope_change[i] > 0, TRUE, FALSE)
-    pos_slope_after_bp[i] <- dplyr::if_else(
-      lm_right$coefficients[1] > 0, TRUE, FALSE
-    )
-  }
-  # calculate cutoff for finding approximate confidence interval
-  crit_F <- stats::qf(conf_level, 1, n_rows - 4, lower.tail = TRUE)
-  # using min(MSE_two) and min(RSS_two) based on JM paper
-  inside_ci <- dplyr::if_else(
-    (RSS_two - min(RSS_two, na.rm = TRUE)) /
-      min(MSE_two, na.rm = TRUE) < crit_F,
-    TRUE, FALSE
-  )
-  # for debugging purposes, plot breakpoints inside 95% CI
-  # plot((RSS_two - min(RSS_two, na.rm = TRUE)) / min(MSE_two, na.rm = TRUE))
-  # abline(h = crit_F)
-
-  loop_stats <- tibble::tibble(
-    p = pf_two,
-    pos_change = pos_change,
-    pos_slope_after_bp = pos_slope_after_bp,
-    int_point_x = int_point_x,
-    inside_ci = inside_ci
-  ) %>%
-    dplyr::mutate(idx = dplyr::row_number())
-
-  loop_stats
 }
 
 #' @keywords internal
@@ -346,15 +289,15 @@ get_jm_res <- function(.data, bp_idx, .x, .y, bp,
 
   # check for a significant departure from linearity
   pw_stats <- piecewise_stats(lm_left, lm_right, lm_simple)
-  list2env(pw_stats, envir = environment())
+  # list2env(pw_stats, envir = environment())
 
   y_hat_left <- tibble::tibble("{.x}" := df_left[[.x]],
-    "{.y}" := lm_left$fitted.values,
-    algorithm = "jm"
+                               "{.y}" := lm_left$fitted.values,
+                               algorithm = "jm"
   )
   y_hat_right <- tibble::tibble("{.x}" := df_right[[.x]],
-    "{.y}" := lm_right$fitted.values + b0_plus_b1x0,
-    algorithm = "jm"
+                                "{.y}" := lm_right$fitted.values + b0_plus_b1x0,
+                                algorithm = "jm"
   )
   pred <- dplyr::bind_rows(y_hat_left, y_hat_right)
   # need to use lm_right$coefficients[1] instead of [2] b/c there is only
@@ -363,7 +306,7 @@ get_jm_res <- function(.data, bp_idx, .x, .y, bp,
     abs(lm_left$coefficients[2])
 
   determinant_bp <- check_if_determinant_bp(
-    p = pf_two,
+    p = pw_stats$pf_two,
     pct_slope_change = pct_slope_change,
     pos_change = pos_change,
     pos_slope_after_bp =
@@ -386,8 +329,8 @@ get_jm_res <- function(.data, bp_idx, .x, .y, bp,
       determinant_bp = determinant_bp,
       bp = bp,
       pct_slope_change = pct_slope_change,
-      f_stat = f_stat,
-      p_val_f = pf_two
+      f_stat = pw_stats$ f_stat,
+      p_val_f = pw_stats$pf_two
     ) %>%
     dplyr::relocate(
       bp, algorithm, determinant_bp, est_ci,

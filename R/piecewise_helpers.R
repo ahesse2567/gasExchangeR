@@ -107,29 +107,43 @@ get_best_piecewise_idx <- function(loop_res_df,
                                    alpha_linearity,
                                    pos_change,
                                    pos_slope_after_bp) {
+  # Copy the arguments to distinctly named locals. Inside dplyr::filter() the
+  # data mask makes an identically named column win over a function argument,
+  # so `pos_change == pos_change` would compare the column to itself (always
+  # TRUE) rather than to the expected direction. Comparing the column to these
+  # renamed locals filters as intended.
+  expected_pos_change <- pos_change
+  expected_pos_slope_after_bp <- pos_slope_after_bp
+
   # filter loop results for the best-fit, determinant solution
-  best_idx <- loop_res_df %>%
+  candidates <- loop_res_df %>%
     dplyr::filter(
       p < alpha_linearity &
-        pos_change == pos_change &
-        pos_slope_after_bp == pos_slope_after_bp &
+        pos_change == expected_pos_change &
+        pos_slope_after_bp == expected_pos_slope_after_bp &
         dplyr::between(
           int_point_x,
           data_range[1],
           data_range[2]
         ),
       inside_ci
-    ) %>%
-    # best-fit considered smallest p-value (lowest RSS)
+    )
+
+  # no determinant solution in the expected direction; fall back to the overall
+  # best fit (smallest p) so the caller still gets a breakpoint, which will be
+  # flagged indeterminate downstream. Handling the empty case here also avoids
+  # calling min() on an empty vector below.
+  if (nrow(candidates) == 0) {
+    return(which.min(loop_res_df$p))
+  }
+
+  # best-fit considered smallest p-value (lowest RSS)
+  best_idx <- candidates %>%
     dplyr::filter(p == min(p)) %>%
-    dplyr::select(idx) %>%
-    dplyr::pull()
+    dplyr::pull(idx)
 
   if (length(best_idx) > 1) {
     best_idx <- sample(best_idx, 1)
-  } else if (length(best_idx) == 0) {
-    # no valid solution, but produce next-best result anyway
-    best_idx <- which.min(loop_res_df$p)
   }
 
   best_idx
