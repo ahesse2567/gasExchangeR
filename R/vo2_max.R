@@ -56,7 +56,7 @@
 #' # A 10-second bin average to showcase the VO2max neighbor test
 #' cpet_10s_bin <- avg_exercise_test(
 #'   cpet_bbb,
-#'   test = "time",
+#'   method = "time",
 #'   calc_type = "bin",
 #'   time_col = "time",
 #'   window = 10
@@ -64,6 +64,7 @@
 #'
 #' vo2_plat_10s_bin <- vo2_plateau(cpet_10s_bin,
 #'   test = "vo2max_neighbor",
+#'   method = "time",
 #'   vo2_col = "vo2",
 #'   time_col = "time",
 #'   units = "mL",
@@ -77,7 +78,7 @@
 #' # A 30-second bin average to showcase the VO2max neighbor test
 #' cpet_30s_bin <- avg_exercise_test(
 #'   cpet_bbb,
-#'   test = "time",
+#'   method = "time",
 #'   calc_type = "bin",
 #'   time_col = "time",
 #'   window = 30
@@ -85,21 +86,16 @@
 #'
 #' vo2_plat_30s_bin <- vo2_plateau(cpet_30s_bin,
 #'   test = "vo2max_neighbor",
+#'   method = "time",
 #'   vo2_col = "vo2",
 #'   time_col = "time",
 #'   units = "mL",
-#'   last_x = 60,
+#'   last_x = 30,
 #'   delta_vo2 = 150,
 #'   alpha = 0.05
 #' )
 #'
 #' vo2_plat_30s_bin
-#'
-#' # Notice how the presence of a VO2 plateau differs by a 10 (no plateau) vs.
-#' # 30-second (yes plateau) bin average. This is due in part to the change in
-#' # VO2 of 50 ml/min. Though opinions differ on the best bin average duration
-#' # and VO2 differences for for determining VO2max and the presence of a VO2
-#' # plateau, just be sure to clearly document your tests!
 #'
 #' # Slope at end-of-test test
 #'
@@ -116,10 +112,11 @@
 #'
 #' vo2_plat_15b_roll_slope_eot <- vo2_plateau(cpet_15b_roll,
 #'   test = "slope_eot",
+#'   method = "breath",
 #'   vo2_col = "vo2",
 #'   time_col = "time",
 #'   units = "mL",
-#'   last_x = 60,
+#'   last_x = 30,
 #'   delta_vo2 = 150,
 #'   alpha = 0.05
 #' )
@@ -128,10 +125,11 @@
 #'
 #' vo2_plat_15b_roll_zero_slope <- vo2_plateau(cpet_15b_roll,
 #'  test = "zero_slope",
+#'  method = "breath",
 #'  vo2_col = "vo2",
 #'  time_col = "time",
 #'  units = "mL",
-#'  last_x = 60,
+#'  last_x = 30,
 #'  alpha = 0.05
 #')
 #'
