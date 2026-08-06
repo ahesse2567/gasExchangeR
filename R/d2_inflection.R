@@ -6,22 +6,27 @@
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?
-#' @param degree The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.
+#' @param degree The polynomial degree fit to the curve. Default \code{5}, matching Santos and Giannella-Neto (2004). When \code{search_degree = TRUE}, this is the lowest degree searched. Must be at least 5.
+#' @param search_degree Search for the best polynomial degree rather than using the fixed \code{degree}? Default \code{FALSE}.
+#' @param max_degree Highest polynomial degree considered when \code{search_degree = TRUE}. Default \code{8}.
+#' @param criterion Model-selection rule when \code{search_degree = TRUE}: \code{"aicc"} (default) or \code{"lrt"}.
 #' @param vo2 Name of the \code{vo2} variable
 #' @param vco2 Name of the \code{vco2} variable
 #' @param ve Name of the \code{ve} variable
 #' @param time Name of the \code{time} variable
-#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param alpha_linearity Significance value used by the \code{"lrt"} degree search.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
-#' @param ci Should the output include confidence interval data? Default is `FALSE`.
-#' @param conf_level Confidence level to use if calculating confidence intervals.
+#' @param front_trim_vt1 Seconds of data to remove from the beginning of the test before fitting (VT1). Default \code{60}.
+#' @param front_trim_vt2 Seconds of data to remove from the beginning of the test before fitting (VT2). Default \code{60}.
+#' @param ci Not yet implemented for this function; accepted for interface consistency with the other threshold algorithms but currently has no effect.
+#' @param conf_level Not yet implemented for this function; see \code{ci}.
 #' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' @returns A list containing breakpoint data, best-fit and related functions, and a plot.
 #' @export
 #'
-#' @details To mimic the Santos et al. (2004) paper, this fits a 5th-order polynomial regression to the VE vs. VO2 or VCO2 data. Users can set `degree = NULL` to iteratively increase the polynomial if the likelihood ratio test is significant. After establishing the polynomial, we find the real roots of the 2nd derivative within the given range of the `.x` variable to find the inflection points. We then filter by concavity changes that go from up to down because this matches the expected shape of the pulmonary ventilation curves.
+#' @details To mimic the Santos et al. (2004) paper, this fits a 5th-order polynomial regression to the VE vs. VO2 or VCO2 data by default. Set \code{search_degree = TRUE} to instead select the degree from the data (between \code{degree} and \code{max_degree}) using the corrected AIC (\code{"aicc"}, default) or a sequential likelihood-ratio test (\code{"lrt"}). After establishing the polynomial, we find the real roots of the 2nd derivative within the given range of the `.x` variable to find the inflection points. We then filter by concavity changes that go from up to down because this matches the expected shape of the pulmonary ventilation curves.
 #'
 #' We are unsure how to handle multiple inflection points at this time, but this is unlikely to be an issue if the polynomial degree is kept equal to 5.
 #'
@@ -29,35 +34,87 @@
 #' Santos, E. L., & Giannella-Neto, A. (2004). Comparison of computerized methods for detecting the ventilatory thresholds. European journal of applied physiology, 93, 315-324.
 #'
 #' @examples
-#' # TODO write an example
+#'
+#' cpet_bbb <- utils::read.csv(
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
+#'
+#' cpet_15b_roll <- avg_exercise_test(
+#'   cpet_bbb,
+#'   method = "breath", calc_type = "rolling", time_col = "time", window = 15
+#' )
+#'
+#' # VT1/GET from the inflection point of VE vs. VO2
+#' d2_inflection(
+#'   cpet_15b_roll,
+#'   .x = "vo2",
+#'   .y = "ve",
+#'   bp = "vt1",
+#'   vo2 = "vo2",
+#'   vco2 = "vco2",
+#'   ve = "ve",
+#'   time = "time",
+#'   plots = FALSE
+#' )
 #'
 d2_inflection <- function(.data,
                           .x,
                           .y,
                           bp,
                           ...,
-                          degree = NULL,
+                          degree = 5,
+                          search_degree = FALSE,
+                          max_degree = 8,
+                          criterion = c("aicc", "lrt"),
                           vo2 = "vo2",
                           vco2 = "vco2",
                           ve = "ve",
                           time = "time",
                           alpha_linearity = 0.05,
                           ordering = c("by_x", "time"),
-                          # TODO ADD FROM TRIM ARGUMENTS,
+                          front_trim_vt1 = 60,
+                          front_trim_vt2 = 60,
                           ci = FALSE,
                           conf_level = 0.95,
                           plots = TRUE) {
-  # check if there is crucial missing data
-  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+  # check for crucial missing data
+  rlang::check_required(.data)
+  rlang::check_required(.x)
+  rlang::check_required(.y)
+  rlang::check_required(bp)
 
-  .data <- .data %>% # rearrange by x variable. Use time var to break ties.
-    dplyr::arrange(.data[[.x]], .data[[time]])
+  bp <- rlang::arg_match(bp, values = c("vt1", "vt2"))
+  ordering <- rlang::arg_match(ordering)
+  criterion <- rlang::arg_match(criterion)
 
-  lm_poly <- loop_d2_inflection(
+  .data <- order_cpet_df(.data, .x = .x, time = time, ordering = ordering)
+
+  # remove the noisy start of the test before fitting (as the other threshold
+  # functions do), to avoid spurious early inflection points.
+  front_trim <- set_front_trim(
+    bp = bp,
+    front_trim_vt1 = front_trim_vt1,
+    front_trim_vt2 = front_trim_vt2
+  )
+  .data <- .data %>%
+    dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
+
+  lm_poly <- fit_poly_reg(
     .data = .data, .x = .x, .y = .y,
-    degree = degree,
+    degree = degree, search_degree = search_degree,
+    max_degree = max_degree, criterion = criterion,
     alpha_linearity = alpha_linearity
   )
+
+  # return quick summary if generating the model fails
+  if (is.null(lm_poly) || anyNA(stats::coef(lm_poly))) {
+    bp_dat <- return_indeterminant_findings(
+      .data = .data, bp = bp,
+      algorithm = "d2_inflection",
+      .x = .x, .y = .y, est_ci = "estimate"
+    )
+    return(list(breakpoint_data = bp_dat))
+  }
 
   poly_expr <- expr_from_coefs(lm_poly$coefficients)
   deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
@@ -153,58 +210,6 @@ d2_inflection <- function(.data,
     deriv2_expr = deriv2,
     bp_plot = bp_plot
   ))
-}
-
-#' @keywords internal
-loop_d2_inflection <- function(.data, .x, .y,
-                               degree = NULL, alpha_linearity = 0.05) {
-  # if the user specifies a degree, find that and be done with it
-  if (!is.null(degree)) {
-    lm_poly <- paste0(
-      .y, " ~ ", "1 + ",
-      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
-    ) %>%
-      stats::lm(data = .data)
-    # if the user does NOT specify a degree, find the best degree using
-    # likelihood ratio test
-  } else {
-    degree <- 5 # from testing and previous papers it seems like you need to
-    # force a higher derivative if you want a local maxima within the
-    # range of x values. That doesn't feel wonderful.
-    lm_list <- vector(mode = "list", length = 0) # hold lm data
-    # keep raw = TRUE for now b/c it's way easier for me to test
-    # if the derivative expressions are working
-    # starting with degree = 5 b/c that's the minimum I've seen in
-    # other papers that seemed to use polynomial fits
-
-    lm_poly <- paste0(
-      .y, " ~ ", "1 + ",
-      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
-    ) %>%
-      stats::lm(data = .data)
-
-    lm_list <- append(lm_list, list(lm_poly))
-
-    cont <- TRUE
-    i <- 1 # start at 2 b/c we already made linear (degree = 1) model
-    while (cont == TRUE) {
-      lm_poly <- paste0(
-        .y, " ~ ", "1 + ",
-        "poly(", .x, ", degree = ",
-        degree + i, ", raw = TRUE)"
-      ) %>%
-        stats::lm(data = .data)
-      lm_list <- append(lm_list, list(lm_poly))
-      lrt <- stats::anova(lm_list[[i]], lm_list[[i + 1]])
-      if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-        cont <- FALSE
-        lm_poly <- lm_list[[i]] # take the previous model
-      }
-      i <- i + 1
-    }
-  }
-
-  lm_poly
 }
 
 #' Find when a function changes from concave up to concave down or vice versa

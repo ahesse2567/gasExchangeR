@@ -10,7 +10,10 @@ d2_reg_spline_maxima(
   .y,
   bp,
   degree = 5,
-  df = NULL,
+  n_knots = 2,
+  search_knots = FALSE,
+  max_knots = 6,
+  criterion = c("aicc", "lrt"),
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -35,9 +38,15 @@ d2_reg_spline_maxima(
 
 \item{bp}{Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?}
 
-\item{degree}{The polynomial degree the function should fit to the curve. Most previous studies using this method use 3 or 5.}
+\item{degree}{The B-spline (polynomial) degree. Most previous studies use 3 or 5. Default \code{5}.}
 
-\item{df}{If the user wants to use a specific number of knots, your `df` should equal the number of desired knots +`degree` to account for the df "consumed" by the polynomial regressions.}
+\item{n_knots}{Number of interior knots to use (fixed) or, with \code{search_knots = TRUE}, the lowest number searched. B-spline df is \code{n_knots + degree}. Default \code{2}.}
+
+\item{search_knots}{Search for the best number of interior knots rather than using the fixed \code{n_knots}? Default \code{FALSE}.}
+
+\item{max_knots}{Highest number of interior knots considered when \code{search_knots = TRUE}. Default \code{6}.}
+
+\item{criterion}{Model-selection rule when \code{search_knots = TRUE}: \code{"aicc"} (default) or \code{"lrt"}.}
 
 \item{vo2}{Name of the \code{vo2} variable}
 
@@ -47,41 +56,78 @@ d2_reg_spline_maxima(
 
 \item{time}{Name of the \code{time} variable}
 
-\item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+\item{alpha_linearity}{Significance value used by the \code{"lrt"} knot search.}
 
-\item{pos_change}{Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.}
+\item{pos_change}{Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima. Set \code{FALSE} for PetCO2.}
 
-\item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+\item{ordering}{Prior to fitting, should the data be reordered by the x-axis variable or by time? Default reorders by the x variable, using time to break ties.}
 
-\item{front_trim_vt1}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+\item{front_trim_vt1}{Seconds of data to remove from the beginning of the test before fitting (VT1).}
 
-\item{front_trim_vt2}{How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.}
+\item{front_trim_vt2}{Seconds of data to remove from the beginning of the test before fitting (VT2).}
 
-\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+\item{ci}{Should the output include confidence interval data? Default \code{FALSE}.}
 
 \item{conf_level}{Confidence level to use if calculating confidence intervals.}
 
-\item{plots}{Should this function generate plots? Set to `FALSE` to save time.
+\item{plots}{Should this function generate plots? Set to \code{FALSE} to save time.}
 
-#' @references
-Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
-Sherrill, D. L., Anderson, S. J., & Swanson, G. E. O. R. G. E. (1990). Using smoothing splines for detecting ventilatory thresholds. Medicine and Science in Sports and Exercise, 22(5), 684-689.
-Wade, T. D., Anderson, S. J., Bondy, J., Ramadevi, V. A., Jones, R. H., & Swanson, G. D. (1988). Using smoothing splines to make inferences about the shape of gas-exchange curves. Computers and biomedical research, 21(1), 16-26.}
-
-\item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
+\item{...}{Passed through so this function plays nicely when \code{breakpoint()} supplies extra arguments.}
 }
 \value{
-A slice of the original data frame at the threshold index with a new `algorithm` column.
+A list whose \code{breakpoint_data} is a slice of the original data
+  frame at the threshold, with an \code{algorithm} column, plus the fitted
+  regression spline and its analytic derivative function.
 }
 \description{
-#' Use regression splines of with an increasing number of knots to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
+Fit a B-spline regression to the data, take its second derivative, and find the
+highest maxima of that second derivative. Traditionally used with ventilatory
+equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
 }
 \details{
-#' Several works use an algorithm similar to this one. However, it is somewhat unclear if those previous works were truly using "smoothing splines" or "regression splines" (they are *not* the same). Previous works may refer to a third or fifth order "polynomial smoothing splines", which likely means "regression splines", but we cannot be certain at this time.
+Several works use a similar algorithm, though it is often unclear whether they
+used "smoothing splines" or "regression splines" (which are not the same). By
+default this function fits a fixed B-spline regression with \code{n_knots = 2}
+interior knots. A small, fixed number of knots keeps the fitted curve from
+developing spurious wiggles that would create extra second-derivative maxima.
+If you would rather have the number of knots chosen from the data, set
+\code{search_knots = TRUE}; the search selects a knot count between
+\code{n_knots} and \code{max_knots} using the corrected AIC (AICc) by default,
+or a sequential likelihood-ratio test (\code{criterion = "lrt"}).
 
-Unlike several published works, this method iteratively finds the best-fit regression by increasing the number of knots and using the likelihood ratio test with the \code{anova} function. When the likelihood ratio test does *not* find a statistically significant difference between the previous and the newest regression spline, this returns the previous regression spline. We found that this is a more conservative approach and yields fewer possible second derivative maxima to choose between. However, users can specify their desired number of knots.
+The second derivative is computed analytically from the B-spline basis
+(\code{splines::splineDesign(derivs = 2)}), which is exact at any degree and
+avoids the boundary artifacts of interpolating the fitted values with a second
+spline.
 }
 \examples{
-# TODO write an example
 
+cpet_bbb <- utils::read.csv(
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+cpet_15b_roll <- avg_exercise_test(
+  cpet_bbb,
+  method = "breath", calc_type = "rolling", time_col = "time", window = 15
+)
+cpet_15b_roll$ve_vco2 <- cpet_15b_roll$ve / cpet_15b_roll$vco2
+
+# VT2/RC from the 2nd-derivative maximum of VE/VCO2 vs. time
+d2_reg_spline_maxima(
+  cpet_15b_roll,
+  .x = "time",
+  .y = "ve_vco2",
+  bp = "vt2",
+  vo2 = "vo2",
+  vco2 = "vco2",
+  ve = "ve",
+  time = "time",
+  plots = FALSE
+)
+}
+\references{
+Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and Science in Sports and Exercise, 49(7), 1452-1460.
+Santos, E. L., & Giannella-Neto, A. (2004). Comparison of computerized methods for detecting the ventilatory thresholds. European Journal of Applied Physiology, 93(3), 315-324.
+Sherrill, D. L., Anderson, S. J., & Swanson, G. (1990). Using smoothing splines for detecting ventilatory thresholds. Medicine and Science in Sports and Exercise, 22(5), 684-689.
+Wade, T. D., Anderson, S. J., Bondy, J., Ramadevi, V. A., Jones, R. H., & Swanson, G. D. (1988). Using smoothing splines to make inferences about the shape of gas-exchange curves. Computers and Biomedical Research, 21(1), 16-26.
 }

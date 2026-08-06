@@ -10,13 +10,18 @@ d2_inflection(
   .y,
   bp,
   ...,
-  degree = NULL,
+  degree = 5,
+  search_degree = FALSE,
+  max_degree = 8,
+  criterion = c("aicc", "lrt"),
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
   alpha_linearity = 0.05,
   ordering = c("by_x", "time"),
+  front_trim_vt1 = 60,
+  front_trim_vt2 = 60,
   ci = FALSE,
   conf_level = 0.95,
   plots = TRUE
@@ -33,7 +38,13 @@ d2_inflection(
 
 \item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
-\item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
+\item{degree}{The polynomial degree fit to the curve. Default \code{5}, matching Santos and Giannella-Neto (2004). When \code{search_degree = TRUE}, this is the lowest degree searched. Must be at least 5.}
+
+\item{search_degree}{Search for the best polynomial degree rather than using the fixed \code{degree}? Default \code{FALSE}.}
+
+\item{max_degree}{Highest polynomial degree considered when \code{search_degree = TRUE}. Default \code{8}.}
+
+\item{criterion}{Model-selection rule when \code{search_degree = TRUE}: \code{"aicc"} (default) or \code{"lrt"}.}
 
 \item{vo2}{Name of the \code{vo2} variable}
 
@@ -43,13 +54,17 @@ d2_inflection(
 
 \item{time}{Name of the \code{time} variable}
 
-\item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+\item{alpha_linearity}{Significance value used by the \code{"lrt"} degree search.}
 
 \item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
 
-\item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
+\item{front_trim_vt1}{Seconds of data to remove from the beginning of the test before fitting (VT1). Default \code{60}.}
 
-\item{conf_level}{Confidence level to use if calculating confidence intervals.}
+\item{front_trim_vt2}{Seconds of data to remove from the beginning of the test before fitting (VT2). Default \code{60}.}
+
+\item{ci}{Not yet implemented for this function; accepted for interface consistency with the other threshold algorithms but currently has no effect.}
+
+\item{conf_level}{Not yet implemented for this function; see \code{ci}.}
 
 \item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 }
@@ -60,12 +75,33 @@ A list containing breakpoint data, best-fit and related functions, and a plot.
 Find a breakpoint in ventilatory data based on the 2nd derivative inflection point after Santos et al. (2004). In their paper, they use pulmonary ventilation (VE) vs. VO2 to find the first ventilatory (VT1) / gas exchange threshold (GET) and VE vs. VCO2 to find the respiratory compensation point (RCP) / second ventilatory threshold (VT2). It is generally suitable to also use VE vs. time to find VT2. One can truncate the test and rerun VE vs. time to find VT1.
 }
 \details{
-To mimic the Santos et al. (2004) paper, this fits a 5th-order polynomial regression to the VE vs. VO2 or VCO2 data. Users can set `degree = NULL` to iteratively increase the polynomial if the likelihood ratio test is significant. After establishing the polynomial, we find the real roots of the 2nd derivative within the given range of the `.x` variable to find the inflection points. We then filter by concavity changes that go from up to down because this matches the expected shape of the pulmonary ventilation curves.
+To mimic the Santos et al. (2004) paper, this fits a 5th-order polynomial regression to the VE vs. VO2 or VCO2 data by default. Set \code{search_degree = TRUE} to instead select the degree from the data (between \code{degree} and \code{max_degree}) using the corrected AIC (\code{"aicc"}, default) or a sequential likelihood-ratio test (\code{"lrt"}). After establishing the polynomial, we find the real roots of the 2nd derivative within the given range of the `.x` variable to find the inflection points. We then filter by concavity changes that go from up to down because this matches the expected shape of the pulmonary ventilation curves.
 
 We are unsure how to handle multiple inflection points at this time, but this is unlikely to be an issue if the polynomial degree is kept equal to 5.
 }
 \examples{
-# TODO write an example
+
+cpet_bbb <- utils::read.csv(
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+cpet_15b_roll <- avg_exercise_test(
+  cpet_bbb,
+  method = "breath", calc_type = "rolling", time_col = "time", window = 15
+)
+
+# VT1/GET from the inflection point of VE vs. VO2
+d2_inflection(
+  cpet_15b_roll,
+  .x = "vo2",
+  .y = "ve",
+  bp = "vt1",
+  vo2 = "vo2",
+  vco2 = "vco2",
+  ve = "ve",
+  time = "time",
+  plots = FALSE
+)
 
 }
 \references{

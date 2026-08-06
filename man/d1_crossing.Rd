@@ -10,7 +10,10 @@ d1_crossing(
   .y,
   bp = "vt1",
   ...,
-  degree = NULL,
+  degree = 6,
+  search_degree = FALSE,
+  max_degree = 8,
+  criterion = c("aicc", "lrt"),
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -18,6 +21,8 @@ d1_crossing(
   alpha_linearity = 0.05,
   pos_change = TRUE,
   ordering = c("by_x", "time"),
+  front_trim_vt1 = 60,
+  front_trim_vt2 = 60,
   ci = FALSE,
   conf_level = 0.95,
   plots = TRUE
@@ -34,7 +39,13 @@ d1_crossing(
 
 \item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
-\item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
+\item{degree}{The polynomial degree fit to VO2 and VCO2 vs. time. Default \code{6}, matching Wisen and Wohlfart (2004) (note this differs from the degree-5 default of the other methods). When \code{search_degree = TRUE}, this is the lowest degree searched. Must be at least 5.}
+
+\item{search_degree}{Search for the best polynomial degree rather than using the fixed \code{degree}? Default \code{FALSE}.}
+
+\item{max_degree}{Highest polynomial degree considered when \code{search_degree = TRUE}. Default \code{8}.}
+
+\item{criterion}{Model-selection rule when \code{search_degree = TRUE}: \code{"aicc"} (default) or \code{"lrt"}.}
 
 \item{vo2}{Name of the \code{vo2} variable}
 
@@ -44,11 +55,15 @@ d1_crossing(
 
 \item{time}{Name of the \code{time} variable}
 
-\item{alpha_linearity}{Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.}
+\item{alpha_linearity}{Significance value used by the \code{"lrt"} degree search.}
 
 \item{pos_change}{Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.}
 
 \item{ordering}{Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.}
+
+\item{front_trim_vt1}{Seconds of data to remove from the beginning of the test before fitting (VT1). Default \code{60}.}
+
+\item{front_trim_vt2}{Seconds of data to remove from the beginning of the test before fitting (VT2). Default \code{60}.}
 
 \item{ci}{Should the output include confidence interval data? Default is `FALSE`.}
 
@@ -60,11 +75,35 @@ d1_crossing(
 A list include breakpoint data, best-fit and related functions, and a plot.
 }
 \description{
-Use polynomial regression to find the gas exchange threshold (GET) (practically equivalent to the first ventilatory threshold (VT1)). This method by Wisen and Wohlfart (2004) is similar to the V-slope method by Beaver et al. (1986) in that it finds when the rate of CO2 production outpaces the rate of O2 production. In contrast to piecewise regression in the original V-slope method, this uses the first derivative of VO2 and VCO2 vs. time. The threshold is when dVCO2/dt surpasses dVO2/dt for the final time.
+Use polynomial regression to find the gas exchange threshold (GET) (practically equivalent to the first ventilatory threshold (VT1)). This method by Wisen and Wohlfart (2004) is similar to the V-slope method by Beaver et al. (1986) in that it finds when the rate of CO2 production outpaces the rate of O2 production. In contrast to piecewise regression in the original V-slope method, this uses the first derivative of VO2 and VCO2 vs. time (differentiated analytically). The threshold is when dVCO2/dt surpasses dVO2/dt for the final time.
+}
+\details{
+By default a fixed sixth-degree polynomial is fit to each of VO2 and VCO2 vs. time. \strong{Note:} this degree-6 default differs from the degree-5 default used by the other polynomial and spline methods in this package (e.g. \code{d2_poly_reg_maxima}, \code{d2_reg_spline_maxima}). We use 6 here because the original Wisen and Wohlfart (2004) technique fit sixth-degree polynomials. Set \code{search_degree = TRUE} to instead select the degree from the data (between \code{degree} and \code{max_degree}) using the corrected AIC (\code{"aicc"}, default) or a sequential likelihood-ratio test (\code{"lrt"}).
 }
 \examples{
 
-# TODO write an example
+cpet_bbb <- utils::read.csv(
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+cpet_15b_roll <- avg_exercise_test(
+  cpet_bbb,
+  method = "breath", calc_type = "rolling", time_col = "time", window = 15
+)
+
+# GET/VT1 as the final crossing of dVCO2/dt above dVO2/dt. The crossing is
+# located in TIME, so .x must be "time" (thr_y is the fitted VO2, so .y = "vo2").
+d1_crossing(
+  cpet_15b_roll,
+  .x = "time",
+  .y = "vo2",
+  bp = "vt1",
+  vo2 = "vo2",
+  vco2 = "vco2",
+  ve = "ve",
+  time = "time",
+  plots = FALSE
+)
 
 }
 \references{

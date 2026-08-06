@@ -1,20 +1,27 @@
 #' Find the gas exchange threshold (GET) (~1st ventilatory threshold (VT1)) using the 1st derivative crossing point
 #'
-#' Use polynomial regression to find the gas exchange threshold (GET) (practically equivalent to the first ventilatory threshold (VT1)). This method by Wisen and Wohlfart (2004) is similar to the V-slope method by Beaver et al. (1986) in that it finds when the rate of CO2 production outpaces the rate of O2 production. In contrast to piecewise regression in the original V-slope method, this uses the first derivative of VO2 and VCO2 vs. time. The threshold is when dVCO2/dt surpasses dVO2/dt for the final time.
+#' Use polynomial regression to find the gas exchange threshold (GET) (practically equivalent to the first ventilatory threshold (VT1)). This method by Wisen and Wohlfart (2004) is similar to the V-slope method by Beaver et al. (1986) in that it finds when the rate of CO2 production outpaces the rate of O2 production. In contrast to piecewise regression in the original V-slope method, this uses the first derivative of VO2 and VCO2 vs. time (differentiated analytically). The threshold is when dVCO2/dt surpasses dVO2/dt for the final time.
+#'
+#' By default a fixed sixth-degree polynomial is fit to each of VO2 and VCO2 vs. time. \strong{Note:} this degree-6 default differs from the degree-5 default used by the other polynomial and spline methods in this package (e.g. \code{d2_poly_reg_maxima}, \code{d2_reg_spline_maxima}). We use 6 here because the original Wisen and Wohlfart (2004) technique fit sixth-degree polynomials. Set \code{search_degree = TRUE} to instead select the degree from the data (between \code{degree} and \code{max_degree}) using the corrected AIC (\code{"aicc"}, default) or a sequential likelihood-ratio test (\code{"lrt"}).
 #'
 #' @param .data Gas exchange data frame or tibble.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
-#' @param degree The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.
+#' @param degree The polynomial degree fit to VO2 and VCO2 vs. time. Default \code{6}, matching Wisen and Wohlfart (2004) (note this differs from the degree-5 default of the other methods). When \code{search_degree = TRUE}, this is the lowest degree searched. Must be at least 5.
+#' @param search_degree Search for the best polynomial degree rather than using the fixed \code{degree}? Default \code{FALSE}.
+#' @param max_degree Highest polynomial degree considered when \code{search_degree = TRUE}. Default \code{8}.
+#' @param criterion Model-selection rule when \code{search_degree = TRUE}: \code{"aicc"} (default) or \code{"lrt"}.
 #' @param vo2 Name of the \code{vo2} variable
 #' @param vco2 Name of the \code{vco2} variable
 #' @param ve Name of the \code{ve} variable
 #' @param time Name of the \code{time} variable
-#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
+#' @param alpha_linearity Significance value used by the \code{"lrt"} degree search.
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint? This method is specifically designed for finding VT1 (GET)
 #' @param pos_change Do you expect the change in slope to be positive (default) or negative? If a two-line regression explains significantly reduces the sum square error but the change in slope does not match the expected underlying physiology, the breakpoint will be classified as indeterminate.
 #' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
+#' @param front_trim_vt1 Seconds of data to remove from the beginning of the test before fitting (VT1). Default \code{60}.
+#' @param front_trim_vt2 Seconds of data to remove from the beginning of the test before fitting (VT2). Default \code{60}.
 #' @param ci Should the output include confidence interval data? Default is `FALSE`.
 #' @param conf_level Confidence level to use if calculating confidence intervals.
 #' @param plots Should this function generate plots? Set to `FALSE` to save time.
@@ -29,14 +36,38 @@
 #'
 #' @examples
 #'
-#' # TODO write an example
+#' cpet_bbb <- utils::read.csv(
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
+#'
+#' cpet_15b_roll <- avg_exercise_test(
+#'   cpet_bbb,
+#'   method = "breath", calc_type = "rolling", time_col = "time", window = 15
+#' )
+#'
+#' # GET/VT1 as the final crossing of dVCO2/dt above dVO2/dt. The crossing is
+#' # located in TIME, so .x must be "time" (thr_y is the fitted VO2, so .y = "vo2").
+#' d1_crossing(
+#'   cpet_15b_roll,
+#'   .x = "time",
+#'   .y = "vo2",
+#'   bp = "vt1",
+#'   vo2 = "vo2",
+#'   vco2 = "vco2",
+#'   ve = "ve",
+#'   time = "time",
+#'   plots = FALSE
+#' )
 #'
 d1_crossing <- function(.data,
                         .x,
                         .y,
                         bp = "vt1",
                         ...,
-                        degree = NULL,
+                        degree = 6,
+                        search_degree = FALSE,
+                        max_degree = 8,
+                        criterion = c("aicc", "lrt"),
                         vo2 = "vo2",
                         vco2 = "vco2",
                         ve = "ve",
@@ -44,14 +75,20 @@ d1_crossing <- function(.data,
                         alpha_linearity = 0.05, # change to just alpha?
                         pos_change = TRUE,
                         ordering = c("by_x", "time"),
-                        # TODO ADD FRONT TRIM ARGUMENTS,
+                        front_trim_vt1 = 60,
+                        front_trim_vt2 = 60,
                         ci = FALSE,
                         conf_level = 0.95,
                         plots = TRUE) {
-  # check if there is crucial missing data
-  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+  # check for crucial missing data
+  rlang::check_required(.data)
+  rlang::check_required(.x)
+  rlang::check_required(.y)
+  rlang::check_required(bp)
 
-  ordering <- match.arg(ordering, several.ok = FALSE)
+  bp <- rlang::arg_match(bp, values = c("vt1", "vt2"))
+  ordering <- rlang::arg_match(ordering)
+  criterion <- rlang::arg_match(criterion)
   .data <- order_cpet_df(.data,
     .x = .x, time = time,
     ordering = ordering
@@ -59,17 +96,29 @@ d1_crossing <- function(.data,
 
   plot_df <- .data
 
-  # best-fit polynomial for vo2
-  lm_poly_vo2 <- loop_poly_d1_crossing(
+  # remove the noisy start of the test before fitting (as the other threshold
+  # functions do). Without this, spurious early derivative crossings appear.
+  front_trim <- set_front_trim(
+    bp = bp,
+    front_trim_vt1 = front_trim_vt1,
+    front_trim_vt2 = front_trim_vt2
+  )
+  .data <- .data %>%
+    dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
+
+  # polynomial fit for vo2 (shared poly-fitting loop)
+  lm_poly_vo2 <- fit_poly_reg(
     .data = .data, .x = time, .y = vo2,
-    degree = degree,
+    degree = degree, search_degree = search_degree,
+    max_degree = max_degree, criterion = criterion,
     alpha_linearity = alpha_linearity
   )
 
-  # best-fit polynomial for vco2
-  lm_poly_vco2 <- loop_poly_d1_crossing(
+  # polynomial fit for vco2
+  lm_poly_vco2 <- fit_poly_reg(
     .data = .data, .x = time, .y = vco2,
-    degree = degree,
+    degree = degree, search_degree = search_degree,
+    max_degree = max_degree, criterion = criterion,
     alpha_linearity = alpha_linearity
   )
 
@@ -218,62 +267,6 @@ d1_crossing <- function(.data,
     deriv1_vco2 = deriv1_vco2,
     bp_plot = bp_plot
   ))
-}
-
-#' @keywords internal
-loop_poly_d1_crossing <- function(.data, .x, .y,
-                                  degree = NULL, alpha_linearity = 0.05) {
-  # you can't fit a model if you don't have any data
-  if (nrow(.data) == 0) {
-    return(NULL)
-  }
-  # if the user specifies a degree, find that and be done with it
-  if (!is.null(degree)) {
-    lm_poly <- paste0(
-      .y, " ~ ", "1 + ",
-      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
-    ) %>%
-      stats::lm(data = .data)
-    # if the user does NOT specify a degree, find the best degree using
-    # likelihood ratio test
-  } else {
-    degree <- 5 # from testing and previous papers it seems like you need to
-    # force a higher derivative if you want a local maxima within the
-    # range of x values. That doesn't feel wonderful.
-    lm_list <- vector(mode = "list", length = 0) # hold lm data
-    # keep raw = TRUE for now b/c it's way easier for me to test
-    # if the derivative expressions are working
-    # starting with degree = 5 b/c that's the minimum I've seen in
-    # other papers that seemed to use polynomial fits
-
-    lm_poly <- paste0(
-      .y, " ~ ", "1 + ",
-      "poly(", .x, ", degree = ", degree, ", raw = TRUE)"
-    ) %>%
-      stats::lm(data = .data)
-
-    lm_list <- append(lm_list, list(lm_poly))
-
-    cont <- TRUE
-    i <- 1 # start at 2 b/c we already made linear (degree = 1) model
-    while (cont == TRUE) {
-      lm_poly <- paste0(
-        .y, " ~ ", "1 + ",
-        "poly(", .x, ", degree = ",
-        degree + i, ", raw = TRUE)"
-      ) %>%
-        stats::lm(data = .data)
-      lm_list <- append(lm_list, list(lm_poly))
-      lrt <- stats::anova(lm_list[[i]], lm_list[[i + 1]])
-      if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-        cont <- FALSE
-        lm_poly <- lm_list[[i]] # take the previous model
-      }
-      i <- i + 1
-    }
-  }
-
-  lm_poly
 }
 
 

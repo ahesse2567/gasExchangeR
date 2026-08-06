@@ -10,7 +10,10 @@ d2_poly_reg_maxima(
   .y,
   bp,
   ...,
-  degree = NULL,
+  degree = 5,
+  search_degree = FALSE,
+  max_degree = 8,
+  criterion = c("aicc", "lrt"),
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
@@ -36,7 +39,13 @@ d2_poly_reg_maxima(
 
 \item{...}{Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.}
 
-\item{degree}{The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.}
+\item{degree}{The polynomial degree to fit. Defaults to \code{5}, which matches Santos and Giannella-Neto (2004) and is the minimum degree that supports the four derivatives this method takes. When \code{search_degree = TRUE}, \code{degree} instead sets the lowest degree of the search. Must be at least 5.}
+
+\item{search_degree}{Should the function search for the best polynomial degree rather than using the fixed \code{degree}? Default \code{FALSE}. A fixed degree-5 fit yields the fewest spurious maxima; enable the search only if you want a data-driven degree.}
+
+\item{max_degree}{The highest polynomial degree considered when \code{search_degree = TRUE}. Default \code{8}.}
+
+\item{criterion}{Model-selection rule used when \code{search_degree = TRUE}. \code{"aicc"} (default) picks the degree with the lowest small-sample-corrected AIC, which resists overfitting. \code{"lrt"} uses a sequential likelihood-ratio test up the degrees (the original gasExchangeR behavior), stopping at the first non-significant improvement.}
 
 \item{vo2}{Name of the \code{vo2} variable}
 
@@ -69,12 +78,12 @@ A slice of the original data frame at the threshold index with a new `algorithm`
 Use polynomial regression of increasing order to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
 }
 \details{
-Note, polynomial regressions are usually inferior to regression splines or to smoothing splines because polynomial regressions because polynomial regressions can overfit the data more easily. However, we offer this method in case users want to reproduce previous works and while we develop this package.
+Note: polynomial regressions are usually inferior to regression splines or to smoothing splines because polynomial regressions can overfit the data more easily. However, we offer this method in case users want to reproduce previous works and while we develop this package.
 
-Unlike several published works, this method iteratively finds the best-fit polynomial regression by increasing the polynomial order and using the likelihood ratio test with the \code{anova} function. When the likelihood ratio test does *not* find a statistically significant difference between the previous and the newest polynomial, the function uses the previous polynomial. However, users can specify the polynomial \code{degree} if desired.
+By default this method fits a fixed fifth-degree polynomial, matching Santos and Giannella-Neto (2004). A fifth-degree fit is the minimum that supports the four derivatives used here and keeps the fitted curve from developing spurious wiggles that would create extra second-derivative maxima. If you would rather have the degree chosen from the data, set \code{search_degree = TRUE}; the search then selects a degree between \code{degree} and \code{max_degree} using the corrected AIC (AICc) by default, or a sequential likelihood-ratio test (\code{criterion = "lrt"}, the original gasExchangeR behavior). AICc is the default because a chained likelihood-ratio test tends to keep climbing to higher, overfit degrees.
 
 #' @details
-Our implementation is similar to two studies by Wisen and Wohlfart et al. in that this uses a polynomial regression. However, they only found the \emph{first} derivative of the VO2 and VCO2 vs. time curves and denote the threshold as their crossing point. Using ventilatory equivalents vs. time, they considered the threshold as when the \emph{first} derivative of each ventilatory equivalent increased above zero (for the last time). In contrast, the majority of other literature we are aware of that uses regression splines or smoothing splines finds the \emph{second} derivative. We found that this is a more conservative approach and yields fewer possible second derivative maxima to choose between. This function finds the second derivative by default to match the majority of other literature.
+Our implementation is similar to two studies by Wisen and Wohlfart et al. (2004a, 2004b) in that this uses a polynomial regression. However, they only found the \emph{first} derivative of the VO2 and VCO2 vs. time curves and denote the threshold as their crossing point. Using ventilatory equivalents vs. time, they considered the threshold as when the \emph{first} derivative of each ventilatory equivalent increased above zero (for the last time). In contrast, the majority of other literature we are aware of that uses regression splines or smoothing splines finds the \emph{second} derivative. We found that this is a more conservative approach and yields fewer possible second derivative maxima to choose between. This function finds the second derivative by default to match the majority of other literature.
 
 Taking either the first or the second derivative are both valid approaches, but we prefer the reasoning behind taking the second derivative. After crossing a threshold, ventilation increases out of proportion to VO2 (VT1) or to VCO2 (VT2). After the threshold, the rate of increase is faster. Put another way, the slope after the breakpoint is higher than the slope before the breakpoint. However, since we are more interested in when that \emph{slope changes}, we want to know the slope of the slope, i.e., the acceleration, or the second derivative.
 
@@ -83,12 +92,53 @@ Following the logic of Leo et al. (2017), this method then finds the local maxim
 To implement a method similar to Leo et al. (2017), this function actually takes four derivatives of the best-fit polynomial. We find the roots of the the third derivative to find the real parts of the local maxima and minima. For each of those real maxima and minima, we use the fourth derivative to determine if they represent maxima (negative sign), or minima (positive sign). The function then finds the highest of any real local maxima. The values associated with the closest data point to highest real local maxima are taken as the threshold.
 }
 \examples{
-# TODO write an example
+
+# Load breath-by-breath graded exercise testing file
+cpet_bbb <- utils::read.csv(
+  system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+)
+
+# 15-breath (rolling breath) average
+cpet_15b_roll <- avg_exercise_test(
+  cpet_bbb,
+  method = "breath",
+  calc_type = "rolling",
+  time_col = "time",
+  window = 15,
+  align = "center",
+  mos = "mean"
+)
+
+d2prm_res <- d2_poly_reg_maxima(.data = cpet_15b_roll,
+  .x = "vo2",
+  .y = "ve_vco2",
+  bp = "vt2",
+  degree = 5,
+  search_degree = FALSE,
+  max_degree = 8,
+  alpha_linearity = 0.05,
+  pos_change = TRUE,
+  ordering = c("by_x", "time"),
+  plots = FALSE)
+
+d2prm_res
+
+d2prm_res_search <- d2_poly_reg_maxima(.data = cpet_15b_roll,
+  .x = "vo2",
+  .y = "ve_vco2",
+  bp = "vt2",
+  search_degree = TRUE,
+  max_degree = 8,
+  criterion = "aicc",
+  plots = TRUE)
+
+d2prm_res_search
 
 }
 \references{
 Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
+Santos, E. L., & Giannella-Neto, A. (2004). Comparison of computerized methods for detecting the ventilatory thresholds. European Journal of Applied Physiology, 93(3), 315-324.
 Ozkaya, O., Balci, G. A., As, H., Cabuk, R., & Norouzi, M. (2022). Grey zone: a gap between heavy and severe exercise domain. Journal of Strength and Conditioning Research, 36(1), 113-120.
-Wisen, A. G., & Wohlfart, B. (2004). A refined technique for determining the respiratory gas exchange responses to anaerobic metabolism during progressive exercise–repeatability in a group of healthy men. Clinical physiology and functional imaging, 24(1), 1-9.
-Wisen, A. G., & Wohlfart, B. (2004). Aerobic and functional capacity in a group of healthy women: reference values and repeatability. Clinical physiology and functional imaging, 24(6), 341-351.
+Wisen, A. G., & Wohlfart, B. (2004a). A refined technique for determining the respiratory gas exchange responses to anaerobic metabolism during progressive exercise–repeatability in a group of healthy men. Clinical physiology and functional imaging, 24(1), 1-9.
+Wisen, A. G., & Wohlfart, B. (2004b). Aerobic and functional capacity in a group of healthy women: reference values and repeatability. Clinical physiology and functional imaging, 24(6), 341-351.
 }

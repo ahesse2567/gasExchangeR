@@ -2,12 +2,12 @@
 #'
 #' Use polynomial regression of increasing order to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
 #'
-#' Note, polynomial regressions are usually inferior to regression splines or to smoothing splines because polynomial regressions because polynomial regressions can overfit the data more easily. However, we offer this method in case users want to reproduce previous works and while we develop this package.
+#' Note: polynomial regressions are usually inferior to regression splines or to smoothing splines because polynomial regressions can overfit the data more easily. However, we offer this method in case users want to reproduce previous works and while we develop this package.
 #'
-#' Unlike several published works, this method iteratively finds the best-fit polynomial regression by increasing the polynomial order and using the likelihood ratio test with the \code{anova} function. When the likelihood ratio test does *not* find a statistically significant difference between the previous and the newest polynomial, the function uses the previous polynomial. However, users can specify the polynomial \code{degree} if desired.
+#' By default this method fits a fixed fifth-degree polynomial, matching Santos and Giannella-Neto (2004). A fifth-degree fit is the minimum that supports the four derivatives used here and keeps the fitted curve from developing spurious wiggles that would create extra second-derivative maxima. If you would rather have the degree chosen from the data, set \code{search_degree = TRUE}; the search then selects a degree between \code{degree} and \code{max_degree} using the corrected AIC (AICc) by default, or a sequential likelihood-ratio test (\code{criterion = "lrt"}, the original gasExchangeR behavior). AICc is the default because a chained likelihood-ratio test tends to keep climbing to higher, overfit degrees.
 #'
 #' #' @details
-#' Our implementation is similar to two studies by Wisen and Wohlfart et al. in that this uses a polynomial regression. However, they only found the \emph{first} derivative of the VO2 and VCO2 vs. time curves and denote the threshold as their crossing point. Using ventilatory equivalents vs. time, they considered the threshold as when the \emph{first} derivative of each ventilatory equivalent increased above zero (for the last time). In contrast, the majority of other literature we are aware of that uses regression splines or smoothing splines finds the \emph{second} derivative. We found that this is a more conservative approach and yields fewer possible second derivative maxima to choose between. This function finds the second derivative by default to match the majority of other literature.
+#' Our implementation is similar to two studies by Wisen and Wohlfart et al. (2004a, 2004b) in that this uses a polynomial regression. However, they only found the \emph{first} derivative of the VO2 and VCO2 vs. time curves and denote the threshold as their crossing point. Using ventilatory equivalents vs. time, they considered the threshold as when the \emph{first} derivative of each ventilatory equivalent increased above zero (for the last time). In contrast, the majority of other literature we are aware of that uses regression splines or smoothing splines finds the \emph{second} derivative. We found that this is a more conservative approach and yields fewer possible second derivative maxima to choose between. This function finds the second derivative by default to match the majority of other literature.
 #'
 #' Taking either the first or the second derivative are both valid approaches, but we prefer the reasoning behind taking the second derivative. After crossing a threshold, ventilation increases out of proportion to VO2 (VT1) or to VCO2 (VT2). After the threshold, the rate of increase is faster. Put another way, the slope after the breakpoint is higher than the slope before the breakpoint. However, since we are more interested in when that \emph{slope changes}, we want to know the slope of the slope, i.e., the acceleration, or the second derivative.
 #'
@@ -19,7 +19,10 @@
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?
-#' @param degree The polynomial degree the function should fit to the curve. If left \code{NULL} this function finds the best fit.
+#' @param degree The polynomial degree to fit. Defaults to \code{5}, which matches Santos and Giannella-Neto (2004) and is the minimum degree that supports the four derivatives this method takes. When \code{search_degree = TRUE}, \code{degree} instead sets the lowest degree of the search. Must be at least 5.
+#' @param search_degree Should the function search for the best polynomial degree rather than using the fixed \code{degree}? Default \code{FALSE}. A fixed degree-5 fit yields the fewest spurious maxima; enable the search only if you want a data-driven degree.
+#' @param max_degree The highest polynomial degree considered when \code{search_degree = TRUE}. Default \code{8}.
+#' @param criterion Model-selection rule used when \code{search_degree = TRUE}. \code{"aicc"} (default) picks the degree with the lowest small-sample-corrected AIC, which resists overfitting. \code{"lrt"} uses a sequential likelihood-ratio test up the degrees (the original gasExchangeR behavior), stopping at the first non-significant improvement.
 #' @param vo2 Name of the \code{vo2} variable
 #' @param vco2 Name of the \code{vco2} variable
 #' @param ve Name of the \code{ve} variable
@@ -40,20 +43,65 @@
 #'
 #' @references
 #' Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
+#' Santos, E. L., & Giannella-Neto, A. (2004). Comparison of computerized methods for detecting the ventilatory thresholds. European Journal of Applied Physiology, 93(3), 315-324.
 #' Ozkaya, O., Balci, G. A., As, H., Cabuk, R., & Norouzi, M. (2022). Grey zone: a gap between heavy and severe exercise domain. Journal of Strength and Conditioning Research, 36(1), 113-120.
-#' Wisen, A. G., & Wohlfart, B. (2004). A refined technique for determining the respiratory gas exchange responses to anaerobic metabolism during progressive exercise–repeatability in a group of healthy men. Clinical physiology and functional imaging, 24(1), 1-9.
-#' Wisen, A. G., & Wohlfart, B. (2004). Aerobic and functional capacity in a group of healthy women: reference values and repeatability. Clinical physiology and functional imaging, 24(6), 341-351.
+#' Wisen, A. G., & Wohlfart, B. (2004a). A refined technique for determining the respiratory gas exchange responses to anaerobic metabolism during progressive exercise–repeatability in a group of healthy men. Clinical physiology and functional imaging, 24(1), 1-9.
+#' Wisen, A. G., & Wohlfart, B. (2004b). Aerobic and functional capacity in a group of healthy women: reference values and repeatability. Clinical physiology and functional imaging, 24(6), 341-351.
 #'
 #'
 #' @examples
-#' # TODO write an example
 #'
+#' # Load breath-by-breath graded exercise testing file
+#' cpet_bbb <- utils::read.csv(
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
+#'
+#' # 15-breath (rolling breath) average
+#' cpet_15b_roll <- avg_exercise_test(
+#'   cpet_bbb,
+#'   method = "breath",
+#'   calc_type = "rolling",
+#'   time_col = "time",
+#'   window = 15,
+#'   align = "center",
+#'   mos = "mean"
+#' )
+#'
+#' d2prm_res <- d2_poly_reg_maxima(.data = cpet_15b_roll,
+#'   .x = "vo2",
+#'   .y = "ve_vco2",
+#'   bp = "vt2",
+#'   degree = 5,
+#'   search_degree = FALSE,
+#'   max_degree = 8,
+#'   alpha_linearity = 0.05,
+#'   pos_change = TRUE,
+#'   ordering = c("by_x", "time"),
+#'   plots = FALSE)
+#'
+#' d2prm_res
+#'
+#' d2prm_res_search <- d2_poly_reg_maxima(.data = cpet_15b_roll,
+#'   .x = "vo2",
+#'   .y = "ve_vco2",
+#'   bp = "vt2",
+#'   search_degree = TRUE,
+#'   max_degree = 8,
+#'   criterion = "aicc",
+#'   plots = TRUE)
+#'
+#' d2prm_res_search
+#'
+
 d2_poly_reg_maxima <- function(.data,
                                .x,
                                .y,
                                bp,
                                ...,
-                               degree = NULL,
+                               degree = 5,
+                               search_degree = FALSE,
+                               max_degree = 8,
+                               criterion = c("aicc", "lrt"),
                                vo2 = "vo2",
                                vco2 = "vco2",
                                ve = "ve",
@@ -66,10 +114,15 @@ d2_poly_reg_maxima <- function(.data,
                                ci = FALSE,
                                conf_level = 0.95,
                                plots = TRUE) {
-  # check if there is crucial missing data
-  stopifnot(!any(missing(.data), missing(.x), missing(.y), missing(bp)))
+  # check for crucial missing data
+  rlang::check_required(.data)
+  rlang::check_required(.x)
+  rlang::check_required(.y)
+  rlang::check_required(bp)
 
-  ordering <- match.arg(ordering, several.ok = FALSE)
+  bp <- rlang::arg_match(bp, values = c("vt1", "vt2"))
+  ordering <- rlang::arg_match(ordering)
+  criterion <- rlang::arg_match(criterion)
   .data <- order_cpet_df(.data,
     .x = .x, time = time,
     ordering = ordering
@@ -85,9 +138,12 @@ d2_poly_reg_maxima <- function(.data,
   .data <- .data %>%
     dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-  lm_poly <- loop_d2_poly_reg_maxima(
+  lm_poly <- fit_poly_reg(
     .data = .data, .x = .x, .y = .y,
     degree = degree,
+    search_degree = search_degree,
+    max_degree = max_degree,
+    criterion = criterion,
     alpha_linearity = alpha_linearity
   )
 
@@ -282,6 +338,9 @@ d2_poly_reg_maxima <- function(.data,
     )
 
   if (ci) {
+    # bootstrap at the degree actually fitted above (coefficients = degree + 1),
+    # so each resample uses the same fixed degree rather than re-searching.
+    poly_degree <- length(stats::coef(lm_poly)) - 1
     # nonparametric bootstrapping
     boot_res <- boot::boot(
       data = .data,
@@ -290,7 +349,7 @@ d2_poly_reg_maxima <- function(.data,
       sim = "ordinary",
       .x = .x,
       .y = .y,
-      degree = degree,
+      degree = poly_degree,
       pos_change = pos_change,
       alpha_linearity = alpha_linearity,
       parallel = "multicore"
@@ -389,54 +448,75 @@ d2_poly_reg_maxima <- function(.data,
   ))
 }
 
+#' Corrected Akaike information criterion (AICc) for a fitted lm.
+#'
+#' AICc adds a small-sample correction to AIC. It is undefined (or unstable)
+#' when the number of parameters approaches the sample size, in which case we
+#' return `Inf` so the model is never selected.
 #' @keywords internal
-loop_d2_poly_reg_maxima <- function(.data, .x, .y,
-                                    degree = NULL, alpha_linearity = 0.05) {
+#' @noRd
+aicc <- function(model) {
+  k <- length(stats::coef(model)) + 1 # +1 for the residual variance
+  n <- stats::nobs(model)
+  if (n - k - 1 <= 0 || anyNA(stats::coef(model))) {
+    return(Inf)
+  }
+  stats::AIC(model) + (2 * k * (k + 1)) / (n - k - 1)
+}
+
+#' @keywords internal
+fit_poly_reg <- function(.data, .x, .y,
+                                    degree = 5,
+                                    search_degree = FALSE,
+                                    max_degree = 10,
+                                    criterion = c("aicc", "lrt"),
+                                    alpha_linearity = 0.05) {
   if (nrow(.data) == 0) {
     return(NULL)
   }
+  criterion <- rlang::arg_match(criterion)
 
-  if (!is.null(degree)) {
-    # if the user specifies a degree, find that and be done with it
-    lm_poly <- paste0(
-      .y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
-      degree, ", raw = TRUE)"
-    ) %>%
-      stats::lm(data = .data)
-  } else {
-    # if the user does NOT specify a degree (default),
-    # find the best degree using likelihood ratio test
-    degree <- 5 # start at degree = 5 so you can take 4 derivatives
-    lm_list <- vector(mode = "list", length = 0) # hold lm data
-    # keep raw = TRUE for now b/c it's way easier for me to test
-    # if the derivative expressions are working
-    # starting with degree = 5 b/c that's the minimum I've seen in
-    # other papers that seemed to use polynomial fits
-    lm_poly <- paste0(
-      .y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
-      degree, ", raw = TRUE)"
-    ) %>%
-      stats::lm(data = .data)
-    lm_list <- append(lm_list, list(lm_poly))
-
-    cont <- TRUE
-    i <- 1 # start at 2 b/c we already made linear (degree = 1) model
-    while (cont == TRUE) {
-      lm_poly <- paste0(
-        .y, " ~ ", "1 + ", "poly(", .x, ", degree = ",
-        degree + i, ", raw = TRUE)"
-      ) %>%
-        stats::lm(data = .data)
-      lm_list <- append(lm_list, list(lm_poly))
-      lrt <- stats::anova(lm_list[[i]], lm_list[[i + 1]])
-      if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-        cont <- FALSE
-        lm_poly <- lm_list[[i]] # take the previous model
-      }
-      i <- i + 1
-    }
+  # Degree 5 is the conservative floor shared by the callers: d2_poly_reg_maxima
+  # needs it to take four derivatives, and it keeps the fitted curve from
+  # developing spurious wiggles.
+  if (degree < 5) {
+    rlang::abort("`degree` must be at least 5.")
   }
 
+  fit_poly <- function(deg) {
+    paste0(.y, " ~ 1 + poly(", .x, ", degree = ", deg, ", raw = TRUE)") %>%
+      stats::lm(data = .data)
+  }
+
+  # default: a single fixed-degree fit (no search)
+  if (!search_degree) {
+    return(fit_poly(degree))
+  }
+
+  # otherwise search from `degree` (>= 5) up to `max_degree`
+  degrees <- seq.int(degree, max_degree)
+
+  if (criterion == "aicc") {
+    # fit every degree in the range and keep the lowest-AICc model. AICc
+    # penalizes added terms enough to resist the degree creep that a chained
+    # likelihood-ratio test is prone to.
+    fits <- lapply(degrees, fit_poly)
+    scores <- vapply(fits, aicc, numeric(1))
+    return(fits[[which.min(scores)]])
+  }
+
+  # criterion == "lrt": sequential likelihood-ratio test up the degrees,
+  # stopping at the first non-significant improvement and keeping the previous
+  # model. This reproduces the original gasExchangeR behavior.
+  lm_poly <- fit_poly(degrees[1])
+  for (deg in degrees[-1]) {
+    lm_next <- fit_poly(deg)
+    lrt <- stats::anova(lm_poly, lm_next)
+    if (is.na(lrt$`Pr(>F)`[2]) || lrt$`Pr(>F)`[2] >= alpha_linearity) {
+      break
+    }
+    lm_poly <- lm_next
+  }
   lm_poly
 }
 
@@ -450,7 +530,7 @@ boot_ci_d2_poly_reg <- #' @keywords internal
                                          pos_change,
                                          alpha_linearity) {
     # find best number of knots
-    lm_poly <- loop_d2_poly_reg_maxima(
+    lm_poly <- fit_poly_reg(
       .data = .data[i, ],
       .x = .x,
       .y = .y,

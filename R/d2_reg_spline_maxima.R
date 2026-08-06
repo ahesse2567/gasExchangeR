@@ -1,76 +1,295 @@
+# d2_reg_spline_maxima(): fit a B-spline regression, take its 2nd derivative, and
+# find the highest maxima. Notable implementation choices:
+#   1. The 2nd derivative is computed ANALYTICALLY from the B-spline basis
+#      (splineDesign(derivs = 2)) rather than by interpolating the fitted values
+#      with a second cubic spline. Exact at any degree, no boundary artifact.
+#   2. Knot selection mirrors d2_poly_reg_maxima(): a fixed, small number of
+#      interior knots by default (n_knots = 2), with an opt-in search (AICc by
+#      default, LRT optional).
+# The maxima-selection logic lives in select_deriv2_max_idx(), shared by the
+# main function and the bootstrap statistic.
+
+#' Analytic derivative of a fitted B-spline regression.
+#'
+#' Returns a closure with the same `f(x, deriv)` interface as
+#' [stats::splinefun()], but evaluates the exact derivative of the fitted
+#' regression spline from its B-spline basis instead of re-interpolating the
+#' predictions.
+#' @keywords internal
+#' @noRd
+reg_spline_deriv <- function(lm_spline, .x) {
+  bs_obj <- stats::model.frame(lm_spline)[[2]] # the bs() basis, carries knots
+  ord <- attr(bs_obj, "degree") + 1
+  full_knots <- c(
+    rep(attr(bs_obj, "Boundary.knots")[1], ord),
+    attr(bs_obj, "knots"),
+    rep(attr(bs_obj, "Boundary.knots")[2], ord)
+  )
+  cf <- stats::coef(lm_spline)
+  function(x, deriv = 0) {
+    basis <- splines::splineDesign(full_knots, x, ord,
+      derivs = deriv, outer.ok = TRUE
+    )
+    # bs() drops the first basis column (absorbed by the intercept), so drop it
+    # here too; the derivative of the intercept term is 0.
+    vals <- as.vector(basis[, -1] %*% cf[-1])
+    if (deriv == 0) vals <- vals + cf[1]
+    vals
+  }
+}
+
+#' Fit a B-spline regression, optionally searching the number of interior knots.
+#'
+#' @param n_knots Interior knots to use (fixed) or, when searching, the lowest
+#'   number considered. B-spline df is `n_knots + degree`.
+#' @param search_knots Search for the best number of knots?
+#' @param max_knots Upper bound of the knot search.
+#' @param criterion `"aicc"` (default) or `"lrt"`.
+#' @keywords internal
+#' @noRd
+loop_d2_reg_spline <- function(.data, .x, .y,
+                                          degree = 5,
+                                          n_knots = 2,
+                                          search_knots = FALSE,
+                                          max_knots = 6,
+                                          criterion = c("aicc", "lrt"),
+                                          alpha_linearity = 0.05) {
+  if (nrow(.data) == 0) {
+    return(NULL)
+  }
+  criterion <- rlang::arg_match(criterion)
+  if (n_knots < 0) {
+    rlang::abort("`n_knots` must be a non-negative integer.")
+  }
+
+  fit_spline <- function(k) {
+    paste0(
+      .y, " ~ 1 + splines::bs(", .x,
+      ", df = ", k + degree, ", degree = ", degree, ")"
+    ) %>%
+      stats::lm(data = .data)
+  }
+
+  # default: a single fixed-knot fit (no search)
+  if (!search_knots) {
+    return(fit_spline(n_knots))
+  }
+
+  knots_seq <- seq.int(n_knots, max_knots)
+
+  if (criterion == "aicc") {
+    fits <- lapply(knots_seq, fit_spline)
+    scores <- vapply(fits, aicc, numeric(1))
+    return(fits[[which.min(scores)]])
+  }
+
+  # criterion == "lrt": sequential likelihood-ratio test up the knot counts,
+  # stopping at the first non-significant improvement (original behavior).
+  lm_spline <- fit_spline(knots_seq[1])
+  for (k in knots_seq[-1]) {
+    lm_next <- fit_spline(k)
+    lrt <- stats::anova(lm_spline, lm_next)
+    if (is.na(lrt$`Pr(>F)`[2]) || lrt$`Pr(>F)`[2] >= alpha_linearity) {
+      break
+    }
+    lm_spline <- lm_next
+  }
+  lm_spline
+}
+
+#' Locate the chosen 2nd-derivative maximum among candidate sign changes.
+#'
+#' Shared by the main function and the bootstrap statistic. `spline_func` must
+#' accept `(x, deriv)`. Returns the selected index into `equi_spaced_x`
+#' (length 0 or 1). This is the original maxima-selection logic, unchanged.
+#' @keywords internal
+#' @noRd
+select_deriv2_max_idx <- function(spline_func, equi_spaced_x, pos_change) {
+  if (pos_change) {
+    sign_change_idx <- slope_sign_changes(
+      y = spline_func(equi_spaced_x, deriv = 2),
+      change = "pos_to_neg"
+    )
+    if (length(sign_change_idx) > 1) {
+      neg_slope_idx <- which(
+        spline_func(equi_spaced_x[sign_change_idx], deriv = 1) < 0
+      )
+      while (length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
+        sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
+        neg_slope_idx <- which(
+          spline_func(equi_spaced_x[sign_change_idx], deriv = 1) < 0
+        )
+      }
+    }
+  } else {
+    sign_change_idx <- slope_sign_changes(
+      y = spline_func(equi_spaced_x, deriv = 2),
+      change = "neg_to_pos"
+    )
+    if (length(sign_change_idx) > 1) {
+      pos_slope_idx <- which(
+        spline_func(equi_spaced_x[sign_change_idx], deriv = 1) > 0
+      )
+      while (length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
+        sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
+        pos_slope_idx <- which(
+          spline_func(equi_spaced_x[sign_change_idx], deriv = 1) > 0
+        )
+      }
+    }
+  }
+
+  # if several remain, take the largest (pos_change) or smallest 2nd-derivative
+  if (length(sign_change_idx) > 1) {
+    if (pos_change) {
+      sign_change_idx <- sign_change_idx[which.max(
+        spline_func(equi_spaced_x[sign_change_idx], deriv = 2)
+      )]
+    } else {
+      sign_change_idx <- sign_change_idx[which.min(
+        spline_func(equi_spaced_x[sign_change_idx], deriv = 2)
+      )]
+    }
+  }
+  sign_change_idx
+}
+
+#' @keywords internal
+#' @noRd
+boot_stat_d2_reg_spline <- function(.data, i, .x, .y, degree,
+                                               n_knots, pos_change) {
+  lm_spline <- loop_d2_reg_spline(
+    .data = .data[i, ], .x = .x, .y = .y,
+    degree = degree, n_knots = n_knots, search_knots = FALSE
+  )
+  if (is.null(lm_spline) || anyNA(stats::coef(lm_spline))) {
+    return(NA_real_)
+  }
+  spline_func <- reg_spline_deriv(lm_spline, .x)
+  equi_spaced_x <- seq(
+    from = min(.data[i, ][[.x]]), to = max(.data[i, ][[.x]]),
+    length.out = round(diff(range(.data[i, ][[.x]])))
+  )
+  idx <- select_deriv2_max_idx(spline_func, equi_spaced_x, pos_change)
+  if (length(idx) == 0) {
+    return(NA_real_)
+  }
+  equi_spaced_x[idx]
+}
+
 #' Find a breakpoint using the maxima in the 2nd derivative of a regression spline
 #'
-#' #' Use regression splines of with an increasing number of knots to find the best-fit line for the data, take the second derivative, and find the highest maxima of the second derivative. This method is traditionally used with ventilatory equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
+#' Fit a B-spline regression to the data, take its second derivative, and find the
+#' highest maxima of that second derivative. Traditionally used with ventilatory
+#' equivalents (VE/VO2 or VE/VCO2), PetO2, or PetCO2 vs. time or vs. VO2.
 #'
 #' @details
-#' #' Several works use an algorithm similar to this one. However, it is somewhat unclear if those previous works were truly using "smoothing splines" or "regression splines" (they are *not* the same). Previous works may refer to a third or fifth order "polynomial smoothing splines", which likely means "regression splines", but we cannot be certain at this time.
+#' Several works use a similar algorithm, though it is often unclear whether they
+#' used "smoothing splines" or "regression splines" (which are not the same). By
+#' default this function fits a fixed B-spline regression with \code{n_knots = 2}
+#' interior knots. A small, fixed number of knots keeps the fitted curve from
+#' developing spurious wiggles that would create extra second-derivative maxima.
+#' If you would rather have the number of knots chosen from the data, set
+#' \code{search_knots = TRUE}; the search selects a knot count between
+#' \code{n_knots} and \code{max_knots} using the corrected AIC (AICc) by default,
+#' or a sequential likelihood-ratio test (\code{criterion = "lrt"}).
 #'
-#' Unlike several published works, this method iteratively finds the best-fit regression by increasing the number of knots and using the likelihood ratio test with the \code{anova} function. When the likelihood ratio test does *not* find a statistically significant difference between the previous and the newest regression spline, this returns the previous regression spline. We found that this is a more conservative approach and yields fewer possible second derivative maxima to choose between. However, users can specify their desired number of knots.
+#' The second derivative is computed analytically from the B-spline basis
+#' (\code{splines::splineDesign(derivs = 2)}), which is exact at any degree and
+#' avoids the boundary artifacts of interpolating the fitted values with a second
+#' spline.
 #'
 #' @param .data Gas exchange data frame or tibble.
 #' @param .x The x-axis variable.
 #' @param .y the y-axis variable.
 #' @param bp Is this the first (\code{vt1}) or the second (\code{vt2}) breakpoint?
-#' @param degree The polynomial degree the function should fit to the curve. Most previous studies using this method use 3 or 5.
-#' @param df If the user wants to use a specific number of knots, your `df` should equal the number of desired knots +`degree` to account for the df "consumed" by the polynomial regressions.
+#' @param degree The B-spline (polynomial) degree. Most previous studies use 3 or 5. Default \code{5}.
+#' @param n_knots Number of interior knots to use (fixed) or, with \code{search_knots = TRUE}, the lowest number searched. B-spline df is \code{n_knots + degree}. Default \code{2}.
+#' @param search_knots Search for the best number of interior knots rather than using the fixed \code{n_knots}? Default \code{FALSE}.
+#' @param max_knots Highest number of interior knots considered when \code{search_knots = TRUE}. Default \code{6}.
+#' @param criterion Model-selection rule when \code{search_knots = TRUE}: \code{"aicc"} (default) or \code{"lrt"}.
 #' @param vo2 Name of the \code{vo2} variable
 #' @param vco2 Name of the \code{vco2} variable
 #' @param ve Name of the \code{ve} variable
 #' @param time Name of the \code{time} variable
-#' @param alpha_linearity Significance value to determine if a piecewise model explains significantly reduces the residual sums of squares more than a simpler model.
-#' @param pos_change Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima.
-#' @param ... Dot dot dot mostly allows this function to work properly if breakpoint() passes arguments that is not strictly needed by this function.
-#' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
-#' @param front_trim_vt1 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
-#' @param front_trim_vt2 How much data (in seconds) to remove from the beginning of the test prior to fitting any regressions. The original V-slope paper suggests 1 minute.
-#' @param ci Should the output include confidence interval data? Default is `FALSE`.
+#' @param alpha_linearity Significance value used by the \code{"lrt"} knot search.
+#' @param pos_change Do you expect the slope to be increasing at the breakpoint? This helps with filtering maxima. Set \code{FALSE} for PetCO2.
+#' @param ordering Prior to fitting, should the data be reordered by the x-axis variable or by time? Default reorders by the x variable, using time to break ties.
+#' @param front_trim_vt1 Seconds of data to remove from the beginning of the test before fitting (VT1).
+#' @param front_trim_vt2 Seconds of data to remove from the beginning of the test before fitting (VT2).
+#' @param ci Should the output include confidence interval data? Default \code{FALSE}.
 #' @param conf_level Confidence level to use if calculating confidence intervals.
-#' @param plots Should this function generate plots? Set to `FALSE` to save time.
+#' @param plots Should this function generate plots? Set to \code{FALSE} to save time.
+#' @param ... Passed through so this function plays nicely when \code{breakpoint()} supplies extra arguments.
 #'
-#' #' @references
-#' Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and science in sports and exercise, 49(7), 1452-1460.
-#' Sherrill, D. L., Anderson, S. J., & Swanson, G. E. O. R. G. E. (1990). Using smoothing splines for detecting ventilatory thresholds. Medicine and Science in Sports and Exercise, 22(5), 684-689.
-#' Wade, T. D., Anderson, S. J., Bondy, J., Ramadevi, V. A., Jones, R. H., & Swanson, G. D. (1988). Using smoothing splines to make inferences about the shape of gas-exchange curves. Computers and biomedical research, 21(1), 16-26.
+#' @returns A list whose \code{breakpoint_data} is a slice of the original data
+#'   frame at the threshold, with an \code{algorithm} column, plus the fitted
+#'   regression spline and its analytic derivative function.
 #'
-#' @returns A slice of the original data frame at the threshold index with a new `algorithm` column.
+#' @references
+#' Leo, J. A., Sabapathy, S., Simmonds, M. J., & Cross, T. J. (2017). The Respiratory Compensation Point is Not a Valid Surrogate for Critical Power. Medicine and Science in Sports and Exercise, 49(7), 1452-1460.
+#' Santos, E. L., & Giannella-Neto, A. (2004). Comparison of computerized methods for detecting the ventilatory thresholds. European Journal of Applied Physiology, 93(3), 315-324.
+#' Sherrill, D. L., Anderson, S. J., & Swanson, G. (1990). Using smoothing splines for detecting ventilatory thresholds. Medicine and Science in Sports and Exercise, 22(5), 684-689.
+#' Wade, T. D., Anderson, S. J., Bondy, J., Ramadevi, V. A., Jones, R. H., & Swanson, G. D. (1988). Using smoothing splines to make inferences about the shape of gas-exchange curves. Computers and Biomedical Research, 21(1), 16-26.
+#'
 #' @export
 #'
 #' @examples
-#' # TODO write an example
 #'
+#' cpet_bbb <- utils::read.csv(
+#'   system.file("extdata", "anton_vo2max_clean.csv", package = "gasExchangeR")
+#' )
+#'
+#' cpet_15b_roll <- avg_exercise_test(
+#'   cpet_bbb,
+#'   method = "breath", calc_type = "rolling", time_col = "time", window = 15
+#' )
+#' cpet_15b_roll$ve_vco2 <- cpet_15b_roll$ve / cpet_15b_roll$vco2
+#'
+#' # VT2/RC from the 2nd-derivative maximum of VE/VCO2 vs. time
+#' d2_reg_spline_maxima(
+#'   cpet_15b_roll,
+#'   .x = "time",
+#'   .y = "ve_vco2",
+#'   bp = "vt2",
+#'   vo2 = "vo2",
+#'   vco2 = "vco2",
+#'   ve = "ve",
+#'   time = "time",
+#'   plots = FALSE
+#' )
 d2_reg_spline_maxima <- function(.data,
-                                 .x,
-                                 .y,
-                                 bp,
-                                 degree = 5,
-                                 df = NULL,
-                                 vo2 = "vo2",
-                                 vco2 = "vco2",
-                                 ve = "ve",
-                                 time = "time",
-                                 alpha_linearity = 0.05,
-                                 pos_change = TRUE,
-                                 ordering = c("by_x", "time"),
-                                 front_trim_vt1 = 60,
-                                 front_trim_vt2 = 60,
-                                 ci = FALSE,
-                                 conf_level = 0.95,
-                                 plots = TRUE,
-                                 ...) {
-  # check if there is crucial missing data
-  stopifnot(!any(
-    missing(.data),
-    missing(.x),
-    missing(.y),
-    missing(bp)
-  ))
+                                            .x,
+                                            .y,
+                                            bp,
+                                            degree = 5,
+                                            n_knots = 2,
+                                            search_knots = FALSE,
+                                            max_knots = 6,
+                                            criterion = c("aicc", "lrt"),
+                                            vo2 = "vo2",
+                                            vco2 = "vco2",
+                                            ve = "ve",
+                                            time = "time",
+                                            alpha_linearity = 0.05,
+                                            pos_change = TRUE,
+                                            ordering = c("by_x", "time"),
+                                            front_trim_vt1 = 60,
+                                            front_trim_vt2 = 60,
+                                            ci = FALSE,
+                                            conf_level = 0.95,
+                                            plots = TRUE,
+                                            ...) {
+  rlang::check_required(.data)
+  rlang::check_required(.x)
+  rlang::check_required(.y)
+  rlang::check_required(bp)
 
-  ordering <- match.arg(ordering, several.ok = FALSE)
-  .data <- order_cpet_df(.data,
-    .x = .x, time = time,
-    ordering = ordering
-  )
+  bp <- rlang::arg_match(bp, values = c("vt1", "vt2"))
+  ordering <- rlang::arg_match(ordering)
+  criterion <- rlang::arg_match(criterion)
 
+  .data <- order_cpet_df(.data, .x = .x, time = time, ordering = ordering)
   plot_df <- .data
 
   front_trim <- set_front_trim(
@@ -81,283 +300,102 @@ d2_reg_spline_maxima <- function(.data,
   .data <- .data %>%
     dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-  # find best number of knots
   lm_spline <- loop_d2_reg_spline(
     .data = .data, .x = .x, .y = .y,
-    df = df, degree = degree
+    degree = degree, n_knots = n_knots,
+    search_knots = search_knots, max_knots = max_knots,
+    criterion = criterion, alpha_linearity = alpha_linearity
   )
 
-  # return quick summary if generating models fails
-  if (is.null(lm_spline) | any(is.na(stats::coef(lm_spline)))) {
+  if (is.null(lm_spline) || anyNA(stats::coef(lm_spline))) {
     bp_dat <- return_indeterminant_findings(
-      .data = plot_df,
-      bp = bp,
-      algorithm = as.character(match.call()[[1]]),
-      .x = .x,
-      .y = .y,
-      est_ci = "estimate"
+      .data = plot_df, bp = bp,
+      algorithm = "d2_reg_spline_maxima",
+      .x = .x, .y = .y, est_ci = "estimate"
     )
-
     return(list(breakpoint_data = bp_dat))
   }
 
-  # It feels like there's a better way than splinefun to find a more exact
-  # 2nd derivative, but I don't know it
+  # analytic derivative closure (same f(x, deriv) interface as splinefun)
+  spline_func <- reg_spline_deriv(lm_spline, .x)
 
-  # find maxima in 2nd derivative. This is accomplished by making
-  # a spline interpolation function. Use this with optimize() function.
-
-  # get new values at equal spacing for a smoother splinefun result
   equi_spaced_x <- seq(
     from = min(.data[[.x]]), to = max(.data[[.x]]),
-    length.out = range(.data[[.x]]) %>%
-      diff() %>%
-      round()
+    length.out = round(diff(range(.data[[.x]])))
   )
-  pred <- stats::predict(
-    lm_spline,
-    newdata = tibble::tibble("{.x}" := equi_spaced_x)
-  )
+  pred <- stats::predict(lm_spline, newdata = tibble::tibble("{.x}" := equi_spaced_x))
 
-  spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
-
-  # find number of maxima
-  if (pos_change) {
-    sign_change_idx <- slope_sign_changes(
-      y = spline_func(
-        x = equi_spaced_x,
-        deriv = 2
-      ),
-      change = "pos_to_neg"
-    )
-    # filter by expected slope (usually positive)
-    # there can be a spike in accel during the initial drop in vent eqs
-    # however, only remove these thresholds with a negative derivative
-    # if there is more than one value with a negative slope
-    if (length(sign_change_idx) > 1) {
-      # see which derivatives at the sign changes are negative
-      neg_slope_idx <- which(spline_func(
-        x = equi_spaced_x[sign_change_idx],
-        deriv = 1
-      ) < 0)
-      while (length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
-        # remove one value with a negative slope at a time in case
-        # all are negative. If the derivative is negative but it's
-        # right befor a clear upturn, that's probably the threshold
-        sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
-        # find which values have negative signs to exit loop
-        neg_slope_idx <- which(spline_func(
-          x = equi_spaced_x[sign_change_idx],
-          deriv = 1
-        ) < 0)
-      }
-    }
-  } else { # this only applies when y var = petco2
-    sign_change_idx <- slope_sign_changes(
-      y = spline_func(
-        x = equi_spaced_x,
-        deriv = 2
-      ),
-      change = "neg_to_pos"
-    )
-    # filter by expected slope (in this case negative)
-    if (length(sign_change_idx) > 1) {
-      # see which derivatives at the sign changes are positive
-      pos_slope_idx <- which(spline_func(
-        x = equi_spaced_x[sign_change_idx],
-        deriv = 1
-      ) > 0)
-      while (length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
-        # remove values with a positive slope by logical indexing
-        # should I still be removing these incrementally? in case the
-        # nadir isocapnic buffering period is VERY short-lived?
-        # I could see how the deriv could be negative, but the
-        # accel could be very positive. this would be okay if
-        # it were the only maxima (I think)
-        sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
-        # find values with positive slope again to exit loop
-        pos_slope_idx <- which(spline_func(
-          x = equi_spaced_x[sign_change_idx],
-          deriv = 1
-        ) > 0)
-      }
-    }
-  }
-
-  # there can be multiple local extrema. Choose the extrema closer to the
-  # nadir or peak because this often represents the beginning of a systematic
-  # rise
-
-  # choosing closest to the nadir/peak probably isn't a good idea when
-  # the graph is NOT a ventilatory equivalents graph b/c the nadir will
-  # be super close to the beginning of the test
-  # At least for now, for better or for worse, I'd say choose the extrema
-  # with the largest y-magnitude
-
-  y_val_sign_change <- spline_func(
-    x = equi_spaced_x[sign_change_idx],
-    deriv = 1
-  )
-
-  if (length(sign_change_idx) > 1) {
-    if (pos_change) {
-      sign_change_idx <- sign_change_idx[which.max(
-        spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-      )]
-      # OLD code
-      # find nadir of y values
-      # nadir <- min(pred)
-      # sign_change_idx <- sign_change_idx[which.min(abs(
-      #     nadir - equi_spaced_x[sign_change_idx]))]
-    } else {
-      sign_change_idx <- sign_change_idx[which.min(
-        spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-      )]
-      # OLD code
-      # find peak (when using petco2 basically)
-      # peak <- max(pred)
-      # sign_change_idx <- sign_change_idx[which.min(abs(
-      #     peak - equi_spaced_x[sign_change_idx]))]
-    }
-  }
-
-  # OLD CODE, KEEP FOR A BIT
-  # there are often two local maxima. Choose the higher x-axis value
-  # for VT2/RC, and the lower for VT1. This is similar to
-  # Sherril et al. (1990) and Cross et al. (2012)
-  # if(length(sign_change_idx) > 1) {
-  #     if(bp == "vt1") {
-  #         sign_change_idx <- sign_change_idx[which.min(sign_change_idx)]
-  #     }
-  #     if(bp == "vt2") {
-  #         sign_change_idx <- sign_change_idx[which.max(sign_change_idx)]
-  #     }
-  # }
-
-  # calculate y-value at the threshold
-  # get value on either side of index
-  # interval <- c(equi_spaced_x[sign_change_idx[i] - 1],
-  #               equi_spaced_x[sign_change_idx[i] + 1])
-  #
-  # extrema_deriv2 <- stats::optimize(f = spline_func, interval = interval,
-  #                                   deriv = 2, maximum = TRUE)
-  #
-  # y_val_sign_changes <- extrema_deriv2$objective
+  sign_change_idx <- select_deriv2_max_idx(spline_func, equi_spaced_x, pos_change)
 
   if (length(sign_change_idx) > 0) {
     x_threshold <- equi_spaced_x[sign_change_idx]
     y_hat_threshold <- stats::predict(
-      lm_spline,
-      tibble::tibble("{.x}" := x_threshold)
+      lm_spline, tibble::tibble("{.x}" := x_threshold)
     )
-    # get values at threshold
     bp_dat <- find_threshold_vals(
-      .data = .data, thr_x = x_threshold,
-      thr_y = y_hat_threshold, .x = .x,
-      .y = .y, ...
+      .data = .data, thr_x = x_threshold, thr_y = y_hat_threshold,
+      .x = .x, .y = .y, ...
     )
   } else {
     bp_dat <- tibble::tibble()
   }
 
-  if (nrow(bp_dat) == 0) { # no breakpoint found
+  if (nrow(bp_dat) == 0) {
     bp_dat <- bp_dat %>%
       dplyr::add_row() %>%
       dplyr::mutate(determinant_bp = FALSE)
-    # add character or factor columns that are all the same value (e.g. ids)
     non_numeric_df <- .data %>%
       dplyr::select(tidyselect::where(
-        function(x) {
-          is.character(x) | is.factor(x) &
-            all(x == x[1])
-        }
+        function(x) is.character(x) | is.factor(x) & all(x == x[1])
       )) %>%
       dplyr::slice(1)
     bp_dat <- dplyr::bind_cols(bp_dat, non_numeric_df)
-  } else { # breakpoint found
-    bp_dat <- bp_dat %>%
-      dplyr::mutate(determinant_bp = TRUE)
+  } else {
+    bp_dat <- bp_dat %>% dplyr::mutate(determinant_bp = TRUE)
   }
 
   bp_dat <- bp_dat %>%
     dplyr::mutate(
       algorithm = "d2_reg_spline_maxima",
-      x_var = .x,
-      y_var = .y,
-      bp = bp,
-      est_ci = "estimate"
+      x_var = .x, y_var = .y, bp = bp, est_ci = "estimate"
     )
 
   if (ci) {
-    # nonparametric bootstrapping
+    poly_df <- length(stats::coef(lm_spline)) - 1 # fitted bs df
+    fitted_knots <- poly_df - degree
     boot_res <- boot::boot(
       data = .data,
-      statistic = bootstrap_ci_d2_reg_spline,
-      R = 100,
-      sim = "ordinary",
-      .x = .x,
-      .y = .y,
-      df = df,
-      degree = degree,
-      pos_change = pos_change,
+      statistic = boot_stat_d2_reg_spline,
+      R = 100, sim = "ordinary",
+      .x = .x, .y = .y, degree = degree,
+      n_knots = fitted_knots, pos_change = pos_change,
       parallel = "multicore"
     )
-    # calculate percentile CI's
-    boot_ci <- broom::tidy(boot_res,
-      conf.int = TRUE,
-      conf.method = "perc"
-    )
-    # calculate new values at threshold
-    ci_lower_x <- boot_ci$conf.low
-    ci_lower_y <- stats::predict(
-      lm_spline,
-      tibble::tibble("{.x}" := ci_lower_x)
-    )
+    boot_ci <- broom::tidy(boot_res, conf.int = TRUE, conf.method = "perc")
 
+    ci_lower_x <- boot_ci$conf.low
+    ci_lower_y <- stats::predict(lm_spline, tibble::tibble("{.x}" := ci_lower_x))
     lower_ci_res <- find_threshold_vals(
-      .data = .data,
-      thr_x = ci_lower_x,
-      thr_y = ci_lower_y,
-      .x = .x,
-      .y = .y,
-      ...
+      .data = .data, thr_x = ci_lower_x, thr_y = ci_lower_y,
+      .x = .x, .y = .y, ...
     ) %>%
       dplyr::mutate(
-        bp = bp,
-        algorithm = "d2_reg_spline_maxima",
-        x_var = .x,
-        y_var = .y,
-        est_ci = "lower_ci"
+        bp = bp, algorithm = "d2_reg_spline_maxima",
+        x_var = .x, y_var = .y, est_ci = "lower_ci"
       )
 
     ci_upper_x <- boot_ci$conf.high
-    ci_upper_y <- stats::predict(
-      lm_spline,
-      tibble::tibble("{.x}" := ci_upper_x)
-    )
-
+    ci_upper_y <- stats::predict(lm_spline, tibble::tibble("{.x}" := ci_upper_x))
     upper_ci_res <- find_threshold_vals(
-      .data = .data,
-      thr_x = ci_upper_x,
-      thr_y = ci_upper_y,
-      .x = .x,
-      .y = .y,
-      ...
+      .data = .data, thr_x = ci_upper_x, thr_y = ci_upper_y,
+      .x = .x, .y = .y, ...
     ) %>%
       dplyr::mutate(
-        bp = bp,
-        algorithm = "d2_reg_spline_maxima",
-        x_var = .x,
-        y_var = .y,
-        est_ci = "upper_ci"
+        bp = bp, algorithm = "d2_reg_spline_maxima",
+        x_var = .x, y_var = .y, est_ci = "upper_ci"
       )
 
-    bp_dat <- dplyr::bind_rows(
-      lower_ci_res,
-      bp_dat,
-      upper_ci_res
-    )
-    # if the estimate was true, set the others to TRUE
+    bp_dat <- dplyr::bind_rows(lower_ci_res, bp_dat, upper_ci_res)
     if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
       bp_dat[["determinant_bp"]] <- TRUE
     }
@@ -369,17 +407,11 @@ d2_reg_spline_maxima <- function(.data,
   if (plots) {
     bp_plot <- ggplot2::ggplot(
       data = plot_df,
-      ggplot2::aes(
-        x = .data[[.x]],
-        y = .data[[.y]]
-      )
+      ggplot2::aes(x = .data[[.x]], y = .data[[.y]])
     ) +
       ggplot2::geom_point(alpha = 0.5) +
       ggplot2::geom_line(
-        data = tibble::tibble(
-          x = equi_spaced_x,
-          y = pred
-        ),
+        data = tibble::tibble(x = equi_spaced_x, y = pred),
         ggplot2::aes(x = equi_spaced_x, y = pred)
       ) +
       ggplot2::geom_vline(xintercept = bp_dat[[.x]]) +
@@ -388,209 +420,10 @@ d2_reg_spline_maxima <- function(.data,
     bp_plot <- NULL
   }
 
-  return(list(
+  list(
     breakpoint_data = bp_dat,
     lm_reg_spline = lm_spline,
     spline_deriv_func = spline_func,
     bp_plot = bp_plot
-  ))
-}
-
-#' @keywords internal
-loop_d2_reg_spline <- function(.data, .x, .y, df = NULL,
-                               degree = 5, alpha_linearity = 0.05) {
-  # TODO allow users to specify b-spline or natural-spline basis
-  # would that use do.call()?
-
-  # sometimes, using something like the orr method has a weird
-  # intersection point at the very front of the data.
-  # after trimming off the first (usually) 60 seconds, there is no df left
-  if (nrow(.data) == 0) {
-    return(NULL)
-  }
-
-  # if statement for if users specify the knots or df
-  if (!is.null(df)) {
-    lm_spline <- paste0(
-      .y, " ~ ", "1 + ",
-      "splines::bs(", .x,
-      ", df = ", df,
-      ", degree = ", degree, ")"
-    ) %>%
-      stats::lm(data = .data)
-  } else {
-    spline_mod_list <- vector(mode = "list", length = 0)
-    cont <- TRUE
-    i <- 1
-    # reference model with one interior knot
-    lm_spline <- paste0(
-      .y, " ~ ", "1 + ",
-      "splines::bs(", .x,
-      ", df = ", i + degree,
-      ", degree = ", degree, ")"
-    ) %>%
-      stats::lm(data = .data)
-    spline_mod_list <- append(spline_mod_list, list(lm_spline))
-    # while loop beings with 1 knot (3 df already used assuming a 3rd spline)
-    while (cont == TRUE) {
-      # browser()
-      i <- i + 1
-      # TODO add options for user-defined knots and df
-      lm_spline <- paste0(
-        .y, " ~ ", "1 + ",
-        "splines::bs(", .x,
-        ", df = ", i + degree,
-        ", degree = ", degree, ")"
-      ) %>%
-        stats::lm(data = .data)
-      spline_mod_list <- append(spline_mod_list, list(lm_spline))
-      lrt <- stats::anova(spline_mod_list[[i - 1]], spline_mod_list[[i]])
-      if (is.na(lrt$`Pr(>F)`[2]) | lrt$`Pr(>F)`[2] >= alpha_linearity) {
-        cont <- FALSE
-        lm_spline <- spline_mod_list[[i - 1]] # take the previous model
-      }
-    }
-  }
-  lm_spline
-}
-
-#' @keywords internal
-bootstrap_ci_d2_reg_spline <- function(.data,
-                                       i,
-                                       .x,
-                                       .y,
-                                       df,
-                                       degree,
-                                       pos_change) {
-  # find best number of knots
-  lm_spline <- loop_d2_reg_spline(
-    .data = .data[i, ], .x = .x, .y = .y,
-    df = df, degree = degree
   )
-
-  # It feels like there's a better way than splinefun to find a more exact
-  # 2nd derivative, but I don't know it
-
-  # find maxima in 2nd derivative. This is accomplished by making
-  # a spline interpolation function. Use this with optimize() function.
-
-  # get new values at equal spacing for a smoother splinefun result
-  equi_spaced_x <- seq(
-    from = min(.data[i, ][[.x]]),
-    to = max(.data[i, ][[.x]]),
-    length.out = range(.data[i, ][[.x]]) %>%
-      diff() %>%
-      round()
-  )
-  pred <- stats::predict(lm_spline,
-    newdata = tibble::tibble("{.x}" := equi_spaced_x)
-  )
-
-  spline_func <- stats::splinefun(x = equi_spaced_x, y = pred)
-
-  # find number of maxima
-  if (pos_change) {
-    sign_change_idx <- slope_sign_changes(
-      y = spline_func(
-        x = equi_spaced_x,
-        deriv = 2
-      ),
-      change = "pos_to_neg"
-    )
-    # filter by expected slope (usually positive)
-    # there can be a spike in accel during the initial drop in vent eqs
-    # however, only remove these thresholds with a negative derivative
-    # if there is more than one value with a negative slope
-    if (length(sign_change_idx) > 1) {
-      # see which derivatives at the sign changes are negative
-      neg_slope_idx <- which(spline_func(
-        x = equi_spaced_x[sign_change_idx],
-        deriv = 1
-      ) < 0)
-      while (length(neg_slope_idx) > 0 & length(sign_change_idx) > 1) {
-        # remove one value with a negative slope at a time in case
-        # all are negative. If the derivative is negative but it's
-        # right befor a clear upturn, that's probably the threshold
-        sign_change_idx <- sign_change_idx[-neg_slope_idx[1]]
-        # find which values have negative signs to exit loop
-        neg_slope_idx <- which(spline_func(
-          x = equi_spaced_x[sign_change_idx],
-          deriv = 1
-        ) < 0)
-      }
-    }
-  } else { # this only applies when y var = petco2
-    sign_change_idx <- slope_sign_changes(
-      y = spline_func(
-        x = equi_spaced_x,
-        deriv = 2
-      ),
-      change = "neg_to_pos"
-    )
-    # filter by expected slope (in this case negative)
-    if (length(sign_change_idx) > 1) {
-      # see which derivatives at the sign changes are positive
-      pos_slope_idx <- which(spline_func(
-        x = equi_spaced_x[sign_change_idx],
-        deriv = 1
-      ) > 0)
-      while (length(pos_slope_idx) > 0 & length(sign_change_idx) > 1) {
-        # remove values with a positive slope by logical indexing
-        # should I still be removing these incrementally? in case the
-        # nadir isocapnic buffering period is VERY short-lived?
-        # I could see how the deriv could be negative, but the
-        # accel could be very positive. this would be okay if
-        # it were the only maxima (I think)
-        sign_change_idx <- sign_change_idx[-pos_slope_idx[1]]
-        # find values with positive slope again to exit loop
-        pos_slope_idx <- which(spline_func(
-          x = equi_spaced_x[sign_change_idx],
-          deriv = 1
-        ) > 0)
-      }
-    }
-  }
-
-  # there can be multiple local extrema. Choose the extrema closer to the
-  # nadir or peak because this often represents the beginning of a systematic
-  # rise
-
-  # choosing closest to the nadir/peak probably isn't a good idea when
-  # the graph is NOT a ventilatory equivalents graph b/c the nadir will
-  # be super close to the beginning of the test
-  # At least for now, for better or for worse, I'd say choose the extrema
-  # with the largest y-magnitude
-
-  y_val_sign_change <- spline_func(
-    x = equi_spaced_x[sign_change_idx],
-    deriv = 1
-  )
-
-  if (length(sign_change_idx) > 1) {
-    if (pos_change) {
-      sign_change_idx <- sign_change_idx[which.max(
-        spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-      )]
-      # OLD code
-      # find nadir of y values
-      # nadir <- min(pred)
-      # sign_change_idx <- sign_change_idx[which.min(abs(
-      #     nadir - equi_spaced_x[sign_change_idx]))]
-    } else {
-      sign_change_idx <- sign_change_idx[which.min(
-        spline_func(x = equi_spaced_x[sign_change_idx], deriv = 2)
-      )]
-      # OLD code
-      # find peak (when using petco2 basically)
-      # peak <- max(pred)
-      # sign_change_idx <- sign_change_idx[which.min(abs(
-      #     peak - equi_spaced_x[sign_change_idx]))]
-    }
-  }
-
-  if (length(sign_change_idx) > 0) {
-    return(equi_spaced_x[sign_change_idx])
-  } else {
-    return(NA)
-  }
 }
