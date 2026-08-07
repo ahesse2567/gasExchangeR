@@ -19,8 +19,8 @@
 #' @param ordering Prior to fitting any functions, should the data be reordered by the x-axis variable or by time? Default is to use the current x-axis variable and use the time variable to break any ties.
 #' @param front_trim_vt1 Seconds of data to remove from the beginning of the test before fitting (VT1). Default \code{60}.
 #' @param front_trim_vt2 Seconds of data to remove from the beginning of the test before fitting (VT2). Default \code{60}.
-#' @param ci Not yet implemented for this function; accepted for interface consistency with the other threshold algorithms but currently has no effect.
-#' @param conf_level Not yet implemented for this function; see \code{ci}.
+#' @param ci Should the output include confidence interval data? Default is `FALSE`. When `TRUE`, a nonparametric (case-resampling) bootstrap with 999 replicates is used to estimate a percentile confidence interval, refitting at the same fixed \code{degree} used for the estimate.
+#' @param conf_level Confidence level to use if calculating confidence intervals.
 #' @param plots Should this function generate plots? Set to `FALSE` to save time.
 #'
 #' @returns A list containing breakpoint data, best-fit and related functions, and a plot.
@@ -44,16 +44,21 @@
 #'   method = "breath", calc_type = "rolling", time_col = "time", window = 15
 #' )
 #'
-#' # VT1/GET from the inflection point of VE vs. VO2
+#' # RCP from the inflection point of VE vs. VCO2
 #' d2_inflection(
 #'   cpet_15b_roll,
-#'   .x = "vo2",
+#'   .x = "vco2",
 #'   .y = "ve",
-#'   bp = "vt1",
+#'   bp = "vt2",
+#'   degree = 5,
+#'   search_degree = FALSE,
+#'   max_degree = 8,
+#'   criterion = "aicc",
 #'   vo2 = "vo2",
 #'   vco2 = "vco2",
 #'   ve = "ve",
 #'   time = "time",
+#'   ci = FALSE,
 #'   plots = FALSE
 #' )
 #'
@@ -99,12 +104,15 @@ d2_inflection <- function(.data,
   .data <- .data %>%
     dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-  lm_poly <- fit_poly_reg(
-    .data = .data, .x = .x, .y = .y,
+  # fit the polynomial and locate the chosen inflection point (shared with the
+  # bootstrap statistic so this logic exists in exactly one place)
+  infl_res <- find_d2_inflection(
+    .data, .x = .x, .y = .y,
     degree = degree, search_degree = search_degree,
     max_degree = max_degree, criterion = criterion,
     alpha_linearity = alpha_linearity
   )
+  lm_poly <- infl_res$lm_poly
 
   # return quick summary if generating the model fails
   if (is.null(lm_poly) || anyNA(stats::coef(lm_poly))) {
@@ -116,41 +124,13 @@ d2_inflection <- function(.data,
     return(list(breakpoint_data = bp_dat))
   }
 
-  poly_expr <- expr_from_coefs(lm_poly$coefficients)
-  deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1) # slope
-  deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2) # acceleration
+  poly_expr <- infl_res$poly_expr
+  deriv1 <- infl_res$deriv1
+  deriv2 <- infl_res$deriv2
+  inflection_points_x <- infl_res$inflection_x
 
-  # find x-values of roots of second derivative (inflection points)
-  inflection_points_x <- deriv2 %>%
-    Ryacas::y_fn("Simplify") %>% # simplify derivative for ease of extraction coefficients
-    Ryacas::yac_str() %>%
-    stringr::str_extract_all("(?<!\\^)-?\\d+\\.?\\d*e?-?\\d*") %>% # extract coefficients
-    purrr::map(as.numeric) %>%
-    unlist() %>%
-    rev() %>% # reverse order for polyroot()
-    polyroot() %>%
-    find_real()
-
-  # filter by roots within range of x values
-  inflection_points_x <- inflection_points_x[inflection_points_x >=
-    min(.data[[.x]]) &
-    inflection_points_x <=
-      max(.data[[.x]])]
-
-  concavity_chgs <- concavity_changes(poly_expr,
-    inflection_points = inflection_points_x
-  )
-  # filter by concave up to concave down
-  inflection_points_x <- inflection_points_x[concavity_chgs == "up to down"]
-  # if there's more than one up to down inflection point, choose whichever
-  # point has the higher slope
-  inflection_points_x <- inflection_points_x[which.max(
-    eval(deriv1, envir = list(x = inflection_points_x))
-  )]
-
-  inflection_points_y <- eval(poly_expr, envir = list(x = inflection_points_x))
-
-  if (length(inflection_points_x) > 0 & length(inflection_points_y) > 0) {
+  if (!is.na(inflection_points_x)) {
+    inflection_points_y <- eval(poly_expr, envir = list(x = inflection_points_x))
     bp_dat <- find_threshold_vals(
       .data = .data, thr_x = inflection_points_x,
       thr_y = inflection_points_y, .x = .x,
@@ -159,8 +139,6 @@ d2_inflection <- function(.data,
   } else {
     bp_dat <- tibble::tibble()
   }
-
-  # get values at threshold. Make this a deriv helpers function to prep bp_dat?
 
   if (nrow(bp_dat) == 0) { # no breakpoint found
     bp_dat <- bp_dat %>%
@@ -183,9 +161,51 @@ d2_inflection <- function(.data,
       bp = bp,
       algorithm = "d2_inflection",
       x_var = .x,
-      y_var = .y
+      y_var = .y,
+      est_ci = "estimate"
     ) %>%
     dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+
+  # bootstrapping a CI around an indeterminate estimate is not meaningful, so
+  # only run it when a threshold was actually found on the original data.
+  if (ci && isTRUE(bp_dat$determinant_bp[1])) {
+    boot_res <- bootstrap_threshold_ci(
+      .data = .data,
+      statistic = boot_stat_d2_inflection,
+      R = 999,
+      conf_level = conf_level,
+      .x = .x, .y = .y,
+      degree = degree, alpha_linearity = alpha_linearity
+    )
+
+    if (!is.null(boot_res)) {
+      y_lower <- eval(poly_expr, envir = list(x = boot_res$lower))
+      lower_ci_res <- find_threshold_vals(
+        .data = .data, thr_x = boot_res$lower, thr_y = y_lower,
+        .x = .x, .y = .y, ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp, algorithm = "d2_inflection",
+          x_var = .x, y_var = .y, est_ci = "lower_ci"
+        )
+
+      y_upper <- eval(poly_expr, envir = list(x = boot_res$upper))
+      upper_ci_res <- find_threshold_vals(
+        .data = .data, thr_x = boot_res$upper, thr_y = y_upper,
+        .x = .x, .y = .y, ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp, algorithm = "d2_inflection",
+          x_var = .x, y_var = .y, est_ci = "upper_ci"
+        )
+
+      bp_dat <- dplyr::bind_rows(lower_ci_res, bp_dat, upper_ci_res) %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+      if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
+        bp_dat[["determinant_bp"]] <- TRUE
+      }
+    }
+  }
 
   # make plot for output
   if (plots) {
@@ -212,20 +232,110 @@ d2_inflection <- function(.data,
   ))
 }
 
-#' Find when a function changes from concave up to concave down or vice versa
+#' Fit the polynomial and locate the chosen "up to down" inflection point.
+#'
+#' Shared by [d2_inflection()] and its bootstrap statistic
+#' ([boot_stat_d2_inflection()]) so this logic exists in exactly one place.
+#' Returns `inflection_x = NA_real_` when the model fails to fit or no
+#' qualifying inflection point exists.
+#'
+#' Root-finding uses exact polynomial arithmetic (see `poly_deriv_coefs()`,
+#' `poly_eval_coefs()` in utils.R) rather than symbolic differentiation
+#' (Deriv::Deriv) plus a Ryacas-simplify/string-parse/polyroot() route. This
+#' is both faster (Ryacas, an external computer algebra system, is the
+#' dominant cost when this function is called ~1000 times for a bootstrap CI)
+#' and simpler: the 2nd derivative's coefficients come directly from the
+#' original coefficients via two closed-form differentiation steps, with no
+#' string round-trip through a symbolic simplifier. The symbolic expressions
+#' are still built once (cheaply, via Deriv::Deriv with no Ryacas call)
+#' purely so the return value keeps its existing shape for
+#' plotting/inspection.
+#'
 #' @keywords internal
 #' @noRd
-#'
-concavity_changes <- function(f, inflection_points, tol = 0.1) {
-  # find second derivative
-  f_dd <- Deriv::Deriv(f, x = "x", nderiv = 2)
-  if (is.expression(f_dd)) { # change expression to function if needed
-    f_dd <- expr_to_func(f_dd)
-  }
-  left_sign <- sign(f_dd(inflection_points - tol))
-  right_sign <- sign(f_dd(inflection_points + tol))
-  conc_changes <- dplyr::if_else(left_sign > 0 & right_sign < 0,
-    "up to down", "down to up"
+find_d2_inflection <- function(.data, .x, .y, degree,
+                               search_degree = FALSE, max_degree = 8,
+                               criterion = c("aicc", "lrt"),
+                               alpha_linearity = 0.05,
+                               build_exprs = TRUE) {
+  lm_poly <- fit_poly_reg(
+    .data = .data, .x = .x, .y = .y,
+    degree = degree, search_degree = search_degree,
+    max_degree = max_degree, criterion = criterion,
+    alpha_linearity = alpha_linearity
   )
-  conc_changes
+
+  if (is.null(lm_poly) || anyNA(stats::coef(lm_poly))) {
+    return(list(
+      inflection_x = NA_real_, lm_poly = lm_poly,
+      poly_expr = NULL, deriv1 = NULL, deriv2 = NULL
+    ))
+  }
+
+  coefs <- stats::coef(lm_poly)
+  deriv1_coefs <- poly_deriv_coefs(coefs)
+  deriv2_coefs <- poly_deriv_coefs(deriv1_coefs)
+
+  # roots of the 2nd derivative (an exact polynomial) are the inflection
+  # candidates; polyroot() finds them directly, no symbolic engine needed.
+  inflection_points_x <- find_real(polyroot(deriv2_coefs))
+
+  # filter by roots within range of x values
+  rng <- range(.data[[.x]])
+  inflection_points_x <- inflection_points_x[
+    inflection_points_x >= rng[1] & inflection_points_x <= rng[2]
+  ]
+
+  # keep only "concave up to concave down" points: the 2nd derivative goes
+  # from + to - across the point (tol matches the previous default).
+  tol <- 0.1
+  left_sign <- sign(poly_eval_coefs(deriv2_coefs, inflection_points_x - tol))
+  right_sign <- sign(poly_eval_coefs(deriv2_coefs, inflection_points_x + tol))
+  inflection_points_x <- inflection_points_x[left_sign > 0 & right_sign < 0]
+
+  # if there's more than one up to down inflection point, choose whichever
+  # point has the higher slope. which.max() on an empty vector correctly
+  # returns integer(0), so no valid inflection point yields NA below.
+  inflection_points_x <- inflection_points_x[which.max(
+    poly_eval_coefs(deriv1_coefs, inflection_points_x)
+  )]
+
+  if (length(inflection_points_x) == 0) {
+    inflection_points_x <- NA_real_
+  }
+
+  # build symbolic expressions once (cheap; no Ryacas) purely for the return
+  # value's existing shape -- not needed for the root-finding above, and
+  # skipped by the bootstrap statistic, where it would run ~1000x per call.
+  if (build_exprs) {
+    poly_expr <- expr_from_coefs(coefs)
+    deriv1 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 1)
+    deriv2 <- Deriv::Deriv(poly_expr, x = "x", nderiv = 2)
+  } else {
+    poly_expr <- deriv1 <- deriv2 <- NULL
+  }
+
+  list(
+    inflection_x = inflection_points_x,
+    lm_poly = lm_poly, poly_expr = poly_expr,
+    deriv1 = deriv1, deriv2 = deriv2
+  )
 }
+
+#' Bootstrap statistic for [d2_inflection()]'s confidence interval.
+#'
+#' Refits the polynomial on the resampled data at the fixed `degree` selected
+#' from the full data (no re-searching per replicate) and returns the
+#' inflection x-location, or `NA_real_` if this resample has none.
+#' @keywords internal
+#' @noRd
+boot_stat_d2_inflection <- function(.data, i, .x, .y, degree, alpha_linearity) {
+  find_d2_inflection(
+    .data[i, ],
+    .x = .x, .y = .y,
+    degree = degree, search_degree = FALSE,
+    alpha_linearity = alpha_linearity,
+    build_exprs = FALSE # skip building symbolic expressions per replicate
+  )$inflection_x
+}
+

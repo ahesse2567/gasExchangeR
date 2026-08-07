@@ -52,10 +52,15 @@
 #'   .x = "time",
 #'   .y = "vo2",
 #'   bp = "vt1",
+#'   degree = 6,
+#'   search_degree = FALSE,
+#'   max_degree = 8,
+#'   criterion = "aicc",
 #'   vo2 = "vo2",
 #'   vco2 = "vco2",
 #'   ve = "ve",
 #'   time = "time",
+#'   ci = FALSE,
 #'   plots = FALSE
 #' )
 #'
@@ -106,29 +111,22 @@ d1_crossing <- function(.data,
   .data <- .data %>%
     dplyr::filter(.data[[time]] >= min(.data[[time]] + front_trim))
 
-  # polynomial fit for vo2 (shared poly-fitting loop)
-  lm_poly_vo2 <- fit_poly_reg(
-    .data = .data, .x = time, .y = vo2,
+  # find VO2/VCO2 polynomial fits and the final derivative crossing (shared
+  # with the bootstrap statistic so this logic exists in exactly one place)
+  crossing_res <- find_d1_crossing(
+    .data, time = time, vo2 = vo2, vco2 = vco2,
     degree = degree, search_degree = search_degree,
     max_degree = max_degree, criterion = criterion,
     alpha_linearity = alpha_linearity
   )
-
-  # polynomial fit for vco2
-  lm_poly_vco2 <- fit_poly_reg(
-    .data = .data, .x = time, .y = vco2,
-    degree = degree, search_degree = search_degree,
-    max_degree = max_degree, criterion = criterion,
-    alpha_linearity = alpha_linearity
-  )
+  lm_poly_vo2 <- crossing_res$lm_poly_vo2
+  lm_poly_vco2 <- crossing_res$lm_poly_vco2
 
   # if creating the linear model fails, return a quick summary
-  if (is.null(lm_poly_vo2) |
-    is.null(lm_poly_vco2) |
-    any(
-      is.na(lm_poly_vo2$coefficients),
-      is.na(lm_poly_vco2$coefficients)
-    )) {
+  if (is.null(lm_poly_vo2) ||
+    is.null(lm_poly_vco2) ||
+    anyNA(lm_poly_vo2$coefficients) ||
+    anyNA(lm_poly_vco2$coefficients)) {
     bp_dat <- return_indeterminant_findings(
       .data = plot_df, # change to plot_data later?
       bp = bp,
@@ -141,54 +139,16 @@ d1_crossing <- function(.data,
     return(list(breakpoint_data = bp_dat))
   }
 
-
-  # 1st derivative for vo2
-  poly_expr_vo2 <- expr_from_coefs(lm_poly_vo2$coefficients)
-  deriv1_vo2 <- Deriv::Deriv(poly_expr_vo2, x = "x", nderiv = 1) # slope
-
-  # 1st derivative for vco2
-  poly_expr_vco2 <- expr_from_coefs(lm_poly_vco2$coefficients)
-  deriv1_vco2 <- Deriv::Deriv(poly_expr_vco2, x = "x", nderiv = 1) # slope
-
-  # turn derivative expressions into functions to use with uniroot.all()
-  deriv1_vo2_func <- expr_to_func(deriv1_vo2)
-  deriv1_vco2_func <- expr_to_func(deriv1_vco2)
-
-  # calculate derivative of difference in 1st derivative functions
-  # this lets us know if vco2 was surpassing vo2 or the other way around
-  deriv_diff_deriv1 <- paste0(
-    deriv1_vo2 %>%
-      Ryacas::y_fn("Simplify") %>%
-      Ryacas::yac_str(),
-    " - (",
-    deriv1_vco2 %>%
-      Ryacas::y_fn("Simplify") %>%
-      Ryacas::yac_str(),
-    ")"
-  ) %>%
-    parse(text = .) %>%
-    Deriv::Deriv(x = "x", nderiv = 1)
-
-  roots <- rootSolve::uniroot.all(
-    function(x) deriv1_vo2_func(x) - deriv1_vco2_func(x),
-    interval = c(min(.data[[.x]]), max(.data[[.x]]))
-  )
-
-  # filter by roots within range of x values
-  roots <- roots[roots >= min(.data[[.x]]) &
-    roots <= max(.data[[.x]])]
-
-  # filter by which roots have a negative derivative. This indicates that
-  # co2 is rising above o2. Finding max finds the last time this occurs.
-  final_crossing <- roots[eval(deriv_diff_deriv1,
-    envir = list(x = roots)
-  ) < 0] %>%
-    max()
+  poly_expr_vo2 <- crossing_res$poly_expr_vo2
+  poly_expr_vco2 <- crossing_res$poly_expr_vco2
+  deriv1_vo2 <- crossing_res$deriv1_vo2
+  deriv1_vco2 <- crossing_res$deriv1_vco2
+  final_crossing <- crossing_res$crossing_x
 
   # find the fitted VO2 value and use that to find threshold values.
   # You could use VCO2 or somehow integrate both VO2 & VCO2, but that might be a future update
 
-  if (length(final_crossing) > 0) {
+  if (!is.na(final_crossing)) {
     y_hat_threshold <- eval(poly_expr_vo2,
       envir = list(x = final_crossing)
     )
@@ -205,6 +165,7 @@ d1_crossing <- function(.data,
         algorithm = "d1_crossing",
         x_var = .x,
         y_var = .y,
+        est_ci = "estimate"
       )
   } else {
     bp_dat <- tibble::tibble()
@@ -223,9 +184,51 @@ d1_crossing <- function(.data,
       algorithm = "d1_crossing",
       x_var = .x,
       y_var = .y,
-      bp = bp
+      bp = bp,
+      est_ci = "estimate"
     ) %>%
     dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+
+  # bootstrapping a CI around an indeterminate estimate is not meaningful, so
+  # only run it when a threshold was actually found on the original data.
+  if (ci && isTRUE(bp_dat$determinant_bp[1])) {
+    boot_res <- bootstrap_threshold_ci(
+      .data = .data,
+      statistic = boot_stat_d1_crossing,
+      R = 999,
+      conf_level = conf_level,
+      time = time, vo2 = vo2, vco2 = vco2,
+      degree = degree, alpha_linearity = alpha_linearity
+    )
+
+    if (!is.null(boot_res)) {
+      y_lower <- eval(poly_expr_vo2, envir = list(x = boot_res$lower))
+      lower_ci_res <- find_threshold_vals(
+        .data = .data, thr_x = boot_res$lower, thr_y = y_lower,
+        .x = .x, .y = .y, ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp, algorithm = "d1_crossing",
+          x_var = .x, y_var = .y, est_ci = "lower_ci"
+        )
+
+      y_upper <- eval(poly_expr_vo2, envir = list(x = boot_res$upper))
+      upper_ci_res <- find_threshold_vals(
+        .data = .data, thr_x = boot_res$upper, thr_y = y_upper,
+        .x = .x, .y = .y, ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp, algorithm = "d1_crossing",
+          x_var = .x, y_var = .y, est_ci = "upper_ci"
+        )
+
+      bp_dat <- dplyr::bind_rows(lower_ci_res, bp_dat, upper_ci_res) %>%
+        dplyr::relocate(bp, algorithm, x_var, y_var, determinant_bp)
+      if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
+        bp_dat[["determinant_bp"]] <- TRUE
+      }
+    }
+  }
 
   if (plots) {
     bp_plot <- ggplot2::ggplot(
@@ -269,7 +272,116 @@ d1_crossing <- function(.data,
   ))
 }
 
+#' Fit VO2 and VCO2 vs. time and locate the final 1st-derivative crossing.
+#'
+#' Shared by [d1_crossing()] and its bootstrap statistic ([boot_stat_d1_crossing()])
+#' so this logic exists in exactly one place. Returns `crossing_x = NA_real_`
+#' (not `-Inf`) when the models fail to fit or no valid crossing exists; a
+#' previous version of this logic took `max()` of a possibly-empty vector,
+#' which silently returns `-Inf` rather than signaling "not found."
+#'
+#' Root-finding uses exact polynomial arithmetic (see `poly_deriv_coefs()`,
+#' `poly_eval_coefs()` in utils.R) rather than symbolic differentiation
+#' (Deriv::Deriv) plus Ryacas simplification and rootSolve::uniroot.all().
+#' This is both faster (the symbolic + Ryacas route is the dominant cost when
+#' this function is called ~1000 times for a bootstrap CI) and, since the
+#' derivative of a polynomial is itself an exact polynomial, MORE reliable:
+#' polyroot() finds every root of that polynomial exactly (to numerical
+#' precision), whereas uniroot.all() is a numerical scan that can miss closely
+#' spaced roots depending on its sampling grid. The symbolic expressions are
+#' still built once (cheaply, via Deriv::Deriv with no Ryacas call) purely so
+#' the return value keeps its existing shape for plotting/inspection.
+#'
+#' @keywords internal
+#' @noRd
+find_d1_crossing <- function(.data, time, vo2, vco2, degree,
+                             search_degree = FALSE, max_degree = 8,
+                             criterion = c("aicc", "lrt"),
+                             alpha_linearity = 0.05,
+                             build_exprs = TRUE) {
+  lm_poly_vo2 <- fit_poly_reg(
+    .data = .data, .x = time, .y = vo2,
+    degree = degree, search_degree = search_degree,
+    max_degree = max_degree, criterion = criterion,
+    alpha_linearity = alpha_linearity
+  )
+  lm_poly_vco2 <- fit_poly_reg(
+    .data = .data, .x = time, .y = vco2,
+    degree = degree, search_degree = search_degree,
+    max_degree = max_degree, criterion = criterion,
+    alpha_linearity = alpha_linearity
+  )
 
+  failed <- is.null(lm_poly_vo2) || is.null(lm_poly_vco2) ||
+    anyNA(lm_poly_vo2$coefficients) || anyNA(lm_poly_vco2$coefficients)
+  if (failed) {
+    return(list(
+      crossing_x = NA_real_,
+      lm_poly_vo2 = lm_poly_vo2, lm_poly_vco2 = lm_poly_vco2,
+      poly_expr_vo2 = NULL, poly_expr_vco2 = NULL,
+      deriv1_vo2 = NULL, deriv1_vco2 = NULL
+    ))
+  }
+
+  coefs_vo2 <- stats::coef(lm_poly_vo2)
+  coefs_vco2 <- stats::coef(lm_poly_vco2)
+  deriv1_vo2_coefs <- poly_deriv_coefs(coefs_vo2)
+  deriv1_vco2_coefs <- poly_deriv_coefs(coefs_vco2)
+
+  # the difference of the two 1st derivatives is itself an exact polynomial;
+  # its roots ARE the crossing candidates.
+  diff_coefs <- poly_subtract_coefs(deriv1_vo2_coefs, deriv1_vco2_coefs)
+  roots <- find_real(polyroot(diff_coefs))
+
+  rng <- range(.data[[time]])
+  roots <- roots[roots >= rng[1] & roots <= rng[2]]
+
+  # keep roots where CO2 is rising above O2 (negative derivative-of-difference,
+  # i.e. the difference polynomial is decreasing there); the last such
+  # crossing is the threshold. Check length BEFORE max() -- max(numeric(0))
+  # is -Inf, not an empty/NA result.
+  diff_deriv_coefs <- poly_deriv_coefs(diff_coefs)
+  neg_roots <- roots[poly_eval_coefs(diff_deriv_coefs, roots) < 0]
+  crossing_x <- if (length(neg_roots) > 0) max(neg_roots) else NA_real_
+
+  # build symbolic expressions once (cheap; no Ryacas) purely for the return
+  # value's existing shape -- not needed for the root-finding above, and
+  # skipped by the bootstrap statistic, where it would run ~1000x per call.
+  if (build_exprs) {
+    poly_expr_vo2 <- expr_from_coefs(coefs_vo2)
+    deriv1_vo2 <- Deriv::Deriv(poly_expr_vo2, x = "x", nderiv = 1)
+    poly_expr_vco2 <- expr_from_coefs(coefs_vco2)
+    deriv1_vco2 <- Deriv::Deriv(poly_expr_vco2, x = "x", nderiv = 1)
+  } else {
+    poly_expr_vo2 <- poly_expr_vco2 <- deriv1_vo2 <- deriv1_vco2 <- NULL
+  }
+
+  list(
+    crossing_x = crossing_x,
+    lm_poly_vo2 = lm_poly_vo2, lm_poly_vco2 = lm_poly_vco2,
+    poly_expr_vo2 = poly_expr_vo2, poly_expr_vco2 = poly_expr_vco2,
+    deriv1_vo2 = deriv1_vo2, deriv1_vco2 = deriv1_vco2
+  )
+}
+
+#' Bootstrap statistic for [d1_crossing()]'s confidence interval.
+#'
+#' Refits both polynomials on the resampled data at the fixed `degree`
+#' selected from the full data (no re-searching per replicate) and returns
+#' the crossing x-location, or `NA_real_` if this resample has no valid
+#' crossing.
+#' @keywords internal
+#' @noRd
+boot_stat_d1_crossing <- function(.data, i, time, vo2, vco2, degree,
+                                  alpha_linearity) {
+  find_d1_crossing(
+    .data[i, ],
+    time = time, vo2 = vo2, vco2 = vco2,
+    degree = degree, search_degree = FALSE,
+    alpha_linearity = alpha_linearity,
+    build_exprs = FALSE # skip building symbolic expressions per replicate
+  )$crossing_x
+}
 
 
 ## plotting code to figure out later
