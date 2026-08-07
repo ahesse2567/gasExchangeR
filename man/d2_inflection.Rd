@@ -62,9 +62,9 @@ d2_inflection(
 
 \item{front_trim_vt2}{Seconds of data to remove from the beginning of the test before fitting (VT2). Default \code{60}.}
 
-\item{ci}{Not yet implemented for this function; accepted for interface consistency with the other threshold algorithms but currently has no effect.}
+\item{ci}{Should the output include confidence interval data? Default is `FALSE`. When `TRUE`, a nonparametric (case-resampling) bootstrap with 999 replicates is used to estimate a percentile confidence interval, refitting at the same fixed \code{degree} used for the estimate.}
 
-\item{conf_level}{Not yet implemented for this function; see \code{ci}.}
+\item{conf_level}{Confidence level to use if calculating confidence intervals.}
 
 \item{plots}{Should this function generate plots? Set to `FALSE` to save time.}
 }

@@ -360,44 +360,46 @@ d2_reg_spline_maxima <- function(.data,
       x_var = .x, y_var = .y, bp = bp, est_ci = "estimate"
     )
 
-  if (ci) {
+  # bootstrapping a CI around an indeterminate estimate is not meaningful, so
+  # only run it when a threshold was actually found on the original data.
+  if (ci && isTRUE(bp_dat$determinant_bp[1])) {
     poly_df <- length(stats::coef(lm_spline)) - 1 # fitted bs df
     fitted_knots <- poly_df - degree
-    boot_res <- boot::boot(
-      data = .data,
+    boot_res <- bootstrap_threshold_ci(
+      .data = .data,
       statistic = boot_stat_d2_reg_spline,
-      R = 100, sim = "ordinary",
+      R = 999, conf_level = conf_level,
       .x = .x, .y = .y, degree = degree,
-      n_knots = fitted_knots, pos_change = pos_change,
-      parallel = "multicore"
+      n_knots = fitted_knots, pos_change = pos_change
     )
-    boot_ci <- broom::tidy(boot_res, conf.int = TRUE, conf.method = "perc")
 
-    ci_lower_x <- boot_ci$conf.low
-    ci_lower_y <- stats::predict(lm_spline, tibble::tibble("{.x}" := ci_lower_x))
-    lower_ci_res <- find_threshold_vals(
-      .data = .data, thr_x = ci_lower_x, thr_y = ci_lower_y,
-      .x = .x, .y = .y, ...
-    ) %>%
-      dplyr::mutate(
-        bp = bp, algorithm = "d2_reg_spline_maxima",
-        x_var = .x, y_var = .y, est_ci = "lower_ci"
-      )
+    if (!is.null(boot_res)) {
+      ci_lower_x <- boot_res$lower
+      ci_lower_y <- stats::predict(lm_spline, tibble::tibble("{.x}" := ci_lower_x))
+      lower_ci_res <- find_threshold_vals(
+        .data = .data, thr_x = ci_lower_x, thr_y = ci_lower_y,
+        .x = .x, .y = .y, ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp, algorithm = "d2_reg_spline_maxima",
+          x_var = .x, y_var = .y, est_ci = "lower_ci"
+        )
 
-    ci_upper_x <- boot_ci$conf.high
-    ci_upper_y <- stats::predict(lm_spline, tibble::tibble("{.x}" := ci_upper_x))
-    upper_ci_res <- find_threshold_vals(
-      .data = .data, thr_x = ci_upper_x, thr_y = ci_upper_y,
-      .x = .x, .y = .y, ...
-    ) %>%
-      dplyr::mutate(
-        bp = bp, algorithm = "d2_reg_spline_maxima",
-        x_var = .x, y_var = .y, est_ci = "upper_ci"
-      )
+      ci_upper_x <- boot_res$upper
+      ci_upper_y <- stats::predict(lm_spline, tibble::tibble("{.x}" := ci_upper_x))
+      upper_ci_res <- find_threshold_vals(
+        .data = .data, thr_x = ci_upper_x, thr_y = ci_upper_y,
+        .x = .x, .y = .y, ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp, algorithm = "d2_reg_spline_maxima",
+          x_var = .x, y_var = .y, est_ci = "upper_ci"
+        )
 
-    bp_dat <- dplyr::bind_rows(lower_ci_res, bp_dat, upper_ci_res)
-    if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
-      bp_dat[["determinant_bp"]] <- TRUE
+      bp_dat <- dplyr::bind_rows(lower_ci_res, bp_dat, upper_ci_res)
+      if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
+        bp_dat[["determinant_bp"]] <- TRUE
+      }
     }
   }
 

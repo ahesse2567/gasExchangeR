@@ -337,83 +337,76 @@ d2_poly_reg_maxima <- function(.data,
       bp = bp
     )
 
-  if (ci) {
+  # bootstrapping a CI around an indeterminate estimate is not meaningful, so
+  # only run it when a threshold was actually found on the original data.
+  if (ci && isTRUE(bp_dat$determinant_bp[1])) {
     # bootstrap at the degree actually fitted above (coefficients = degree + 1),
     # so each resample uses the same fixed degree rather than re-searching.
     poly_degree <- length(stats::coef(lm_poly)) - 1
-    # nonparametric bootstrapping
-    boot_res <- boot::boot(
-      data = .data,
-      statistic = boot_ci_d2_poly_reg,
-      R = 100,
-      sim = "ordinary",
-      .x = .x,
-      .y = .y,
-      degree = poly_degree,
-      pos_change = pos_change,
-      alpha_linearity = alpha_linearity,
-      parallel = "multicore"
-    )
-    # calculate percentile CI's
-    # is there a problem with this not dealing with NA values?
-    # I may need to use the boot.ci() funtion
-    boot_ci <- broom::tidy(boot_res,
-      conf.int = TRUE,
-      conf.method = "perc"
-    )
-    # calculate new values at threshold
-    ci_lower_x <- boot_ci$conf.low
-    ci_lower_y <- stats::predict(
-      lm_poly,
-      tibble::tibble("{.x}" := ci_lower_x)
+    boot_res <- bootstrap_threshold_ci(
+      .data = .data,
+      statistic = boot_stat_d2_poly_reg_maxima,
+      R = 999,
+      conf_level = conf_level,
+      .x = .x, .y = .y,
+      degree = poly_degree, pos_change = pos_change,
+      alpha_linearity = alpha_linearity
     )
 
-    lower_ci_res <- find_threshold_vals(
-      .data = .data,
-      thr_x = ci_lower_x,
-      thr_y = ci_lower_y,
-      .x = .x,
-      .y = .y,
-      ...
-    ) %>%
-      dplyr::mutate(
-        bp = bp,
-        algorithm = "d2_reg_spline_maxima",
-        x_var = .x,
-        y_var = .y,
-        est_ci = "lower_ci"
+    if (!is.null(boot_res)) {
+      ci_lower_x <- boot_res$lower
+      ci_lower_y <- stats::predict(
+        lm_poly,
+        tibble::tibble("{.x}" := ci_lower_x)
       )
 
-    ci_upper_x <- boot_ci$conf.high
-    ci_upper_y <- stats::predict(
-      lm_poly,
-      tibble::tibble("{.x}" := ci_upper_x)
-    )
+      lower_ci_res <- find_threshold_vals(
+        .data = .data,
+        thr_x = ci_lower_x,
+        thr_y = ci_lower_y,
+        .x = .x,
+        .y = .y,
+        ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp,
+          algorithm = "d2_poly_reg_maxima",
+          x_var = .x,
+          y_var = .y,
+          est_ci = "lower_ci"
+        )
 
-    upper_ci_res <- find_threshold_vals(
-      .data = .data,
-      thr_x = ci_upper_x,
-      thr_y = ci_upper_y,
-      .x = .x,
-      .y = .y,
-      ...
-    ) %>%
-      dplyr::mutate(
-        bp = bp,
-        algorithm = "d2_reg_spline_maxima",
-        x_var = .x,
-        y_var = .y,
-        est_ci = "upper_ci"
+      ci_upper_x <- boot_res$upper
+      ci_upper_y <- stats::predict(
+        lm_poly,
+        tibble::tibble("{.x}" := ci_upper_x)
       )
 
-    bp_dat <- dplyr::bind_rows(
-      lower_ci_res,
-      bp_dat,
-      upper_ci_res
-    )
-    # if the estimate was true, set the others to TRUE
-    if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
-      bp_dat[["determinant_bp"]] <- TRUE
+      upper_ci_res <- find_threshold_vals(
+        .data = .data,
+        thr_x = ci_upper_x,
+        thr_y = ci_upper_y,
+        .x = .x,
+        .y = .y,
+        ...
+      ) %>%
+        dplyr::mutate(
+          bp = bp,
+          algorithm = "d2_poly_reg_maxima",
+          x_var = .x,
+          y_var = .y,
+          est_ci = "upper_ci"
+        )
+
+      bp_dat <- dplyr::bind_rows(
+        lower_ci_res,
+        bp_dat,
+        upper_ci_res
+      )
+      # if the estimate was true, set the others to TRUE
+      if (any(bp_dat[["determinant_bp"]], na.rm = TRUE)) {
+        bp_dat[["determinant_bp"]] <- TRUE
+      }
     }
   }
 
@@ -521,15 +514,20 @@ fit_poly_reg <- function(.data, .x, .y,
 }
 
 
-boot_ci_d2_poly_reg <- #' @keywords internal
-  bootstrap_ci_d2_reg_spline <- function(.data,
+#' Bootstrap statistic for [d2_poly_reg_maxima()]'s confidence interval.
+#'
+#' Refits the polynomial on the resampled data at the fixed `degree` selected
+#' from the full data (no re-searching per replicate) and returns the 2nd
+#' derivative maximum location, or `NA` if this resample has none.
+#' @keywords internal
+#' @noRd
+boot_stat_d2_poly_reg_maxima <- function(.data,
                                          i,
                                          .x,
                                          .y,
                                          degree,
                                          pos_change,
                                          alpha_linearity) {
-    # find best number of knots
     lm_poly <- fit_poly_reg(
       .data = .data[i, ],
       .x = .x,
