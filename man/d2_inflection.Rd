@@ -90,16 +90,21 @@ cpet_15b_roll <- avg_exercise_test(
   method = "breath", calc_type = "rolling", time_col = "time", window = 15
 )
 
-# VT1/GET from the inflection point of VE vs. VO2
+# RCP from the inflection point of VE vs. VCO2
 d2_inflection(
   cpet_15b_roll,
-  .x = "vo2",
+  .x = "vco2",
   .y = "ve",
-  bp = "vt1",
+  bp = "vt2",
+  degree = 5,
+  search_degree = FALSE,
+  max_degree = 8,
+  criterion = "aicc",
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
+  ci = FALSE,
   plots = FALSE
 )
 

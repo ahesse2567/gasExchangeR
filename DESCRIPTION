@@ -22,8 +22,6 @@ Imports:
     magrittr,
     purrr,
     rlang,
-    rootSolve,
-    Ryacas,
     signal,
     slider,
     splines,

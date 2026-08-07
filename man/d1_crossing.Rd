@@ -98,10 +98,15 @@ d1_crossing(
   .x = "time",
   .y = "vo2",
   bp = "vt1",
+  degree = 6,
+  search_degree = FALSE,
+  max_degree = 8,
+  criterion = "aicc",
   vo2 = "vo2",
   vco2 = "vco2",
   ve = "ve",
   time = "time",
+  ci = FALSE,
   plots = FALSE
 )
 
