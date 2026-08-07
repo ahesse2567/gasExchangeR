@@ -104,7 +104,7 @@
 #'
 #' cpet_15b_roll <- avg_exercise_test(
 #'   cpet_bbb,
-#'   test = "breath",
+#'   method = "breath",
 #'   calc_type = "rolling",
 #'   time_col = "time",
 #'   window = 15
