@@ -12,3 +12,4 @@
 ^\.git.*$
 ^CLAUDE\.md$
 ^\.claude$
+^cran-comments\.md$

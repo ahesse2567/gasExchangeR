@@ -226,7 +226,7 @@ vo2_plateau_slope_eot <- function(.data, test, method, vo2_col, time_col,
   eot <- end_of_test(.data, time_col, last_x, method)
 
   form <- stats::as.formula(paste(vo2_col, "~ 1 +", time_col))
-  lm_vo2_time <- lm(form, data = eot)
+  lm_vo2_time <- stats::lm(form, data = eot)
   vo2_time_slope_min <- stats::coef(lm_vo2_time)[2] * 60
   plateau <- vo2_time_slope_min < delta_vo2
   tibble::tibble(
@@ -246,7 +246,7 @@ vo2_plateau_zero_slope <- function(.data, test, method, vo2_col, time_col,
   eot <- end_of_test(.data, time_col, last_x, method)
 
   form <- stats::as.formula(paste(vo2_col, "~ 1 +", time_col))
-  lm <- lm(form, data = eot)
+  lm <- stats::lm(form, data = eot)
 
   if (broom::tidy(lm)[["p.value"]][2] > alpha) {
     plateau <- TRUE
